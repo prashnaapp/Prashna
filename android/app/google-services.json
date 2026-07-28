@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "884425833475",
+    "project_id": "prashna-67689",
+    "storage_bucket": "prashna-67689.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:884425833475:android:0be33646385bddf154a236",
+        "android_client_info": {
+          "package_name": "com.prashna.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKrVoYjMw0G7ObXJs1aTmgmj4ZaNravT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
