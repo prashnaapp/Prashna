@@ -122,6 +122,9 @@ class ProgressService {
             topicName: topic.topicName,
             accuracy: topic.accuracy,
             attempts: topic.attempts,
+            paperId: topic.paperId,
+            paperName: topic.paperName,
+            courseId: topic.courseId ?? courseId,
           ),
         )
         .toList(growable: false);

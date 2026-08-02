@@ -8,6 +8,7 @@ import '../widgets/continue_learning_card.dart';
 import '../widgets/home_courses_section.dart';
 import '../widgets/home_current_affairs_section.dart';
 import '../widgets/home_entrance.dart';
+import '../widgets/home_study_planner_section.dart';
 import '../widgets/today_goal_card.dart';
 import '../widgets/welcome_section.dart';
 
@@ -70,8 +71,13 @@ class HomeScreen extends StatelessWidget {
                 topSpacing: AppSpacing.xxl,
                 child: HomeCurrentAffairsSection(),
               ),
-              HomeEntrance(
+              const HomeEntrance(
                 index: 4,
+                topSpacing: AppSpacing.xxl,
+                child: HomeStudyPlannerSection(),
+              ),
+              HomeEntrance(
+                index: 5,
                 topSpacing: AppSpacing.xxl,
                 child: TodayGoalCard(goal: todayGoal),
               ),

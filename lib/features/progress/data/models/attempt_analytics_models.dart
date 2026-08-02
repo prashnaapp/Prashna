@@ -86,12 +86,18 @@ class WeakTopic {
     required this.topicName,
     required this.accuracy,
     required this.attempts,
+    this.paperId,
+    this.paperName,
+    this.courseId,
   });
 
   final String topicId;
   final String topicName;
   final double accuracy;
   final int attempts;
+  final String? paperId;
+  final String? paperName;
+  final String? courseId;
 }
 
 class StrongTopic {
@@ -118,6 +124,9 @@ class TopicStatistics {
     required this.wrong,
     required this.accuracy,
     required this.averageScore,
+    this.paperId,
+    this.paperName,
+    this.courseId,
   });
 
   final String topicId;
@@ -127,6 +136,9 @@ class TopicStatistics {
   final int correct;
   final int wrong;
   final double accuracy;
+  final String? paperId;
+  final String? paperName;
+  final String? courseId;
   final double averageScore;
 }
 

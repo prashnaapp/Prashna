@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
-import '../../../test_engine/presentation/test_engine_navigation.dart';
+import '../../../../navigation/tab_scroll_view.dart';
 import '../../data/models/revision_models.dart';
 import '../../services/revision_service.dart';
-import '../widgets/revision_collection_card.dart';
+import '../revision_navigation.dart';
+import '../widgets/revision_hub_card.dart';
 
 class RevisionCenterScreen extends StatefulWidget {
   const RevisionCenterScreen({
@@ -19,46 +20,27 @@ class RevisionCenterScreen extends StatefulWidget {
 }
 
 class _RevisionCenterScreenState extends State<RevisionCenterScreen> {
-  late Future<List<RevisionCollection>> _future;
-  bool _starting = false;
+  late Future<List<RevisionHubItem>> _future;
 
   @override
   void initState() {
     super.initState();
-    _future = RevisionService.instance.generateCollections(
-      courseId: widget.courseId,
-    );
+    _future = RevisionService.instance.loadHubItems(courseId: widget.courseId);
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _future = RevisionService.instance.generateCollections(
-        courseId: widget.courseId,
-      );
+      _future = RevisionService.instance.loadHubItems(courseId: widget.courseId);
     });
   }
 
-  Future<void> _start(RevisionCollection collection) async {
-    if (_starting || collection.isEmpty) return;
-    setState(() => _starting = true);
-
-    try {
-      final test = await RevisionService.instance.buildRevisionTest(
-        collection: collection,
-        courseId: widget.courseId ?? 'group-ii',
-      );
-      if (!mounted) return;
-      if (test == null || test.questions.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No questions available for revision.')),
-        );
-        return;
-      }
-      await TestEngineNavigation.openTest(context, test: test);
-      if (mounted) await _refresh();
-    } finally {
-      if (mounted) setState(() => _starting = false);
-    }
+  Future<void> _open(RevisionHubItem item) async {
+    await RevisionNavigation.openHubDestination(
+      context,
+      type: item.type,
+      courseId: widget.courseId,
+    );
+    if (mounted) await _refresh();
   }
 
   @override
@@ -66,62 +48,41 @@ class _RevisionCenterScreenState extends State<RevisionCenterScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Revision Center')),
-      body: FutureBuilder<List<RevisionCollection>>(
+      body: FutureBuilder<List<RevisionHubItem>>(
         future: _future,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: AppCircularProgress());
           }
 
-          final collections = snapshot.data!;
-          final total = collections.fold<int>(0, (sum, c) => sum + c.count);
+          final items = snapshot.data!;
 
-          return ListView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            children: [
-              Text(
-                'Revise smarter',
-                style: AppTextStyles.headline(context),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Collections are generated from your Question Bank and Progress.',
-                style: AppTextStyles.bodyMedium(context),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              AppCard(
-                showShadow: false,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Ready to revise',
-                        style: AppTextStyles.bodyMedium(context),
-                      ),
-                    ),
-                    Text(
-                      '$total questions',
-                      style: AppTextStyles.label(context).copyWith(
-                        color: AppColors.primary,
-                      ),
+          return SafeArea(
+            bottom: false,
+            child: AppResponsivePadding(
+              child: TabScrollView(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
+                children: [
+                  Text(
+                    'Revise everything in one place',
+                    style: AppTextStyles.headline(context),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Wrong answers, weak topics, bookmarks, and repeated mistakes.',
+                    style: AppTextStyles.bodyMedium(context),
+                  ),
+                  const SizedBox(height: AppSpacing.xxl),
+                  for (var i = 0; i < items.length; i++) ...[
+                    if (i > 0) const SizedBox(height: AppSpacing.md),
+                    RevisionHubCard(
+                      item: items[i],
+                      onTap: () => _open(items[i]),
                     ),
                   ],
-                ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.xxl),
-              if (_starting)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: AppSpacing.lg),
-                  child: LinearProgressIndicator(),
-                ),
-              for (final collection in collections) ...[
-                RevisionCollectionCard(
-                  collection: collection,
-                  onStart: () => _start(collection),
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-            ],
+            ),
           );
         },
       ),

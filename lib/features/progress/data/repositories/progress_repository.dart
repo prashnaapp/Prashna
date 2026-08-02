@@ -186,8 +186,17 @@ class ProgressRepository {
       if (id == null || id.isEmpty) continue;
       final bucket = map.putIfAbsent(
         id,
-        () => _TopicBucket(id: id, name: item.topicName ?? id),
+        () => _TopicBucket(
+          id: id,
+          name: item.topicName ?? id,
+          paperId: item.paperId,
+          paperName: item.paperName,
+          courseId: item.courseId,
+        ),
       );
+      bucket.paperId ??= item.paperId;
+      bucket.paperName ??= item.paperName;
+      bucket.courseId ??= item.courseId;
       bucket.attempts += 1;
       bucket.correct += item.correct;
       bucket.wrong += item.wrong;
@@ -209,6 +218,9 @@ class ProgressRepository {
         wrong: bucket.wrong,
         accuracy: _round1(accuracy),
         averageScore: _round1(bucket.scoreSum / bucket.attempts),
+        paperId: bucket.paperId,
+        paperName: bucket.paperName,
+        courseId: bucket.courseId,
       );
     }).toList()
       ..sort((a, b) => a.topicName.compareTo(b.topicName));
@@ -321,9 +333,18 @@ class ProgressRepository {
 }
 
 class _TopicBucket {
-  _TopicBucket({required this.id, required this.name});
+  _TopicBucket({
+    required this.id,
+    required this.name,
+    this.paperId,
+    this.paperName,
+    this.courseId,
+  });
   final String id;
   final String name;
+  String? paperId;
+  String? paperName;
+  String? courseId;
   int attempts = 0;
   int correct = 0;
   int wrong = 0;

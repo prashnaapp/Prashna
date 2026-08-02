@@ -1,10 +1,101 @@
+/// Hub destinations on Revision Center home.
+enum RevisionHubType {
+  wrongQuestions,
+  weakTopics,
+  bookmarked,
+  frequentlyIncorrect,
+}
+
+class RevisionHubItem {
+  const RevisionHubItem({
+    required this.type,
+    required this.title,
+    required this.subtitle,
+    required this.count,
+  });
+
+  final RevisionHubType type;
+  final String title;
+  final String subtitle;
+  final int count;
+}
+
+/// Grouped Question Bank items for Wrong / Frequently Incorrect lists.
+class RevisionQuestionItem {
+  const RevisionQuestionItem({
+    required this.questionId,
+    required this.title,
+    required this.courseId,
+    required this.courseName,
+    required this.paperId,
+    required this.paperName,
+    required this.chapterId,
+    required this.chapterName,
+    this.wrongCount,
+  });
+
+  final String questionId;
+  final String title;
+  final String courseId;
+  final String courseName;
+  final String paperId;
+  final String paperName;
+  final String chapterId;
+  final String chapterName;
+  final int? wrongCount;
+}
+
+class RevisionQuestionGroup {
+  const RevisionQuestionGroup({
+    required this.courseName,
+    required this.paperName,
+    required this.chapterName,
+    required this.items,
+  });
+
+  final String courseName;
+  final String paperName;
+  final String chapterName;
+  final List<RevisionQuestionItem> items;
+}
+
+class RevisionWeakTopicGroup {
+  const RevisionWeakTopicGroup({
+    required this.paperName,
+    required this.topics,
+  });
+
+  final String paperName;
+  final List<WeakTopicRevision> topics;
+}
+
+/// Weak topic row for revision UI (backed by ProgressService WeakTopic).
+class WeakTopicRevision {
+  const WeakTopicRevision({
+    required this.topicId,
+    required this.topicName,
+    required this.paperId,
+    required this.paperName,
+    required this.accuracy,
+    required this.attempts,
+    required this.courseId,
+  });
+
+  final String topicId;
+  final String topicName;
+  final String paperId;
+  final String paperName;
+  final double accuracy;
+  final int attempts;
+  final String courseId;
+}
+
+/// Legacy collection type kept for session recording / quiz builder.
 enum RevisionCollectionType {
   wrongQuestions,
   bookmarked,
   weakTopics,
-  unattempted,
-  frequentlyWrong,
-  recentMistakes,
+  frequentlyIncorrect,
 }
 
 class RevisionCollection {
@@ -23,18 +114,4 @@ class RevisionCollection {
   int get count => questionIds.length;
   bool get isEmpty => questionIds.isEmpty;
   bool get isNotEmpty => questionIds.isNotEmpty;
-}
-
-class RevisionSessionConfig {
-  const RevisionSessionConfig({
-    required this.collection,
-    required this.courseId,
-    this.maxQuestions = 20,
-    this.durationMinutes,
-  });
-
-  final RevisionCollection collection;
-  final String courseId;
-  final int maxQuestions;
-  final int? durationMinutes;
 }

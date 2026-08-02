@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../bookmarks/data/services/bookmark_service.dart';
 import '../../data/models/test_engine_models.dart';
 import '../../services/test_service.dart';
 
@@ -13,6 +14,7 @@ class TestEngineController extends ChangeNotifier {
     TestService? service,
   }) : service = service ?? TestService() {
     attempts = this.service.startTest(test);
+    _hydrateBookmarks();
     _remaining = test.duration;
   }
 
@@ -39,7 +41,18 @@ class TestEngineController extends ChangeNotifier {
   QuestionAttempt get currentAttempt => attempts[currentIndex];
   int get questionNumber => currentIndex + 1;
 
+  /// Bookmarks only for Practice Bits & Current Affairs (practice mode).
+  bool get bookmarksEnabled => test.mode == TestMode.practice;
+
   Map<QuestionStatus, int> get statusCounts => service.statusCounts(attempts);
+
+  void _hydrateBookmarks() {
+    if (!bookmarksEnabled) return;
+    final bookmarks = BookmarkService.instance;
+    for (final attempt in attempts) {
+      attempt.bookmarked = bookmarks.isBookmarked(attempt.questionId);
+    }
+  }
 
   Future<void> start() async {
     if (started) return;
@@ -66,8 +79,25 @@ class TestEngineController extends ChangeNotifier {
   }
 
   void toggleBookmark() {
-    if (submitted) return;
+    if (submitted || !bookmarksEnabled) return;
     service.bookmarkQuestion(currentAttempt);
+    if (currentAttempt.bookmarked) {
+      unawaited(
+        BookmarkService.instance.addBookmark(
+          questionId: currentAttempt.questionId,
+          courseId: test.courseId,
+          paperId: currentQuestion.paperId ?? test.paperId,
+          partId: currentQuestion.sectionId ?? test.sectionId,
+          chapterId: currentQuestion.topicId ?? test.topicId,
+          questionType: test.mode.name,
+          questionTitle: currentQuestion.text,
+        ),
+      );
+    } else {
+      unawaited(
+        BookmarkService.instance.removeBookmark(currentAttempt.questionId),
+      );
+    }
     _persist();
     notifyListeners();
   }

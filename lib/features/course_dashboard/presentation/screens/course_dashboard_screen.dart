@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../../navigation/tab_scroll_view.dart';
+import '../../../bookmarks/presentation/bookmark_navigation.dart';
+import '../../../revision/presentation/revision_navigation.dart';
 import '../../../syllabus/presentation/screens/syllabus_papers_screen.dart';
 import '../../../tests/presentation/screens/exam_test_home_screen.dart';
 import '../../models/course_dashboard_models.dart';
@@ -76,8 +78,11 @@ class _CourseDashboardScreenState extends State<CourseDashboardScreen> {
                           onPracticeBits: () => _openPracticeBits(context),
                           onTestSeries: () =>
                               _openTestSeries(context, data.title),
-                          onRevision: () => _soon(context),
-                          onBookmarks: () => _soon(context),
+                          onRevision: () => RevisionNavigation.openRevisionCenter(
+                            context,
+                            courseId: widget.courseId,
+                          ),
+                          onBookmarks: () => openBookmarks(context),
                         ),
                         const SizedBox(height: AppSpacing.xxxl),
                         PaperProgressSection(papers: data.papers),
@@ -116,11 +121,5 @@ class _CourseDashboardScreenState extends State<CourseDashboardScreen> {
       MaterialPageRoute(builder: (_) => screen),
     );
     if (mounted) _reload();
-  }
-
-  void _soon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Coming Soon')),
-    );
   }
 }

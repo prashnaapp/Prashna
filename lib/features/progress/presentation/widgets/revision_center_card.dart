@@ -38,7 +38,7 @@ class RevisionCenterCard extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  'Wrong, bookmarked, weak topics & more',
+                  'Wrong, weak topics, bookmarks & repeats',
                   style: AppTextStyles.bodyMedium(context),
                 ),
               ],

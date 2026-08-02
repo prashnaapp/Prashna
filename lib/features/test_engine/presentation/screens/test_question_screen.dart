@@ -56,18 +56,19 @@ class TestQuestionScreen extends StatelessWidget {
                           style: AppTextStyles.label(context),
                         ),
                         const Spacer(),
-                        IconButton(
-                          tooltip: 'Bookmark',
-                          onPressed: controller.toggleBookmark,
-                          icon: Icon(
-                            attempt.bookmarked
-                                ? Icons.bookmark
-                                : Icons.bookmark_border,
-                            color: attempt.bookmarked
-                                ? AppColors.accentWarm
-                                : AppColors.textSecondary,
+                        if (controller.bookmarksEnabled)
+                          IconButton(
+                            tooltip: 'Bookmark',
+                            onPressed: controller.toggleBookmark,
+                            icon: Icon(
+                              attempt.bookmarked
+                                  ? Icons.star_rounded
+                                  : Icons.star_border_rounded,
+                              color: attempt.bookmarked
+                                  ? AppColors.accentWarm
+                                  : AppColors.textSecondary,
+                            ),
                           ),
-                        ),
                         IconButton(
                           tooltip: 'Mark for review',
                           onPressed: controller.toggleMarkForReview,
