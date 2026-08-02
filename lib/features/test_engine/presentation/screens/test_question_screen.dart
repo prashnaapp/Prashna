@@ -1,0 +1,252 @@
+import 'package:flutter/material.dart';
+
+import '../../../../core/design_system/design_system.dart';
+import '../controllers/test_engine_controller.dart';
+import '../widgets/attempt_option_tile.dart';
+import '../widgets/attempt_timer_badge.dart';
+import '../widgets/question_palette.dart';
+
+class TestQuestionScreen extends StatelessWidget {
+  const TestQuestionScreen({
+    super.key,
+    required this.controller,
+    required this.onOpenReview,
+    required this.onSubmit,
+  });
+
+  final TestEngineController controller;
+  final VoidCallback onOpenReview;
+  final Future<void> Function() onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final question = controller.currentQuestion;
+        final attempt = controller.currentAttempt;
+        final urgent = controller.remaining.inMinutes < 2;
+
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(
+            title: Text(controller.test.title),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.md),
+                child: Center(
+                  child: AttemptTimerBadge(
+                    label: controller.formatRemaining(),
+                    urgent: urgent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Question ${controller.questionNumber} / ${controller.test.totalQuestions}',
+                          style: AppTextStyles.label(context),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: 'Bookmark',
+                          onPressed: controller.toggleBookmark,
+                          icon: Icon(
+                            attempt.bookmarked
+                                ? Icons.bookmark
+                                : Icons.bookmark_border,
+                            color: attempt.bookmarked
+                                ? AppColors.accentWarm
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Mark for review',
+                          onPressed: controller.toggleMarkForReview,
+                          icon: Icon(
+                            attempt.markedForReview
+                                ? Icons.flag
+                                : Icons.flag_outlined,
+                            color: attempt.markedForReview
+                                ? AppColors.secondary
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    AppCard(
+                      showShadow: false,
+                      child: Text(
+                        question.text,
+                        style: AppTextStyles.bodyLarge(context).copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    for (final option in question.options) ...[
+                      AttemptOptionTile(
+                        label: option.label,
+                        optionText: option.text,
+                        selected: attempt.selectedOption == option.label,
+                        onTap: () => controller.selectOption(option.label),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    const SizedBox(height: AppSpacing.md),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: attempt.selectedOption == null
+                            ? null
+                            : controller.clearResponse,
+                        child: const Text('Clear Response'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppSecondaryButton(
+                              label: 'Previous',
+                              onPressed: controller.isFirst
+                                  ? null
+                                  : controller.goPrevious,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: AppPrimaryButton(
+                              label: controller.isLast ? 'Review' : 'Next',
+                              onPressed: controller.isLast
+                                  ? onOpenReview
+                                  : controller.goNext,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _showPalette(context),
+                              icon: const Icon(Icons.grid_view_rounded),
+                              label: const Text('Palette'),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                final ok = await _confirmSubmit(context);
+                                if (ok && context.mounted) await onSubmit();
+                              },
+                              child: const Text('Submit'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool> _confirmSubmit(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Submit Test?'),
+        content: const Text(
+          'You will not be able to change answers after submitting.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  void _showPalette(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                MediaQuery.paddingOf(context).bottom + AppSpacing.lg,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Question Palette',
+                    style: AppTextStyles.headline(context),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  const QuestionStatusLegend(),
+                  const SizedBox(height: AppSpacing.lg),
+                  QuestionPalette(
+                    attempts: controller.attempts,
+                    currentIndex: controller.currentIndex,
+                    onSelect: (index) {
+                      controller.goTo(index);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}

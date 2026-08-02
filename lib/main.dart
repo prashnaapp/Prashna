@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 import 'screens/splash/splash_screen.dart';
 import 'services/auth/auth_service.dart';
@@ -23,13 +24,7 @@ class PrashnaApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Prashna',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1565C0),
-        ),
-        fontFamily: 'Roboto',
-      ),
+      theme: AppTheme.light(),
       home: const SplashScreen(),
     );
   }

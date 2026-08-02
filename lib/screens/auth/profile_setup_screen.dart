@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/utils/auth_validators.dart';
+import '../../navigation/main_navigation_screen.dart';
 import '../../services/auth/auth_service.dart';
 import '../../widgets/auth_message_banner.dart';
-import '../home/home_screen.dart';
+import '../../core/utils/auth_validators.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   ProfileSetupScreen({
@@ -72,7 +72,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (context) => const HomeScreen(),
+        builder: (context) => const MainNavigationScreen(),
       ),
       (route) => false,
     );

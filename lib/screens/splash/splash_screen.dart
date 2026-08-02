@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../navigation/main_navigation_screen.dart';
 import '../../services/auth/auth_service.dart';
-import '../home/home_screen.dart';
 import '../welcome/welcome_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -38,7 +38,7 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     final destination = loggedIn
-        ? const HomeScreen()
+        ? const MainNavigationScreen()
         : const WelcomeScreen();
 
     Navigator.of(context).pushReplacement(
