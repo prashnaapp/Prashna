@@ -43,7 +43,7 @@ class HomeCoursesSection extends StatelessWidget {
   }
 
   void _onCourseTap(BuildContext context, CourseModel course) {
-    if (course.isEnrolled) {
+    if (course.isAvailable) {
       Navigator.push(
         context,
         MaterialPageRoute(

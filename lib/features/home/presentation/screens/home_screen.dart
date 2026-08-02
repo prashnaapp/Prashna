@@ -6,6 +6,7 @@ import '../../../course_dashboard/presentation/screens/course_dashboard_screen.d
 import '../../services/home_service.dart';
 import '../widgets/continue_learning_card.dart';
 import '../widgets/home_courses_section.dart';
+import '../widgets/home_current_affairs_section.dart';
 import '../widgets/home_entrance.dart';
 import '../widgets/today_goal_card.dart';
 import '../widgets/welcome_section.dart';
@@ -64,8 +65,13 @@ class HomeScreen extends StatelessWidget {
                 topSpacing: AppSpacing.xxl,
                 child: HomeCoursesSection(),
               ),
-              HomeEntrance(
+              const HomeEntrance(
                 index: 3,
+                topSpacing: AppSpacing.xxl,
+                child: HomeCurrentAffairsSection(),
+              ),
+              HomeEntrance(
+                index: 4,
                 topSpacing: AppSpacing.xxl,
                 child: TodayGoalCard(goal: todayGoal),
               ),

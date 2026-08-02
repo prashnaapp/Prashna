@@ -1,129 +1,126 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
-import '../../../../navigation/app_nav_item.dart';
-import '../../../../navigation/main_navigation_screen.dart';
+import '../../../../navigation/tab_scroll_view.dart';
 import '../../../syllabus/presentation/screens/syllabus_papers_screen.dart';
-import '../../services/course_service.dart';
+import '../../../tests/presentation/screens/exam_test_home_screen.dart';
+import '../../models/course_dashboard_models.dart';
+import '../../services/course_dashboard_service.dart';
+import '../widgets/continue_learning_section.dart';
+import '../widgets/course_header_section.dart';
+import '../widgets/paper_progress_section.dart';
+import '../widgets/quick_actions_section.dart';
+import '../widgets/recent_activity_section.dart';
+import '../widgets/weak_topics_section.dart';
 
-class CourseDashboardScreen extends StatelessWidget {
+/// Course study home — Progress Engine backed.
+class CourseDashboardScreen extends StatefulWidget {
   const CourseDashboardScreen({super.key, required this.courseId});
 
   final String courseId;
 
   @override
-  Widget build(BuildContext context) {
-    final course = CourseService.instance.getCourseById(courseId);
-    final name = course?.name ?? 'Course';
+  State<CourseDashboardScreen> createState() => _CourseDashboardScreenState();
+}
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: Text(name)),
-      body: AppResponsivePadding(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          children: [
-            Text(name, style: AppTextStyles.headline(context)),
-            if (course != null) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(course.subtitle, style: AppTextStyles.bodyMedium(context)),
-            ],
-            const SizedBox(height: AppSpacing.xxl),
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Continue Learning',
-                    style: AppTextStyles.titleMedium(context),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'Browse the $name syllabus and start practicing.',
-                    style: AppTextStyles.bodyMedium(context),
-                  ),
-                  const SizedBox(height: AppSpacing.xxl),
-                  AppPrimaryButton(
-                    label: 'Continue →',
-                    onPressed: () => _openSyllabus(context),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-            const SectionHeader(title: 'Quick Actions'),
-            const SizedBox(height: AppSpacing.lg),
-            ..._actions(context),
-            const SizedBox(height: AppSpacing.xxl),
-            const SectionHeader(title: 'Course Information'),
-            const SizedBox(height: AppSpacing.lg),
-            AppCard(
-              child: Text(
-                course == null
-                    ? 'Course details unavailable.'
-                    : '${course.totalMarks} Marks · ${course.totalPapers} Papers',
-                style: AppTextStyles.bodyLarge(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+class _CourseDashboardScreenState extends State<CourseDashboardScreen> {
+  late Future<CourseDashboardData> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = CourseDashboardService.instance.loadDashboard(widget.courseId);
   }
 
-  List<Widget> _actions(BuildContext context) {
-    final tiles = [
-      ('Study', Icons.menu_book_rounded, null),
-      ('Practice', Icons.fitness_center_rounded, null),
-      ('Test Series', Icons.quiz_rounded, AppTab.testSeries),
-      ('Progress', Icons.insights_rounded, AppTab.progress),
-    ];
-    return [
-      for (var i = 0; i < tiles.length; i++) ...[
-        if (i > 0) const SizedBox(height: AppSpacing.md),
-        AppCard(
-          onTap: () {
-            final tab = tiles[i].$3;
-            if (tab == null) {
-              _openSyllabus(context);
-            } else {
-              _openTab(context, tab);
-            }
-          },
-          child: Row(
-            children: [
-              Icon(tiles[i].$2, color: AppColors.primary),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(
-                child: Text(
-                  tiles[i].$1,
-                  style: AppTextStyles.titleMedium(context),
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textTertiary,
+  void _reload() {
+    setState(() {
+      _future =
+          CourseDashboardService.instance.loadDashboard(widget.courseId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<CourseDashboardData>(
+      future: _future,
+      builder: (context, snapshot) {
+        final data = snapshot.data;
+
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(
+            title: Text(data?.title ?? 'Course'),
+            actions: [
+              IconButton(
+                tooltip: 'Notifications',
+                onPressed: () {},
+                icon: const Icon(Icons.notifications_rounded),
               ),
             ],
           ),
-        ),
-      ],
-    ];
-  }
-
-  void _openSyllabus(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SyllabusPapersScreen(courseId: courseId),
-      ),
+          body: !snapshot.hasData
+              ? const Center(child: AppCircularProgress())
+              : SafeArea(
+                  bottom: false,
+                  child: AppResponsivePadding(
+                    child: TabScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.xxl,
+                      ),
+                      children: [
+                        CourseHeaderSection(data: data!),
+                        const SizedBox(height: AppSpacing.xxxl),
+                        ContinueLearningSection(data: data.continueLearning),
+                        const SizedBox(height: AppSpacing.xxxl),
+                        QuickActionsSection(
+                          onPracticeBits: () => _openPracticeBits(context),
+                          onTestSeries: () =>
+                              _openTestSeries(context, data.title),
+                          onRevision: () => _soon(context),
+                          onBookmarks: () => _soon(context),
+                        ),
+                        const SizedBox(height: AppSpacing.xxxl),
+                        PaperProgressSection(papers: data.papers),
+                        const SizedBox(height: AppSpacing.xxxl),
+                        RecentActivitySection(activity: data.recentActivity),
+                        const SizedBox(height: AppSpacing.xxxl),
+                        WeakTopicsSection(topics: data.weakTopics),
+                      ],
+                    ),
+                  ),
+                ),
+        );
+      },
     );
   }
 
-  void _openTab(BuildContext context, AppTab tab) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => MainNavigationScreen(initialTab: tab)),
-      (route) => false,
+  Future<void> _openPracticeBits(BuildContext context) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SyllabusPapersScreen(courseId: widget.courseId),
+      ),
+    );
+    if (mounted) _reload();
+  }
+
+  Future<void> _openTestSeries(BuildContext context, String title) async {
+    final Widget screen = switch (widget.courseId) {
+      'group-ii' => const GroupIITestHomeScreen(),
+      'group-iii' => const GroupIIITestHomeScreen(),
+      _ => ExamTestHomeScreen(examId: widget.courseId, examTitle: title),
+    };
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+    );
+    if (mounted) _reload();
+  }
+
+  void _soon(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Coming Soon')),
     );
   }
 }
