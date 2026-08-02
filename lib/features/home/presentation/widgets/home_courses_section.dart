@@ -5,7 +5,6 @@ import '../../../course_dashboard/models/course_model.dart';
 import '../../../course_dashboard/presentation/screens/course_dashboard_screen.dart';
 import '../../../course_dashboard/services/course_service.dart';
 import '../../../profile/presentation/profile_navigation.dart';
-import 'home_course_card.dart';
 
 class HomeCoursesSection extends StatelessWidget {
   const HomeCoursesSection({super.key});
@@ -26,7 +25,6 @@ class HomeCoursesSection extends StatelessWidget {
       children: [
         const SectionHeader(title: 'My Courses'),
         const SizedBox(height: AppSpacing.lg),
-        // Content-height rows (no fixed aspect-ratio cells that reserve empty space).
         for (var i = 0; i < courses.length; i += crossAxisCount) ...[
           if (i > 0) const SizedBox(height: AppSpacing.md),
           _CourseRow(
@@ -78,14 +76,39 @@ class _CourseRow extends StatelessWidget {
           if (i > 0) const SizedBox(width: AppSpacing.md),
           Expanded(
             child: i < courses.length
-                ? HomeCourseCard(
-                    course: courses[i],
-                    onTap: () => onCourseTap(courses[i]),
+                ? CourseGridCard(
+                    title: courses[i].name,
+                    marksValue: '${courses[i].totalMarks}',
+                    papersValue: '${courses[i].totalPapers}',
+                    accentColor: _accentFor(courses[i]),
+                    icon: _iconFor(courses[i].icon),
+                    locked: !courses[i].isAvailable,
+                    onTap: courses[i].isAvailable
+                        ? () => onCourseTap(courses[i])
+                        : null,
                   )
                 : const SizedBox.shrink(),
           ),
         ],
       ],
     );
+  }
+
+  Color _accentFor(CourseModel course) {
+    return switch (course.id) {
+      'group-iii' => AppColors.success,
+      'group-ii' => AppColors.primary,
+      _ => course.isEnrolled ? AppColors.primary : AppColors.secondary,
+    };
+  }
+
+  IconData _iconFor(String key) {
+    return switch (key) {
+      'school' => Icons.school_rounded,
+      'menu_book' => Icons.menu_book_rounded,
+      'badge' => Icons.badge_rounded,
+      'local_police' => Icons.local_police_rounded,
+      _ => Icons.auto_stories_rounded,
+    };
   }
 }

@@ -77,3 +77,50 @@ class TestExamSummary {
   final int paperCount;
   final bool isEnabled;
 }
+
+/// Paper entry for Paper-wise Tests (Phase 2) and Mock Tests papers (Phase 3).
+class PaperWisePaper {
+  const PaperWisePaper({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+}
+
+/// Mock Test list entry (Phase 3).
+class MockTestEntry {
+  const MockTestEntry({
+    required this.id,
+    required this.title,
+  });
+
+  final String id;
+  final String title;
+}
+
+/// Exam choice under Previous Papers (Phase 4).
+class PreviousPaperExam {
+  const PreviousPaperExam({
+    required this.examId,
+    required this.title,
+  });
+
+  final String examId;
+  final String title;
+}
+
+/// Year entry under a Previous Papers exam (Phase 4).
+class PreviousPaperYear {
+  const PreviousPaperYear({
+    required this.year,
+  });
+
+  final int year;
+
+  String get id => '$year';
+  String get title => '$year Previous Paper';
+}

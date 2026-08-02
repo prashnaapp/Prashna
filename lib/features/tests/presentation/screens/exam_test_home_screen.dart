@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/design_system/design_system.dart';
 import '../../../progress/data/progress_dummy_data.dart';
 import '../../services/test_service.dart';
+import '../paper_wise_navigation.dart';
 import '../widgets/test_category_card.dart';
 import '../widgets/tests_scroll_body.dart';
-import 'test_list_screen.dart';
 
 class ExamTestHomeScreen extends StatelessWidget {
   const ExamTestHomeScreen({
@@ -32,18 +32,11 @@ class ExamTestHomeScreen extends StatelessWidget {
             TestCategoryCard(
               title: categories[i].title,
               subtitle: categories[i].subtitle,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => TestListScreen(
-                      examId: examId,
-                      category: categories[i].type,
-                      title: categories[i].title,
-                    ),
-                  ),
-                );
-              },
+              onTap: () => openTestCategory(
+                context: context,
+                examId: examId,
+                category: categories[i],
+              ),
             ),
           ],
         ],

@@ -10,14 +10,21 @@ abstract final class TestsDummyData {
 
   static final Map<TestCategoryType, String> categoryTitles = {
     TestCategoryType.chapterTests: 'Chapter Tests',
-    TestCategoryType.partTests: 'Part Tests',
+    TestCategoryType.partTests: 'Paper-wise Tests',
     TestCategoryType.paperTests: 'Paper Tests',
     TestCategoryType.mockTests: 'Mock Tests',
-    TestCategoryType.previousYear: 'Previous Year Papers',
+    TestCategoryType.previousYear: 'Previous Papers',
   };
 
+  /// Phase 1 Group dashboard — three entry cards only.
+  static const dashboardCategories = <TestCategoryType>[
+    TestCategoryType.partTests,
+    TestCategoryType.mockTests,
+    TestCategoryType.previousYear,
+  ];
+
   static List<TestCategoryModel> categoriesFor(String examId) {
-    return TestCategoryType.values
+    return dashboardCategories
         .map(
           (type) => TestCategoryModel(
             type: type,
@@ -39,6 +46,161 @@ abstract final class TestsDummyData {
       TestCategoryType.mockTests => _mockTests(examId),
       TestCategoryType.previousYear => _previousYear(examId),
     };
+  }
+
+  /// Papers shown under Paper-wise Tests for [examId].
+  static List<PaperWisePaper> paperWisePapersFor(String examId) {
+    return switch (examId) {
+      'group-ii' => const [
+          PaperWisePaper(
+            id: 'paper-i',
+            title: 'Paper I',
+            subtitle: 'General Studies',
+          ),
+          PaperWisePaper(
+            id: 'paper-ii',
+            title: 'Paper II',
+            subtitle: 'History, Polity & Social Structure',
+          ),
+          PaperWisePaper(
+            id: 'paper-iii',
+            title: 'Paper III',
+            subtitle: 'Economy',
+          ),
+          PaperWisePaper(
+            id: 'paper-iv',
+            title: 'Paper IV',
+            subtitle: 'Telangana Movement',
+          ),
+        ],
+      'group-iii' => const [
+          PaperWisePaper(
+            id: 'paper-i',
+            title: 'Paper I',
+            subtitle: 'General Studies',
+          ),
+          PaperWisePaper(
+            id: 'paper-ii',
+            title: 'Paper II',
+            subtitle: 'History, Polity & Social Structure',
+          ),
+          PaperWisePaper(
+            id: 'paper-iii',
+            title: 'Paper III',
+            subtitle: 'Economy',
+          ),
+        ],
+      _ => const [],
+    };
+  }
+
+  /// Parts under a Paper-wise paper — each launches the existing Test Engine.
+  static List<TestModel> paperWisePartsFor({
+    required String examId,
+    required String paperId,
+  }) {
+    return [
+      _test(
+        examId,
+        '$paperId-part-i',
+        TestCategoryType.partTests,
+        'Part I',
+        150,
+        150,
+        150,
+      ),
+      _test(
+        examId,
+        '$paperId-part-ii',
+        TestCategoryType.partTests,
+        'Part II',
+        150,
+        150,
+        150,
+      ),
+      _test(
+        examId,
+        '$paperId-part-iii',
+        TestCategoryType.partTests,
+        'Part III',
+        150,
+        150,
+        150,
+      ),
+    ];
+  }
+
+  /// Mock Test list entries (Phase 3).
+  static List<MockTestEntry> mockTestsListFor(String examId) {
+    if (examId != 'group-ii' && examId != 'group-iii') return const [];
+    return const [
+      MockTestEntry(id: 'mock-1', title: 'Mock Test 1'),
+      MockTestEntry(id: 'mock-2', title: 'Mock Test 2'),
+      MockTestEntry(id: 'mock-3', title: 'Mock Test 3'),
+    ];
+  }
+
+  /// Papers under a mock — same catalog as Paper-wise for [examId].
+  static List<PaperWisePaper> mockPapersFor(String examId) =>
+      paperWisePapersFor(examId);
+
+  /// Selecting a paper under a mock launches the existing Test Engine.
+  static TestModel mockPaperTest({
+    required String examId,
+    required MockTestEntry mock,
+    required PaperWisePaper paper,
+  }) {
+    return _test(
+      examId,
+      '${mock.id}-${paper.id}',
+      TestCategoryType.mockTests,
+      '${mock.title} · ${paper.title}',
+      150,
+      150,
+      150,
+    );
+  }
+
+  /// Exams shown under Previous Papers (Phase 4).
+  static List<PreviousPaperExam> previousPaperExams() => const [
+        PreviousPaperExam(examId: 'group-ii', title: 'Group-II'),
+        PreviousPaperExam(examId: 'group-iii', title: 'Group-III'),
+      ];
+
+  /// Real exam years only for Previous Papers.
+  static List<PreviousPaperYear> previousPaperYearsFor(String examId) {
+    return switch (examId) {
+      'group-ii' => const [
+          PreviousPaperYear(year: 2016),
+          PreviousPaperYear(year: 2024),
+        ],
+      'group-iii' => const [
+          PreviousPaperYear(year: 2018),
+          PreviousPaperYear(year: 2024),
+        ],
+      _ => const [],
+    };
+  }
+
+  /// Papers under a previous-paper year — same catalog as Paper-wise.
+  static List<PaperWisePaper> previousPapersFor(String examId) =>
+      paperWisePapersFor(examId);
+
+  /// Selecting a paper under a previous year launches the existing Test Engine.
+  static TestModel previousPaperTest({
+    required String examId,
+    required PreviousPaperYear year,
+    required PaperWisePaper paper,
+  }) {
+    return _test(
+      examId,
+      'py-${year.year}-${paper.id}',
+      TestCategoryType.previousYear,
+      '${year.title} · ${paper.title}',
+      150,
+      150,
+      150,
+    );
   }
 
   static List<TestModel> _chapterTests(String examId) => [

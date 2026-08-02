@@ -26,6 +26,52 @@ class TestService {
   List<TestCategoryModel> getCategories(String examId) =>
       TestsDummyData.categoriesFor(examId);
 
+  List<PaperWisePaper> getPaperWisePapers(String examId) =>
+      TestsDummyData.paperWisePapersFor(examId);
+
+  List<TestModel> getPaperWiseParts({
+    required String examId,
+    required String paperId,
+  }) =>
+      TestsDummyData.paperWisePartsFor(examId: examId, paperId: paperId);
+
+  List<MockTestEntry> getMockTests(String examId) =>
+      TestsDummyData.mockTestsListFor(examId);
+
+  List<PaperWisePaper> getMockPapers(String examId) =>
+      TestsDummyData.mockPapersFor(examId);
+
+  TestModel getMockPaperTest({
+    required String examId,
+    required MockTestEntry mock,
+    required PaperWisePaper paper,
+  }) =>
+      TestsDummyData.mockPaperTest(
+        examId: examId,
+        mock: mock,
+        paper: paper,
+      );
+
+  List<PreviousPaperExam> getPreviousPaperExams() =>
+      TestsDummyData.previousPaperExams();
+
+  List<PreviousPaperYear> getPreviousPaperYears(String examId) =>
+      TestsDummyData.previousPaperYearsFor(examId);
+
+  List<PaperWisePaper> getPreviousPapers(String examId) =>
+      TestsDummyData.previousPapersFor(examId);
+
+  TestModel getPreviousPaperTest({
+    required String examId,
+    required PreviousPaperYear year,
+    required PaperWisePaper paper,
+  }) =>
+      TestsDummyData.previousPaperTest(
+        examId: examId,
+        year: year,
+        paper: paper,
+      );
+
   List<TestModel> getTests({
     required String examId,
     required TestCategoryType category,

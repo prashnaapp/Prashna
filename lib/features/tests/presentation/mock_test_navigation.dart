@@ -1,0 +1,54 @@
+import 'package:flutter/material.dart';
+
+import '../data/models/test_models.dart';
+import '../services/test_service.dart';
+import 'screens/mock_test_list_screen.dart';
+import 'screens/mock_test_paper_list_screen.dart';
+import 'test_quiz_navigation.dart';
+
+/// Phase 3 navigation helpers for Mock Tests.
+void openMockTests({
+  required BuildContext context,
+  required String examId,
+  required String title,
+}) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => MockTestListScreen(
+        examId: examId,
+        title: title,
+      ),
+    ),
+  );
+}
+
+void openMockPapers({
+  required BuildContext context,
+  required String examId,
+  required MockTestEntry mock,
+}) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => MockTestPaperListScreen(
+        examId: examId,
+        mock: mock,
+      ),
+    ),
+  );
+}
+
+void openMockPaperTest({
+  required BuildContext context,
+  required String examId,
+  required MockTestEntry mock,
+  required PaperWisePaper paper,
+}) {
+  final test = TestService.instance.getMockPaperTest(
+    examId: examId,
+    mock: mock,
+    paper: paper,
+  );
+  openTestPracticeSession(context, test);
+}

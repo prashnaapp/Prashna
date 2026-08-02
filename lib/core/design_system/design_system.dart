@@ -11,3 +11,4 @@ export '../theme/app_theme.dart';
 export '../../widgets/buttons/app_buttons.dart';
 export '../../widgets/cards/app_cards.dart';
 export '../../widgets/common/app_common_widgets.dart';
+export '../../widgets/course_grid_card.dart';

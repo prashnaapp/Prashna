@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
-import '../../../tests/presentation/widgets/test_exam_card.dart';
 import '../../data/models/progress_models.dart';
 import '../screens/exam_progress_screen.dart';
 import 'exam_tracker_card.dart';
@@ -52,9 +51,9 @@ class CourseProgressSection extends StatelessWidget {
             crossAxisCount: crossAxisCount,
             children: [
               for (final exam in comingSoon)
-                TestExamCard(
+                CourseGridCard(
                   title: exam.title,
-                  enabled: false,
+                  locked: true,
                 ),
             ],
           ),

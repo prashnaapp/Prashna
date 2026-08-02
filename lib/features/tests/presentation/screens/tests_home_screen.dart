@@ -4,7 +4,6 @@ import '../../../../core/design_system/design_system.dart';
 import '../../../../navigation/tab_scroll_view.dart';
 import '../../data/models/test_models.dart';
 import '../../services/test_service.dart';
-import '../widgets/test_exam_card.dart';
 import 'exam_test_home_screen.dart';
 
 /// Test Series tab body — Available + Launching Soon exam grids.
@@ -35,12 +34,11 @@ class TestsHomeScreen extends StatelessWidget {
             crossAxisCount: crossAxisCount,
             children: [
               for (final exam in available)
-                TestExamCard(
+                CourseGridCard(
                   title: exam.title,
-                  enabled: true,
-                  accent: _accentFor(exam.examId),
                   marksValue: exam.maxMarks.toStringAsFixed(0),
                   papersValue: '${exam.paperCount}',
+                  accentColor: _accentFor(exam.examId),
                   onTap: () => _openExam(context, exam),
                 ),
             ],
@@ -54,9 +52,9 @@ class TestsHomeScreen extends StatelessWidget {
             crossAxisCount: crossAxisCount,
             children: [
               for (final exam in launchingSoon)
-                TestExamCard(
+                CourseGridCard(
                   title: exam.title,
-                  enabled: false,
+                  locked: true,
                 ),
             ],
           ),
