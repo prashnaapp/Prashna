@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/design_system/design_system.dart';
+import '../../features/authentication/screens/login_screen.dart';
+import '../../features/authentication/services/auth_service.dart';
 import '../../navigation/main_navigation_screen.dart';
-import '../../services/auth/auth_service.dart';
-import '../welcome/welcome_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,6 +15,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   static const _fadeDuration = Duration(milliseconds: 400);
+  static const _minDisplay = Duration(milliseconds: 900);
 
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnimation;
@@ -34,12 +36,14 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _resolveInitialRoute() async {
-    final loggedIn = await AuthServiceRegistry.instance.isLoggedIn();
+    // Firebase Auth restores the session asynchronously on launch.
+    final user = await AuthService.instance.authStateChanges().first;
+    await Future<void>.delayed(_minDisplay);
     if (!mounted) return;
 
-    final destination = loggedIn
+    final Widget destination = user != null
         ? const MainNavigationScreen()
-        : const WelcomeScreen();
+        : const LoginScreen();
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => destination),
@@ -54,45 +58,39 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: colorScheme.primary,
+      backgroundColor: AppColors.primary,
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnimation,
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
+                  Text(
                     'ప్రశ్న',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 56,
-                      fontWeight: FontWeight.bold,
+                    style: AppTextStyles.display(context).copyWith(
+                      color: AppColors.textOnPrimary,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     'PRASHNA',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          letterSpacing: 6,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: AppTextStyles.titleLarge(context).copyWith(
+                      color: AppColors.textOnPrimary,
+                      letterSpacing: 6,
+                    ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: AppSpacing.xxl),
                   Text(
                     'Every Question. One Step Closer to Victory!',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          height: 1.35,
-                        ),
+                    style: AppTextStyles.titleMedium(context).copyWith(
+                      color: AppColors.textOnPrimary,
+                      height: 1.35,
+                    ),
                   ),
                 ],
               ),

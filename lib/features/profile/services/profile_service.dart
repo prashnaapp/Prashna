@@ -1,22 +1,38 @@
 import '../models/profile_model.dart';
+import '../../authentication/services/auth_service.dart';
 
-/// Profile account data. Dummy today; swap for Firebase later.
+/// Profile account data. Uses Firebase Auth user when signed in.
 class ProfileService {
   ProfileService._();
 
   static final ProfileService instance = ProfileService._();
 
-  ProfileModel getProfile() => const ProfileModel(
-        name: 'Renu Mohan',
-        email: 'renu@prashna.app',
-        avatarInitials: 'RM',
-        isPremium: true,
+  ProfileModel getProfile() {
+    final user = AuthService.instance.currentUser;
+    if (user == null) {
+      return const ProfileModel(
+        name: 'Guest',
+        email: '',
+        avatarInitials: 'G',
+        isPremium: false,
       );
+    }
+
+    return ProfileModel(
+      name: user.displayName?.trim().isNotEmpty == true
+          ? user.displayName!.trim()
+          : 'Prashna Student',
+      email: user.email ?? '',
+      avatarInitials: user.initials,
+      avatarImageUrl: user.photoUrl,
+      isPremium: false,
+    );
+  }
 
   SubscriptionInfo getSubscription() => const SubscriptionInfo(
-        planName: 'Premium Annual',
-        expiryDateLabel: 'Expires 12 Mar 2027',
-        isActive: true,
+        planName: 'Free Plan',
+        expiryDateLabel: 'Upgrade for premium features',
+        isActive: false,
       );
 
   List<ProfilePreference> getPreferences() => const [

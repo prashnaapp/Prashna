@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../../navigation/tab_scroll_view.dart';
+import '../../../authentication/screens/login_screen.dart';
+import '../../../authentication/services/auth_service.dart';
 import '../../services/profile_service.dart';
 import '../widgets/legal_section.dart';
 import '../widgets/logout_button.dart';
@@ -76,16 +78,17 @@ class ProfileScreen extends StatelessWidget {
   }
 
   void _soon(BuildContext context, String title) {
-    // TODO: Wire real navigation / deep links.
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$title — coming soon')),
     );
   }
 
-  void _onLogout(BuildContext context) {
-    // TODO: Connect AuthService.signOut when auth is ready.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Logout — coming soon')),
+  Future<void> _onLogout(BuildContext context) async {
+    await AuthService.instance.signOut();
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
     );
   }
 }

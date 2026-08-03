@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../auth/login_screen.dart';
+import '../../features/authentication/screens/login_screen.dart';
 
+/// Legacy welcome entry — routes into Google Sign-In login.
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
+
+  void _openLogin(BuildContext context) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +54,7 @@ class WelcomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  'Learn • Practice • Succeed.',
+                  'Prepare • Practice • Succeed',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 16,
@@ -57,14 +65,7 @@ class WelcomeScreen extends StatelessWidget {
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => LoginScreen(),
-                        ),
-                      );
-                    },
+                    onPressed: () => _openLogin(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.blue,
@@ -83,14 +84,7 @@ class WelcomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => LoginScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: () => _openLogin(context),
                   child: const Text(
                     'Already have an account? Login',
                     style: TextStyle(
