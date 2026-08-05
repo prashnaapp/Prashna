@@ -22,5 +22,12 @@ service cloud.firestore {
         && request.auth.uid == userId;
       allow delete: if false;
     }
+
+    // Cloud revision mirror — owner read/create/update only; no delete.
+    match /user_revision/{userId} {
+      allow read, create, update: if request.auth != null
+        && request.auth.uid == userId;
+      allow delete: if false;
+    }
   }
 }

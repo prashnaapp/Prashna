@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../progress/services/progress_service.dart';
 import '../../question_bank/data/models/question_models.dart';
 import '../../question_bank/data/services/question_service.dart';
+import '../../revision/services/revision_service.dart';
 import '../data/mappers/question_bank_mapper.dart';
 import '../data/models/test_engine_models.dart';
 import '../data/repositories/test_repository.dart';
@@ -361,6 +362,8 @@ class TestService {
       result: result,
       attempts: attempts,
     );
+    // Mirror revision lists (wrong / weak / frequent) without blocking submit.
+    RevisionService.instance.scheduleCloudSync(courseId: test.courseId);
     onCompleted?.call(result);
     onCompleted = null;
     return result;
