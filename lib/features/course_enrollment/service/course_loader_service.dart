@@ -6,19 +6,25 @@ import '../model/course_context.dart';
 import '../model/user_course.dart';
 import '../repository/course_repository.dart';
 import '../repository/user_course_repository.dart';
+import 'course_catalog_service.dart';
 
 /// Read-only startup loader for published courses + current enrollment.
 ///
+/// Published catalog comes from [CourseCatalogService].
 /// Caches an immutable [CourseContext] in memory. Never writes to Firestore.
 class CourseLoaderService {
   CourseLoaderService({
+    CourseCatalogService? catalogService,
     CourseRepository? courseRepository,
     UserCourseRepository? userCourseRepository,
-  })  : _courses = courseRepository ?? CourseRepository(),
+  })  : _catalog = catalogService ??
+            CourseCatalogService(courseRepository: courseRepository),
+        _courses = courseRepository ?? CourseRepository(),
         _userCourses = userCourseRepository ?? UserCourseRepository();
 
   static final CourseLoaderService instance = CourseLoaderService();
 
+  final CourseCatalogService _catalog;
   final CourseRepository _courses;
   final UserCourseRepository _userCourses;
 
@@ -41,7 +47,7 @@ class CourseLoaderService {
     try {
       final uid = AuthService.instance.currentUser?.uid;
 
-      final published = await _courses.loadPublishedCourses();
+      final published = await _catalog.loadPublishedCourses();
 
       UserCourse? enrollment;
       if (uid != null && uid.isNotEmpty) {

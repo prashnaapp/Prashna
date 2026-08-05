@@ -19,7 +19,9 @@ class CourseRepository {
   DocumentReference<Map<String, dynamic>> docRef(String courseId) =>
       _courses.doc(courseId);
 
-  /// Loads catalog courses where `isPublished == true`.
+  /// Loads catalog documents where `isPublished == true`.
+  ///
+  /// Sorting by `sortOrder` is intentionally left to [CourseCatalogService].
   Future<List<Course>> loadPublishedCourses() async {
     try {
       final snapshot = await _courses
