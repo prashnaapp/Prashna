@@ -1,3 +1,10 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import '../../authentication/services/auth_service.dart';
+import '../../progress_cloud/model/user_progress.dart';
+import '../../progress_cloud/service/progress_cloud_service.dart';
 import '../../syllabus/services/syllabus_service.dart';
 import '../../test_engine/data/models/test_engine_models.dart';
 import '../calculators/progress_calculator.dart';
@@ -7,6 +14,8 @@ import '../data/progress_dummy_data.dart';
 import '../data/repositories/progress_repository.dart';
 
 /// Single source of truth for syllabus progress + attempt analytics.
+///
+/// Local storage remains authoritative. Cloud sync is asynchronous and best-effort.
 class ProgressService {
   ProgressService._();
 
@@ -14,8 +23,13 @@ class ProgressService {
 
   final ProgressCalculator _calculator = ProgressCalculator();
   final ProgressRepository _repository = ProgressRepository.instance;
+  final ProgressCloudService _cloud = ProgressCloudService.instance;
   final Map<String, OverallProgress> _overallCache = {};
   final Map<String, double> _testMarkCredits = {};
+
+  /// Coalesces rapid sync requests so only the latest snapshot is written.
+  int _cloudSyncGeneration = 0;
+  String? _pendingCloudCourseId;
 
   // ---------------------------------------------------------------------------
   // Attempt analytics (Progress Engine)
@@ -74,6 +88,10 @@ class ProgressService {
       correctAnswers: result.correct,
       totalQuestions: result.totalQuestions,
     );
+
+    // Ensure attempt history is mirrored even if applyTestCompletion no-ops.
+    // Coalesced with the schedule inside applyTestCompletion when both run.
+    _scheduleCloudSync(courseId: test.courseId);
   }
 
   Future<List<String>> loadWrongQuestionIds() =>
@@ -295,6 +313,9 @@ class ProgressService {
     final earned = correctAnswers.toDouble();
     _testMarkCredits[examId] = (_testMarkCredits[examId] ?? 0) + earned;
     _overallCache.remove(examId);
+
+    // Fire-and-forget — UI never awaits Firestore.
+    _scheduleCloudSync(courseId: examId);
   }
 
   OverallProgress _withTestCredits(OverallProgress progress, String examId) {
@@ -498,4 +519,135 @@ class ProgressService {
 
   String _topicLabel(String topicId) =>
       'Topic ${topicId.replaceAll('topic-', '')}';
+
+  // ---------------------------------------------------------------------------
+  // Cloud sync (best-effort mirror of local progress)
+  // ---------------------------------------------------------------------------
+
+  /// Schedules an async Firestore sync. Rapid calls are coalesced so only the
+  /// latest local snapshot is written (prevents duplicate overlapping writes).
+  void _scheduleCloudSync({required String courseId}) {
+    // TEMP DEBUG (Milestone 15.3)
+    debugPrint('Cloud sync requested');
+
+    final user = AuthService.instance.currentUser;
+    final uid = user?.uid;
+    // TEMP DEBUG (Milestone 15.3)
+    debugPrint('Current Firebase UID: ${uid ?? 'NULL'}');
+    debugPrint('Current Firebase user email: ${user?.email ?? 'NULL'}');
+
+    if (uid == null || uid.isEmpty) {
+      // TEMP DEBUG (Milestone 15.3)
+      debugPrint('_scheduleCloudSync returns early: YES (UID null/empty)');
+      return;
+    }
+
+    // TEMP DEBUG (Milestone 15.3)
+    debugPrint('_scheduleCloudSync returns early: NO');
+
+    _pendingCloudCourseId = courseId;
+    final generation = ++_cloudSyncGeneration;
+
+    unawaited(_runCloudSync(uid: uid, generation: generation));
+  }
+
+  Future<void> _runCloudSync({
+    required String uid,
+    required int generation,
+  }) async {
+    // Brief delay lets recordTestAttempt → applyTestCompletion collapse into one write.
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (generation != _cloudSyncGeneration) return;
+
+    final courseId = _pendingCloudCourseId;
+    if (courseId == null) return;
+
+    try {
+      final snapshot = await _buildCloudSnapshot(uid: uid, courseId: courseId);
+      if (generation != _cloudSyncGeneration) return;
+      await _cloud.syncSnapshot(snapshot);
+    } catch (error, stack) {
+      // Never crash — local progress already committed.
+      debugPrint('ProgressService cloud sync failed: $error\n$stack');
+    }
+  }
+
+  Future<UserProgress> _buildCloudSnapshot({
+    required String uid,
+    required String courseId,
+  }) async {
+    final summary = await generateSummary(courseId: courseId);
+    final history = await loadHistory(courseId: courseId);
+
+    final questionsCorrect =
+        history.fold<int>(0, (sum, item) => sum + item.correct);
+    final questionsAttempted = history.fold<int>(
+      0,
+      (sum, item) => sum + item.correct + item.wrong + item.skipped,
+    );
+
+    var completion = 0.0;
+    var chaptersCompleted = 0;
+    var totalChapters = 0;
+    final papers = <String, dynamic>{};
+    final chapters = <String, dynamic>{};
+
+    if (ProgressDummyData.examSeeds.containsKey(courseId)) {
+      try {
+        final overall = getOverallProgress(courseId);
+        completion = overall.progressPercent;
+        for (final paper in overall.papers) {
+          papers[paper.id] = {
+            'id': paper.id,
+            'label': paper.label,
+            'maxMarks': paper.maxMarks,
+            'coveredMarks': paper.coveredMarks,
+            'progressPercent': paper.progressPercent,
+            'remainingMarks': paper.remainingMarks,
+          };
+          for (final part in paper.parts) {
+            for (final chapter in part.chapters) {
+              totalChapters += 1;
+              if (chapter.progressPercent >= 75 ||
+                  chapter.status.toLowerCase() == 'completed') {
+                chaptersCompleted += 1;
+              }
+              chapters[chapter.id] = {
+                'id': chapter.id,
+                'label': chapter.label,
+                'paperId': paper.id,
+                'partId': part.id,
+                'maxMarks': chapter.maxMarks,
+                'coveredMarks': chapter.coveredMarks,
+                'progressPercent': chapter.progressPercent,
+                'remainingMarks': chapter.remainingMarks,
+                'status': chapter.status,
+              };
+            }
+          }
+        }
+      } catch (error, stack) {
+        debugPrint(
+          'ProgressService cloud snapshot overall skipped: $error\n$stack',
+        );
+      }
+    }
+
+    return UserProgress(
+      uid: uid,
+      courseId: courseId,
+      overall: ProgressOverall(
+        completion: completion,
+        accuracy: summary.averageAccuracy,
+        chaptersCompleted: chaptersCompleted,
+        totalChapters: totalChapters,
+        questionsAttempted: questionsAttempted,
+        questionsCorrect: questionsCorrect,
+      ),
+      papers: papers,
+      chapters: chapters,
+      lastUpdated: null,
+      appVersion: null,
+    );
+  }
 }
