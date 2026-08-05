@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/design_system/design_system.dart';
 import '../../features/authentication/screens/login_screen.dart';
 import '../../features/authentication/services/auth_service.dart';
+import '../../features/course_enrollment/service/course_loader_service.dart';
 import '../../navigation/main_navigation_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -41,10 +42,17 @@ class _SplashScreenState extends State<SplashScreen>
     await Future<void>.delayed(_minDisplay);
     if (!mounted) return;
 
+    if (user != null) {
+      // Read-only course catalog + enrollment cache for the session.
+      await CourseLoaderService.instance.load();
+      if (!mounted) return;
+    }
+
     final Widget destination = user != null
         ? const MainNavigationScreen()
         : const LoginScreen();
 
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => destination),
     );

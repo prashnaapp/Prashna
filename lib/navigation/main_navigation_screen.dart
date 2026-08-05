@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/design_system/design_system.dart';
+import '../features/course_enrollment/service/course_loader_service.dart';
 import '../screens/chapters/chapters_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/profile/profile_screen.dart';
@@ -38,6 +41,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab.index.clamp(0, _pages.length - 1);
+    // Covers fresh Google Sign-In → Home when Splash did not load courses.
+    if (CourseLoaderService.instance.current == null) {
+      unawaited(CourseLoaderService.instance.load());
+    }
   }
 
   void _onDestinationSelected(int index) {
