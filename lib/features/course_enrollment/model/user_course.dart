@@ -22,6 +22,7 @@ class UserCourse {
     required this.status,
     required this.source,
     required this.expiresAt,
+    this.updatedAt,
   });
 
   final String uid;
@@ -30,6 +31,7 @@ class UserCourse {
   final UserCourseStatus status;
   final UserCourseSource source;
   final DateTime? expiresAt;
+  final DateTime? updatedAt;
 
   factory UserCourse.fromFirestore(
     String uid,
@@ -42,9 +44,11 @@ class UserCourse {
       status: _parseStatus(data['status'] as String?),
       source: _parseSource(data['source'] as String?),
       expiresAt: _readTimestamp(data['expiresAt']),
+      updatedAt: _readTimestamp(data['updatedAt']),
     );
   }
 
+  /// First activation write — [enrolledAt] and [updatedAt] are server timestamps.
   Map<String, dynamic> toCreateMap() {
     return {
       'uid': uid,
@@ -53,9 +57,12 @@ class UserCourse {
       'status': status.name,
       'source': source.name,
       'expiresAt': expiresAt == null ? null : Timestamp.fromDate(expiresAt!),
+      'updatedAt': FieldValue.serverTimestamp(),
     };
   }
 
+  /// Update write — preserves [enrolledAt] when already set; always refreshes
+  /// [updatedAt].
   Map<String, dynamic> toUpdateMap() {
     return {
       'uid': uid,
@@ -66,6 +73,7 @@ class UserCourse {
       'status': status.name,
       'source': source.name,
       'expiresAt': expiresAt == null ? null : Timestamp.fromDate(expiresAt!),
+      'updatedAt': FieldValue.serverTimestamp(),
     };
   }
 
@@ -89,6 +97,11 @@ class UserCourse {
       default:
         return UserCourseSource.free;
     }
+  }
+
+  /// Parses activation [source] strings for [CourseEnrollmentService].
+  static UserCourseSource sourceFromString(String source) {
+    return _parseSource(source.trim().toLowerCase());
   }
 
   static DateTime? _readTimestamp(dynamic value) {

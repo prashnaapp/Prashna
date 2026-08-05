@@ -43,6 +43,14 @@ class CourseLoaderService {
     });
   }
 
+  /// Forces a fresh load so [current] reflects the latest Firestore state.
+  ///
+  /// Drops any in-flight [load] coalesce — used after enrollment activation.
+  Future<CourseContext> reload() {
+    _inFlight = null;
+    return load();
+  }
+
   Future<CourseContext> _loadInternal() async {
     try {
       final uid = AuthService.instance.currentUser?.uid;
@@ -76,6 +84,7 @@ class CourseLoaderService {
   /// Clears the in-memory cache (e.g. after sign-out in a later milestone).
   void clear() {
     _current = null;
+    _inFlight = null;
   }
 
   Future<Course?> _resolveActiveCourse({
