@@ -29,6 +29,7 @@ class BookmarkCloudRepository {
       if (!snapshot.exists || snapshot.data() == null) return null;
       return BookmarkCloud.fromFirestore(uid, snapshot.data()!);
     } on FirebaseException catch (error, stack) {
+      // TEMP DEBUG (Milestone 19.1)
       debugPrint(
         'FirebaseException in BookmarkCloudRepository.load: '
         'code=${error.code} message=${error.message}\n$stack',
@@ -42,14 +43,22 @@ class BookmarkCloudRepository {
 
   /// Creates `user_bookmarks/{uid}` with empty questionIds when missing.
   Future<void> createIfMissing(String uid) async {
+    // TEMP DEBUG (Milestone 19.1)
+    debugPrint('createIfMissing collection=$collectionName');
+    debugPrint('createIfMissing documentId=$uid');
     try {
       final snapshot = await docRef(uid).get();
+      // TEMP DEBUG (Milestone 19.1)
+      debugPrint('createIfMissing document exists=${snapshot.exists}');
       if (snapshot.exists) return;
 
       final appVersion = await _resolveAppVersion();
       final initial = BookmarkCloud.initial(uid: uid, appVersion: appVersion);
       await docRef(uid).set(initial.toCreateMap(appVersion: appVersion));
+      // TEMP DEBUG (Milestone 19.1)
+      debugPrint('createIfMissing success');
     } on FirebaseException catch (error, stack) {
+      // TEMP DEBUG (Milestone 19.1)
       debugPrint(
         'FirebaseException in BookmarkCloudRepository.createIfMissing: '
         'code=${error.code} message=${error.message}\n$stack',
@@ -70,7 +79,10 @@ class BookmarkCloudRepository {
         bookmarks.toUpdateMap(appVersion: appVersion),
         SetOptions(merge: false),
       );
+      // TEMP DEBUG (Milestone 19.1)
+      debugPrint('update success');
     } on FirebaseException catch (error, stack) {
+      // TEMP DEBUG (Milestone 19.1)
       debugPrint(
         'FirebaseException in BookmarkCloudRepository.update: '
         'code=${error.code} message=${error.message}\n$stack',

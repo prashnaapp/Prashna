@@ -15,5 +15,12 @@ service cloud.firestore {
         && request.auth.uid == userId;
       allow delete: if false;
     }
+
+    // Cloud bookmarks mirror — owner read/create/update only; no delete.
+    match /user_bookmarks/{userId} {
+      allow read, create, update: if request.auth != null
+        && request.auth.uid == userId;
+      allow delete: if false;
+    }
   }
 }
