@@ -5,6 +5,7 @@ import '../../../course_dashboard/models/course_model.dart';
 import '../../../course_dashboard/presentation/screens/course_dashboard_screen.dart';
 import '../../../course_dashboard/services/course_service.dart';
 import '../../../profile/presentation/profile_navigation.dart';
+import '../../../subscription/service/course_open_guard.dart';
 
 class HomeCoursesSection extends StatelessWidget {
   const HomeCoursesSection({super.key});
@@ -42,17 +43,24 @@ class HomeCoursesSection extends StatelessWidget {
     );
   }
 
-  void _onCourseTap(BuildContext context, CourseModel course) {
-    if (course.isAvailable) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CourseDashboardScreen(courseId: course.id),
-        ),
-      );
+  Future<void> _onCourseTap(BuildContext context, CourseModel course) async {
+    if (!course.isAvailable) {
+      openSubscription(context);
       return;
     }
-    openSubscription(context);
+
+    await CourseOpenGuard.attemptOpen(
+      context: context,
+      courseId: course.id,
+      onAllowed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CourseDashboardScreen(courseId: course.id),
+          ),
+        );
+      },
+    );
   }
 }
 

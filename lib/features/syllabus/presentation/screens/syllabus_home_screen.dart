@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../../navigation/tab_scroll_view.dart';
+import '../../../subscription/service/course_open_guard.dart';
 import '../../data/models/syllabus_models.dart';
 import '../../services/syllabus_service.dart';
 import 'syllabus_papers_screen.dart';
@@ -75,12 +76,18 @@ class SyllabusHomeScreen extends StatelessWidget {
     );
   }
 
-  void _openCourse(BuildContext context, SyllabusCourse course) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SyllabusPapersScreen(courseId: course.id),
-      ),
+  Future<void> _openCourse(BuildContext context, SyllabusCourse course) async {
+    await CourseOpenGuard.attemptOpen(
+      context: context,
+      courseId: course.id,
+      onAllowed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SyllabusPapersScreen(courseId: course.id),
+          ),
+        );
+      },
     );
   }
 

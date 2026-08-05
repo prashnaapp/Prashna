@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/design_system/design_system.dart';
 import '../../../../navigation/tab_scroll_view.dart';
 import '../../../course_dashboard/presentation/screens/course_dashboard_screen.dart';
+import '../../../subscription/service/course_open_guard.dart';
 import '../../services/home_service.dart';
 import '../widgets/continue_learning_card.dart';
 import '../widgets/home_courses_section.dart';
@@ -50,13 +51,19 @@ class HomeScreen extends StatelessWidget {
                 child: ContinueLearningCard(
                   data: continueLearning,
                   onContinue: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CourseDashboardScreen(
-                          courseId: continueLearning.courseId,
-                        ),
-                      ),
+                    CourseOpenGuard.attemptOpen(
+                      context: context,
+                      courseId: continueLearning.courseId,
+                      onAllowed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CourseDashboardScreen(
+                              courseId: continueLearning.courseId,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
