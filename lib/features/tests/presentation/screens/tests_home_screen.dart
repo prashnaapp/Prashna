@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../../navigation/tab_scroll_view.dart';
+import '../../../subscription/service/course_open_guard.dart';
 import '../../data/models/test_models.dart';
 import '../../services/test_service.dart';
 import 'exam_test_home_screen.dart';
@@ -52,10 +53,7 @@ class TestsHomeScreen extends StatelessWidget {
             crossAxisCount: crossAxisCount,
             children: [
               for (final exam in launchingSoon)
-                CourseGridCard(
-                  title: exam.title,
-                  locked: true,
-                ),
+                CourseGridCard(title: exam.title, locked: true),
             ],
           ),
         ],
@@ -63,16 +61,19 @@ class TestsHomeScreen extends StatelessWidget {
     );
   }
 
-  void _openExam(BuildContext context, TestExamSummary exam) {
-    final Widget screen = switch (exam.examId) {
-      'group-ii' => const GroupIITestHomeScreen(),
-      'group-iii' => const GroupIIITestHomeScreen(),
-      _ => ExamTestHomeScreen(examId: exam.examId, examTitle: exam.title),
-    };
+  Future<void> _openExam(BuildContext context, TestExamSummary exam) async {
+    await CourseOpenGuard.attemptOpen(
+      context: context,
+      courseId: exam.examId,
+      onAllowed: () {
+        final Widget screen = switch (exam.examId) {
+          'group-ii' => const GroupIITestHomeScreen(),
+          'group-iii' => const GroupIIITestHomeScreen(),
+          _ => ExamTestHomeScreen(examId: exam.examId, examTitle: exam.title),
+        };
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => screen),
+        Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+      },
     );
   }
 
@@ -85,10 +86,7 @@ class TestsHomeScreen extends StatelessWidget {
 }
 
 class _ExamGrid extends StatelessWidget {
-  const _ExamGrid({
-    required this.crossAxisCount,
-    required this.children,
-  });
+  const _ExamGrid({required this.crossAxisCount, required this.children});
 
   final int crossAxisCount;
   final List<Widget> children;

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../test_engine/presentation/screens/test_attempt_history_screen.dart';
+
 /// Lightweight placeholders for Profile actions used outside the Profile tab.
 /// Full screens live on the Account tab; deep links can be wired later.
 
@@ -30,5 +32,11 @@ void openHelpSupport(BuildContext context) {
 void openEditProfile(BuildContext context) {
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(content: Text('Edit Profile — coming soon')),
+  );
+}
+
+void openTestHistory(BuildContext context) {
+  Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const TestAttemptHistoryScreen()),
   );
 }

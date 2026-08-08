@@ -4,6 +4,7 @@ import '../../../../core/design_system/design_system.dart';
 import '../../../../navigation/tab_scroll_view.dart';
 import '../../../bookmarks/presentation/bookmark_navigation.dart';
 import '../../../revision/presentation/revision_navigation.dart';
+import '../../../subscription/service/course_open_guard.dart';
 import '../../../syllabus/presentation/screens/syllabus_papers_screen.dart';
 import '../../../tests/presentation/screens/exam_test_home_screen.dart';
 import '../../models/course_dashboard_models.dart';
@@ -36,8 +37,7 @@ class _CourseDashboardScreenState extends State<CourseDashboardScreen> {
 
   void _reload() {
     setState(() {
-      _future =
-          CourseDashboardService.instance.loadDashboard(widget.courseId);
+      _future = CourseDashboardService.instance.loadDashboard(widget.courseId);
     });
   }
 
@@ -78,10 +78,11 @@ class _CourseDashboardScreenState extends State<CourseDashboardScreen> {
                           onPracticeBits: () => _openPracticeBits(context),
                           onTestSeries: () =>
                               _openTestSeries(context, data.title),
-                          onRevision: () => RevisionNavigation.openRevisionCenter(
-                            context,
-                            courseId: widget.courseId,
-                          ),
+                          onRevision: () =>
+                              RevisionNavigation.openRevisionCenter(
+                                context,
+                                courseId: widget.courseId,
+                              ),
                           onBookmarks: () => openBookmarks(context),
                         ),
                         const SizedBox(height: AppSpacing.xxxl),
@@ -110,16 +111,22 @@ class _CourseDashboardScreenState extends State<CourseDashboardScreen> {
   }
 
   Future<void> _openTestSeries(BuildContext context, String title) async {
-    final Widget screen = switch (widget.courseId) {
-      'group-ii' => const GroupIITestHomeScreen(),
-      'group-iii' => const GroupIIITestHomeScreen(),
-      _ => ExamTestHomeScreen(examId: widget.courseId, examTitle: title),
-    };
+    await CourseOpenGuard.attemptOpen(
+      context: context,
+      courseId: widget.courseId,
+      onAllowed: () {
+        final Widget screen = switch (widget.courseId) {
+          'group-ii' => const GroupIITestHomeScreen(),
+          'group-iii' => const GroupIIITestHomeScreen(),
+          _ => ExamTestHomeScreen(examId: widget.courseId, examTitle: title),
+        };
 
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => screen),
+        Navigator.push(context, MaterialPageRoute(builder: (_) => screen)).then(
+          (_) {
+            if (mounted) _reload();
+          },
+        );
+      },
     );
-    if (mounted) _reload();
   }
 }

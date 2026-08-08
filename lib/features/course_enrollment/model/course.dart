@@ -32,10 +32,7 @@ class Course {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
-  factory Course.fromFirestore(
-    String courseId,
-    Map<String, dynamic> data,
-  ) {
+  factory Course.fromFirestore(String courseId, Map<String, dynamic> data) {
     return Course(
       courseId: (data['courseId'] as String?) ?? courseId,
       title: (data['title'] as String?) ?? '',

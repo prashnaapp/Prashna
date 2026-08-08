@@ -29,6 +29,7 @@ class TestModel {
     required this.durationMinutes,
     required this.negativeMarking,
     required this.difficulty,
+    this.questionIds = const [],
   });
 
   final String id;
@@ -40,6 +41,10 @@ class TestModel {
   final int durationMinutes;
   final String negativeMarking;
   final String difficulty;
+
+  /// Optional ordered Firestore question IDs for fixed assignment.
+  /// Empty → existing dynamic Question Bank selection.
+  final List<String> questionIds;
 }
 
 class InstructionModel {

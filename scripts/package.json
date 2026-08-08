@@ -1,0 +1,13 @@
+{
+  "name": "prashna-admin-scripts",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Offline ops tooling for Prashna (not part of the Flutter app).",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

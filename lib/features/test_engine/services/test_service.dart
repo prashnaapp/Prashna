@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import '../../progress/services/progress_service.dart';
 import '../../question_bank/data/models/question_models.dart';
 import '../../question_bank/data/services/question_service.dart';
@@ -8,6 +10,7 @@ import '../data/mappers/question_bank_mapper.dart';
 import '../data/models/test_engine_models.dart';
 import '../data/repositories/test_repository.dart';
 import '../data/test_engine_defaults.dart';
+import '../repository/test_attempt_cloud_repository.dart';
 
 /// Core Test Attempt Engine service.
 ///
@@ -17,14 +20,22 @@ class TestService {
   TestService({
     TestRepository? repository,
     QuestionService? questionService,
-  })  : _repository = repository ?? TestRepository.instance,
-        _questionService = questionService ?? QuestionService.instance;
+    TestAttemptCloudRepository? attemptCloudRepository,
+  }) : _repository = repository ?? TestRepository.instance,
+       _questionService = questionService ?? QuestionService.instance,
+       _attemptCloud =
+           attemptCloudRepository ?? TestAttemptCloudRepository();
 
   final TestRepository _repository;
   final QuestionService _questionService;
+  final TestAttemptCloudRepository _attemptCloud;
 
   /// Optional hook after submit (e.g. progress credit). Cleared after run.
   void Function(TestResult result)? onCompleted;
+
+  /// Dedupes cloud saves if [submitTest] is invoked more than once on this
+  /// instance (controller already guards UI double-submit).
+  String? _cloudSavedAttemptKey;
 
   Future<Test> loadTest(String testId) => _repository.loadTest(testId);
 
@@ -132,10 +143,78 @@ class TestService {
     required List<String> questionIds,
     TestMode mode = TestMode.practice,
     Duration? duration,
+    int? totalMarks,
     double negativeMarks = 0.25,
     List<String>? instructions,
+    bool requireCompleteSet = false,
+    bool requireCourseMatch = false,
+    int? expectedCount,
   }) async {
+    if (requireCompleteSet && questionIds.isEmpty) {
+      throw StateError(
+        'Test configuration is invalid: questionIds must not be empty.',
+      );
+    }
+
+    if (expectedCount != null && questionIds.length != expectedCount) {
+      throw StateError(
+        'Test configuration is invalid: questionIds length '
+        '(${questionIds.length}) does not match questionCount ($expectedCount).',
+      );
+    }
+
     final questions = await _questionService.getByIds(questionIds);
+
+    if (requireCompleteSet) {
+      if (questions.length != questionIds.length) {
+        throw StateError(
+          'Test configuration is invalid: one or more assigned questions '
+          'are missing.',
+        );
+      }
+      for (var i = 0; i < questionIds.length; i++) {
+        if (questions[i].id != questionIds[i]) {
+          throw StateError(
+            'Test configuration is invalid: one or more assigned questions '
+            'are missing.',
+          );
+        }
+      }
+    }
+
+    if (requireCourseMatch) {
+      for (final question in questions) {
+        if (question.courseId != courseId) {
+          throw StateError(
+            'Test configuration is invalid: assigned questions must belong '
+            'to the same course as the test.',
+          );
+        }
+      }
+    }
+
+    // Catalog fixed path: honor configured totalMarks / duration.
+    if (totalMarks != null && duration != null) {
+      final mapped = QuestionBankMapper.toTestQuestions(questions);
+      final test = Test(
+        id: id,
+        title: title,
+        courseId: courseId,
+        paperId: questions.isEmpty ? null : questions.first.paperId,
+        sectionId: questions.isEmpty ? null : questions.first.sectionId,
+        topicId: questions.isEmpty ? null : questions.first.topicId,
+        duration: duration,
+        totalQuestions: mapped.length,
+        totalMarks: totalMarks,
+        negativeMarks: negativeMarks,
+        instructions: instructions ?? TestEngineDefaults.instructions,
+        mode: mode,
+        questions: mapped,
+      );
+      await _repository.loadOrCache(test);
+      return test;
+    }
+
     return createTestFromQuestions(
       id: id,
       title: title,
@@ -364,9 +443,69 @@ class TestService {
     );
     // Mirror revision lists (wrong / weak / frequent) without blocking submit.
     RevisionService.instance.scheduleCloudSync(courseId: test.courseId);
+
+    // Best-effort Firestore persistence — never blocks or alters the result.
+    await _persistAttemptToCloud(
+      test: test,
+      result: result,
+      attempts: attempts,
+      timeTaken: timeTaken,
+    );
+
     onCompleted?.call(result);
     onCompleted = null;
     return result;
+  }
+
+  /// Best-effort cloud persist used by [submitTest]. Exposed for unit tests.
+  @visibleForTesting
+  Future<void> persistCompletedAttemptToCloud({
+    required Test test,
+    required TestResult result,
+    required List<QuestionAttempt> attempts,
+    required Duration timeTaken,
+  }) {
+    return _persistAttemptToCloud(
+      test: test,
+      result: result,
+      attempts: attempts,
+      timeTaken: timeTaken,
+    );
+  }
+
+  Future<void> _persistAttemptToCloud({
+    required Test test,
+    required TestResult result,
+    required List<QuestionAttempt> attempts,
+    required Duration timeTaken,
+  }) async {
+    final dedupeKey = '${test.id}:${result.score}:${timeTaken.inSeconds}';
+    if (_cloudSavedAttemptKey == dedupeKey) {
+      debugPrint(
+        'TestService: skipping duplicate cloud attempt save for $dedupeKey',
+      );
+      return;
+    }
+
+    final saveResult = await _attemptCloud.saveCompletedAttempt(
+      test: test,
+      result: result,
+      attempts: attempts,
+      timeTaken: timeTaken,
+    );
+
+    if (saveResult.success) {
+      _cloudSavedAttemptKey = dedupeKey;
+      debugPrint(
+        'TestService: saved test attempt ${saveResult.attemptId} to Firestore',
+      );
+      return;
+    }
+
+    debugPrint(
+      'TestService: Firestore attempt save failed '
+      '(result screen unchanged): ${saveResult.error}',
+    );
   }
 
   Future<void> saveProgress({

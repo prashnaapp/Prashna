@@ -21,7 +21,7 @@ class PaymentPlan {
   final String description;
   final num amount;
   final String currency;
-  final int durationDays;
+  final int? durationDays;
   final bool isActive;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -37,7 +37,7 @@ class PaymentPlan {
       description: (data['description'] as String?) ?? '',
       amount: (data['amount'] as num?) ?? 0,
       currency: (data['currency'] as String?) ?? 'INR',
-      durationDays: (data['durationDays'] as num?)?.toInt() ?? 0,
+      durationDays: (data['durationDays'] as num?)?.toInt(),
       isActive: (data['isActive'] as bool?) ?? false,
       createdAt: _readTimestamp(data['createdAt']),
       updatedAt: _readTimestamp(data['updatedAt']),

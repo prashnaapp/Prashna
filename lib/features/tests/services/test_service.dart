@@ -4,11 +4,25 @@ import '../../progress/services/progress_service.dart';
 import '../../syllabus/services/syllabus_service.dart';
 import '../data/models/test_models.dart';
 import '../data/tests_dummy_data.dart';
+import '../repository/test_cloud_repository.dart';
 
+/// Test Series **catalog** service (definitions / navigation metadata).
+///
+/// Not the attempt engine (`features/test_engine/services/test_service.dart`).
+///
+/// Published test lists for [getTests] load from Firestore via
+/// [TestCloudRepository]. Paper-wise / mock / previous-paper helpers still use
+/// [TestsDummyData] until those catalogs are migrated.
+///
+/// On Firestore failure, errors propagate — there is **no** silent dummy
+/// fallback for test definitions.
 class TestService {
-  TestService._();
+  TestService({TestCloudRepository? cloudRepository})
+    : _cloudRepository = cloudRepository ?? TestCloudRepository();
 
-  static final TestService instance = TestService._();
+  static final TestService instance = TestService();
+
+  final TestCloudRepository _cloudRepository;
 
   /// Exam catalog from [SyllabusService] — same MVP list as Progress / Home.
   List<TestExamSummary> getExamSummaries() {
@@ -32,8 +46,7 @@ class TestService {
   List<TestModel> getPaperWiseParts({
     required String examId,
     required String paperId,
-  }) =>
-      TestsDummyData.paperWisePartsFor(examId: examId, paperId: paperId);
+  }) => TestsDummyData.paperWisePartsFor(examId: examId, paperId: paperId);
 
   List<MockTestEntry> getMockTests(String examId) =>
       TestsDummyData.mockTestsListFor(examId);
@@ -45,12 +58,11 @@ class TestService {
     required String examId,
     required MockTestEntry mock,
     required PaperWisePaper paper,
-  }) =>
-      TestsDummyData.mockPaperTest(
-        examId: examId,
-        mock: mock,
-        paper: paper,
-      );
+  }) => TestsDummyData.mockPaperTest(
+    examId: examId,
+    mock: mock,
+    paper: paper,
+  );
 
   List<PreviousPaperExam> getPreviousPaperExams() =>
       TestsDummyData.previousPaperExams();
@@ -65,25 +77,32 @@ class TestService {
     required String examId,
     required PreviousPaperYear year,
     required PaperWisePaper paper,
-  }) =>
-      TestsDummyData.previousPaperTest(
-        examId: examId,
-        year: year,
-        paper: paper,
-      );
+  }) => TestsDummyData.previousPaperTest(
+    examId: examId,
+    year: year,
+    paper: paper,
+  );
 
-  List<TestModel> getTests({
+  /// Published Firestore test definitions for [examId], filtered by [category].
+  ///
+  /// Primary source: `tests` collection (`courseId` + `isPublished`).
+  /// Does not fall back to [TestsDummyData] on error.
+  Future<List<TestModel>> getTests({
     required String examId,
     required TestCategoryType category,
-  }) =>
-      TestsDummyData.testsFor(examId: examId, category: category);
+  }) async {
+    final published = await _cloudRepository.loadPublishedTests(examId);
+    return [
+      for (final test in published)
+        if (test.category == category) test,
+    ];
+  }
 
-  TestModel getTest(String testId) {
+  Future<TestModel> getTest(String testId) async {
     for (final exam in getExamSummaries().where((e) => e.isEnabled)) {
-      for (final category in TestCategoryType.values) {
-        for (final test in getTests(examId: exam.examId, category: category)) {
-          if (test.id == testId) return test;
-        }
+      final tests = await _cloudRepository.loadPublishedTests(exam.examId);
+      for (final test in tests) {
+        if (test.id == testId) return test;
       }
     }
     throw ArgumentError('Unknown testId: $testId');

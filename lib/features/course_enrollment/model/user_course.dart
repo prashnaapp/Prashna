@@ -1,19 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Enrollment status for [UserCourse].
-enum UserCourseStatus {
-  active,
-  inactive,
-}
+enum UserCourseStatus { active, inactive }
 
 /// How the user obtained access to the course.
-enum UserCourseSource {
-  free,
-  purchase,
-  admin,
-}
+enum UserCourseSource { free, purchase, admin }
 
-/// Firestore enrollment document (`user_courses/{uid}`).
+/// Firestore enrollment document (`user_courses/{uid}/courses/{courseId}`).
+///
+/// Legacy flat documents lived at `user_courses/{uid}` and are migrated into
+/// the subcollection without deleting the parent.
 class UserCourse {
   const UserCourse({
     required this.uid,
@@ -35,11 +31,12 @@ class UserCourse {
 
   factory UserCourse.fromFirestore(
     String uid,
-    Map<String, dynamic> data,
-  ) {
+    Map<String, dynamic> data, {
+    String? courseIdFallback,
+  }) {
     return UserCourse(
       uid: (data['uid'] as String?) ?? uid,
-      courseId: (data['courseId'] as String?) ?? '',
+      courseId: (data['courseId'] as String?) ?? courseIdFallback ?? '',
       enrolledAt: _readTimestamp(data['enrolledAt']),
       status: _parseStatus(data['status'] as String?),
       source: _parseSource(data['source'] as String?),
@@ -74,6 +71,23 @@ class UserCourse {
       'source': source.name,
       'expiresAt': expiresAt == null ? null : Timestamp.fromDate(expiresAt!),
       'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  /// Payload used when copying a legacy parent doc into the subcollection.
+  Map<String, dynamic> toLegacyMigrationMap() {
+    return {
+      'uid': uid,
+      'courseId': courseId,
+      'enrolledAt': enrolledAt == null
+          ? FieldValue.serverTimestamp()
+          : Timestamp.fromDate(enrolledAt!),
+      'status': status.name,
+      'source': source.name,
+      'expiresAt': expiresAt == null ? null : Timestamp.fromDate(expiresAt!),
+      'updatedAt': updatedAt == null
+          ? FieldValue.serverTimestamp()
+          : Timestamp.fromDate(updatedAt!),
     };
   }
 

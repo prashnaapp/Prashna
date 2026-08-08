@@ -7,9 +7,8 @@ import '../repository/course_repository.dart';
 /// Filters unpublished courses and sorts by [Course.sortOrder] ascending.
 /// No writes, payments, or enrollment logic.
 class CourseCatalogService {
-  CourseCatalogService({
-    CourseRepository? courseRepository,
-  }) : _courses = courseRepository ?? CourseRepository();
+  CourseCatalogService({CourseRepository? courseRepository})
+    : _courses = courseRepository ?? CourseRepository();
 
   static final CourseCatalogService instance = CourseCatalogService();
 

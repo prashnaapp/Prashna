@@ -12,6 +12,14 @@
 .swiftpm/
 migrate_working_dir/
 
+# Admin ops tooling (scripts/) — never commit secrets or node deps
+scripts/node_modules/
+**/serviceAccount*.json
+**/*-firebase-adminsdk-*.json
+**/google-services-private.json
+.env
+.env.*
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -43,3 +51,4 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+.firebase/

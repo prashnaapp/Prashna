@@ -16,8 +16,13 @@ abstract final class TestsDummyData {
     TestCategoryType.previousYear: 'Previous Papers',
   };
 
-  /// Phase 1 Group dashboard — three entry cards only.
+  /// Group dashboard entry cards.
+  ///
+  /// Chapter Tests lists are Firestore-backed via [TestService.getTests].
+  /// Other entries still use dummy paper/mock/previous navigation until
+  /// those catalogs are migrated.
   static const dashboardCategories = <TestCategoryType>[
+    TestCategoryType.chapterTests,
     TestCategoryType.partTests,
     TestCategoryType.mockTests,
     TestCategoryType.previousYear,

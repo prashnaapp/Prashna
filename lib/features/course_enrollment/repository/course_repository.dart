@@ -5,9 +5,8 @@ import '../model/course.dart';
 
 /// Firestore boundary for the top-level `courses` collection.
 class CourseRepository {
-  CourseRepository({
-    FirebaseFirestore? firestore,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance;
+  CourseRepository({FirebaseFirestore? firestore})
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   static const String collectionName = 'courses';
 

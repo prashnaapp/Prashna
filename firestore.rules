@@ -1,51 +1,258 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Existing users collection — ownership rules unchanged.
+    // ============================================================
+    // SHARED HELPERS
+    // ============================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function courseDoc(courseId) {
+      return get(/databases/$(database)/documents/courses/$(courseId));
+    }
+
+    function enrollmentDoc(courseId) {
+      return get(/databases/$(database)/documents/user_courses/$(request.auth.uid)/courses/$(courseId));
+    }
+
+    function isCourseFree(courseId) {
+      return exists(/databases/$(database)/documents/courses/$(courseId))
+        && courseDoc(courseId).data.isFree == true;
+    }
+
+    function hasActiveEnrollment(courseId) {
+      return exists(/databases/$(database)/documents/user_courses/$(request.auth.uid)/courses/$(courseId))
+        && enrollmentDoc(courseId).data.status == 'active'
+        && (
+          !('expiresAt' in enrollmentDoc(courseId).data)
+          || enrollmentDoc(courseId).data.expiresAt == null
+          || enrollmentDoc(courseId).data.expiresAt > request.time
+        );
+    }
+
+    // Mirrors SubscriptionAccessService.canAccessCourse:
+    // free course OR active non-expired enrollment for exact courseId.
+    function canAccessCourse(courseId) {
+      return isSignedIn()
+        && (isCourseFree(courseId) || hasActiveEnrollment(courseId));
+    }
+
+    // Admin privilege comes ONLY from Firebase Auth custom claims.
+    // Never authorize from users/{uid}.role, isAdmin, or any Firestore field.
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.admin == true;
+    }
+
+
+    // ============================================================
+    // USERS
+    // ============================================================
     match /users/{userId} {
       allow read, create, update: if request.auth != null
         && request.auth.uid == userId;
+
       allow delete: if false;
     }
 
-    // Cloud progress mirror — owner read/create/update only; no delete.
+
+    // ============================================================
+    // USER PROGRESS
+    // ============================================================
     match /user_progress/{userId} {
       allow read, create, update: if request.auth != null
         && request.auth.uid == userId;
+
       allow delete: if false;
     }
 
-    // Cloud bookmarks mirror — owner read/create/update only; no delete.
+
+    // ============================================================
+    // USER BOOKMARKS
+    // ============================================================
     match /user_bookmarks/{userId} {
       allow read, create, update: if request.auth != null
         && request.auth.uid == userId;
+
       allow delete: if false;
     }
 
-    // Cloud revision mirror — owner read/create/update only; no delete.
+
+    // ============================================================
+    // USER REVISION
+    // ============================================================
     match /user_revision/{userId} {
       allow read, create, update: if request.auth != null
         && request.auth.uid == userId;
+
       allow delete: if false;
     }
 
-    // Course catalog — authenticated read only; no client writes.
+
+    // ============================================================
+    // COURSE CATALOG
+    // ============================================================
+    // Authenticated users can read published course information.
+    // Clients cannot modify courses.
     match /courses/{courseId} {
       allow read: if request.auth != null;
+
       allow create, update: if false;
       allow delete: if false;
     }
 
-    // Course enrollment — owner read/create/update only; no delete.
+
+    // ============================================================
+    // USER COURSES / ENROLLMENTS
+    // ============================================================
+    //
+    // Legacy document:
+    // user_courses/{userId}
+    //
+    // New multi-course structure:
+    // user_courses/{userId}/courses/{courseId}
+    //
     match /user_courses/{userId} {
+
+      // Legacy parent document
       allow read: if request.auth != null
         && request.auth.uid == userId;
+
       allow create: if request.auth != null
         && request.auth.uid == userId;
+
       allow update: if request.auth != null
         && request.auth.uid == userId;
+
+      allow delete: if false;
+
+
+      // ----------------------------------------------------------
+      // Individual course enrollment
+      // ----------------------------------------------------------
+      match /courses/{courseId} {
+
+        allow read: if request.auth != null
+          && request.auth.uid == userId;
+
+        allow create: if request.auth != null
+          && request.auth.uid == userId;
+
+        allow update: if request.auth != null
+          && request.auth.uid == userId;
+
+        allow delete: if false;
+      }
+    }
+
+
+    // ============================================================
+    // PAYMENT PLANS
+    // ============================================================
+    //
+    // Users need to read plans so the subscription screen can show:
+    //
+    // Group-III
+    //   30 Days  ₹149
+    //   90 Days  ₹299
+    //   365 Days ₹699
+    //
+    // Clients must NOT be able to create/change/delete plans.
+    //
+    match /payment_plans/{planId} {
+
+      allow read: if request.auth != null;
+
+      allow create, update, delete: if false;
+    }
+
+
+    // ============================================================
+    // PAYMENT TRANSACTIONS
+    // ============================================================
+    //
+    // A signed-in user can:
+    // - create their own transaction
+    // - read their own transaction
+    //
+    // Clients cannot modify or delete transactions afterwards.
+    //
+    match /payment_transactions/{transactionId} {
+
+      allow read: if request.auth != null
+        && resource.data.uid == request.auth.uid;
+
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+
+    // ============================================================
+    // QUESTIONS (Test Series bank)
+    // ============================================================
+    match /questions/{questionId} {
+      // Entitled students: active questions for their course only.
+      allow read: if isSignedIn()
+        && resource.data.isActive == true
+        && canAccessCourse(resource.data.courseId);
+
+      // Admins: full read (including inactive) + CRUD.
+      allow read: if isAdmin();
+
+      allow create, update, delete: if isAdmin();
+    }
+
+
+    // ============================================================
+    // TESTS (Test Series definitions)
+    // ============================================================
+    match /tests/{testId} {
+      // Entitled students: published tests for their course only.
+      allow read: if isSignedIn()
+        && resource.data.isPublished == true
+        && canAccessCourse(resource.data.courseId);
+
+      // Admins: full read (including unpublished) + CRUD.
+      allow read: if isAdmin();
+
+      allow create, update, delete: if isAdmin();
+    }
+
+
+    // ============================================================
+    // TEST ATTEMPTS
+    // ============================================================
+    match /test_attempts/{attemptId} {
+      allow read: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.courseId is string
+        && request.resource.data.testId is string
+        && canAccessCourse(request.resource.data.courseId);
+
+      // Own attempts only; uid / courseId / testId immutable after create.
+      allow update: if isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.courseId == resource.data.courseId
+        && request.resource.data.testId == resource.data.testId;
+
       allow delete: if false;
     }
+
+
+    // ============================================================
+    // DEFAULT
+    // ============================================================
+    //
+    // Anything not explicitly allowed above is denied.
+    //
   }
 }

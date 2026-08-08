@@ -114,6 +114,9 @@ class QuestionService {
   }
 
   /// Primary entry for Test Engine — filter, randomize, optionally shuffle.
+  ///
+  /// Broadening is **course-scoped only**. Never falls back to all courses.
+  /// Fewer than [count] questions is acceptable when the bank is thin.
   Future<List<Question>> getQuestionsForTest({
     required int count,
     String? courseId,
@@ -140,8 +143,16 @@ class QuestionService {
       ),
     );
 
-    // Broaden if scoped filters yield too few items (dummy corpus gaps).
-    if (questions.length < count) {
+    // Broaden within the same course if scoped filters yield too few items.
+    if (questions.length < count &&
+        courseId != null &&
+        courseId.isNotEmpty &&
+        (paperId != null ||
+            sectionId != null ||
+            topicId != null ||
+            difficulty != null ||
+            language != null ||
+            year != null)) {
       questions = await fetchQuestions(
         filter: QuestionFilter(
           courseId: courseId,
@@ -149,8 +160,15 @@ class QuestionService {
         ),
       );
     }
-    if (questions.length < count) {
-      questions = await fetchQuestions();
+
+    // Final broaden: same course, active questions only (any type).
+    // NEVER load another course's questions to fill [count].
+    if (questions.length < count &&
+        courseId != null &&
+        courseId.isNotEmpty) {
+      questions = await fetchQuestions(
+        filter: QuestionFilter(courseId: courseId),
+      );
     }
 
     final selected = randomizeOrder
@@ -163,20 +181,8 @@ class QuestionService {
     ];
   }
 
-  Future<List<Question>> getByIds(List<String> ids) async {
-    if (ids.isEmpty) return const [];
-    final unique = ids.toSet();
-    final results = <Question>[];
-    for (final id in unique) {
-      final question = await getById(id);
-      if (question != null) results.add(question);
-    }
-    // Preserve requested order.
-    final byId = {for (final q in results) q.id: q};
-    return [
-      for (final id in ids)
-        if (byId[id] != null) byId[id]!,
-    ];
+  Future<List<Question>> getByIds(List<String> ids) {
+    return _repository.getByIds(ids);
   }
 
   Future<List<Question>> getBookmarked() {

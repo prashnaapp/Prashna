@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
-import '../../../course_dashboard/models/course_model.dart';
 import '../../../course_dashboard/presentation/screens/course_dashboard_screen.dart';
-import '../../../course_dashboard/services/course_service.dart';
-import '../../../profile/presentation/profile_navigation.dart';
+import '../../../course_enrollment/model/course.dart';
+import '../../../course_enrollment/service/course_loader_service.dart';
 import '../../../subscription/service/course_open_guard.dart';
 
 class HomeCoursesSection extends StatelessWidget {
@@ -12,7 +11,20 @@ class HomeCoursesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final courses = CourseService.instance.getAllCourses();
+    final courseContext = CourseLoaderService.instance.current;
+    if (courseContext == null) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SectionHeader(title: 'My Courses'),
+          SizedBox(height: AppSpacing.lg),
+          Center(child: AppCircularProgress()),
+        ],
+      );
+    }
+
+    final courses = courseContext.publishedCourses;
     if (courses.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -43,20 +55,15 @@ class HomeCoursesSection extends StatelessWidget {
     );
   }
 
-  Future<void> _onCourseTap(BuildContext context, CourseModel course) async {
-    if (!course.isAvailable) {
-      openSubscription(context);
-      return;
-    }
-
+  Future<void> _onCourseTap(BuildContext context, Course course) async {
     await CourseOpenGuard.attemptOpen(
       context: context,
-      courseId: course.id,
+      courseId: course.courseId,
       onAllowed: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => CourseDashboardScreen(courseId: course.id),
+            builder: (_) => CourseDashboardScreen(courseId: course.courseId),
           ),
         );
       },
@@ -71,9 +78,9 @@ class _CourseRow extends StatelessWidget {
     required this.onCourseTap,
   });
 
-  final List<CourseModel> courses;
+  final List<Course> courses;
   final int crossAxisCount;
-  final ValueChanged<CourseModel> onCourseTap;
+  final ValueChanged<Course> onCourseTap;
 
   @override
   Widget build(BuildContext context) {
@@ -85,15 +92,12 @@ class _CourseRow extends StatelessWidget {
           Expanded(
             child: i < courses.length
                 ? CourseGridCard(
-                    title: courses[i].name,
-                    marksValue: '${courses[i].totalMarks}',
-                    papersValue: '${courses[i].totalPapers}',
+                    title: courses[i].title,
+                    subtitle: courses[i].shortTitle,
                     accentColor: _accentFor(courses[i]),
                     icon: _iconFor(courses[i].icon),
-                    locked: !courses[i].isAvailable,
-                    onTap: courses[i].isAvailable
-                        ? () => onCourseTap(courses[i])
-                        : null,
+                    locked: false,
+                    onTap: () => onCourseTap(courses[i]),
                   )
                 : const SizedBox.shrink(),
           ),
@@ -102,15 +106,29 @@ class _CourseRow extends StatelessWidget {
     );
   }
 
-  Color _accentFor(CourseModel course) {
-    return switch (course.id) {
+  Color _accentFor(Course course) {
+    final parsed = _parseColor(course.color);
+    if (parsed != null) return parsed;
+
+    return switch (course.courseId) {
       'group-iii' => AppColors.success,
       'group-ii' => AppColors.primary,
-      _ => course.isEnrolled ? AppColors.primary : AppColors.secondary,
+      _ => AppColors.secondary,
     };
   }
 
-  IconData _iconFor(String key) {
+  Color? _parseColor(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    var hex = raw.trim();
+    if (hex.startsWith('#')) hex = hex.substring(1);
+    if (hex.length == 6) hex = 'FF$hex';
+    if (hex.length != 8) return null;
+    final value = int.tryParse(hex, radix: 16);
+    if (value == null) return null;
+    return Color(value);
+  }
+
+  IconData _iconFor(String? key) {
     return switch (key) {
       'school' => Icons.school_rounded,
       'menu_book' => Icons.menu_book_rounded,

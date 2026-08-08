@@ -81,4 +81,38 @@ abstract final class TestEngineNavigation {
     if (!context.mounted) return;
     return openTest(context, test: test, onCompleted: onCompleted);
   }
+
+  /// Fixed question assignment — uses [createTestFromQuestionIds] with strict
+  /// validation (all IDs present, same course, count matches).
+  static Future<void> openFixedConfigured({
+    required BuildContext context,
+    required String id,
+    required String title,
+    required String courseId,
+    required TestMode mode,
+    required List<String> questionIds,
+    required int expectedQuestionCount,
+    required int totalMarks,
+    required int durationMinutes,
+    double negativeMarks = 0.25,
+    List<String>? instructions,
+    void Function(TestResult result)? onCompleted,
+  }) async {
+    final test = await TestService().createTestFromQuestionIds(
+      id: id,
+      title: title,
+      courseId: courseId,
+      questionIds: questionIds,
+      mode: mode,
+      duration: Duration(minutes: durationMinutes),
+      totalMarks: totalMarks,
+      negativeMarks: negativeMarks,
+      instructions: instructions,
+      requireCompleteSet: true,
+      requireCourseMatch: true,
+      expectedCount: expectedQuestionCount,
+    );
+    if (!context.mounted) return;
+    return openTest(context, test: test, onCompleted: onCompleted);
+  }
 }

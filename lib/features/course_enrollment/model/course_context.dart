@@ -1,25 +1,34 @@
 import 'course.dart';
 import 'user_course.dart';
 
-/// Immutable in-memory snapshot of catalog + enrollment for the signed-in user.
+/// Immutable in-memory snapshot of catalog + enrollments for the signed-in user.
+///
+/// [enrollments] is the single source of truth for access checks.
+/// Use [enrollmentFor] for course-specific lookups — never authorize from a
+/// single "current" enrollment.
 class CourseContext {
   const CourseContext({
     required this.publishedCourses,
-    required this.currentEnrollment,
-    required this.activeCourse,
+    required this.enrollments,
   });
 
   static const CourseContext empty = CourseContext(
     publishedCourses: [],
-    currentEnrollment: null,
-    activeCourse: null,
+    enrollments: [],
   );
 
   final List<Course> publishedCourses;
-  final UserCourse? currentEnrollment;
-  final Course? activeCourse;
 
-  bool get hasEnrollment => currentEnrollment != null;
+  /// All course enrollments for the signed-in user (may include expired).
+  final List<UserCourse> enrollments;
 
-  bool get hasActiveCourse => activeCourse != null;
+  bool get hasEnrollment => enrollments.isNotEmpty;
+
+  /// Returns the enrollment for [courseId], if any.
+  UserCourse? enrollmentFor(String courseId) {
+    for (final enrollment in enrollments) {
+      if (enrollment.courseId == courseId) return enrollment;
+    }
+    return null;
+  }
 }

@@ -8,25 +8,37 @@ import '../repository/course_repository.dart';
 import '../repository/user_course_repository.dart';
 import 'course_catalog_service.dart';
 
-/// Read-only startup loader for published courses + current enrollment.
+/// Read-only startup loader for published courses + user enrollments.
 ///
 /// Published catalog comes from [CourseCatalogService].
-/// Caches an immutable [CourseContext] in memory. Never writes to Firestore.
+/// Enrollments come from `user_courses/{uid}/courses/*`.
+/// Caches an immutable [CourseContext] in memory. Never writes enrollments
+/// (legacy migration may write via [UserCourseRepository] during load).
 class CourseLoaderService {
   CourseLoaderService({
     CourseCatalogService? catalogService,
     CourseRepository? courseRepository,
     UserCourseRepository? userCourseRepository,
-  })  : _catalog = catalogService ??
-            CourseCatalogService(courseRepository: courseRepository),
-        _courses = courseRepository ?? CourseRepository(),
-        _userCourses = userCourseRepository ?? UserCourseRepository();
+  })  : _catalogOverride = catalogService,
+        _courseRepositoryOverride = courseRepository,
+        _userCoursesOverride = userCourseRepository;
 
   static final CourseLoaderService instance = CourseLoaderService();
 
-  final CourseCatalogService _catalog;
-  final CourseRepository _courses;
-  final UserCourseRepository _userCourses;
+  final CourseCatalogService? _catalogOverride;
+  final CourseRepository? _courseRepositoryOverride;
+  final UserCourseRepository? _userCoursesOverride;
+
+  CourseCatalogService? _catalogCache;
+  UserCourseRepository? _userCoursesCache;
+
+  CourseCatalogService get _catalog =>
+      _catalogCache ??= _catalogOverride ??
+          CourseCatalogService(courseRepository: _courseRepositoryOverride);
+
+  UserCourseRepository get _userCourses =>
+      _userCoursesCache ??=
+          _userCoursesOverride ?? UserCourseRepository();
 
   CourseContext? _current;
   Future<CourseContext>? _inFlight;
@@ -34,7 +46,7 @@ class CourseLoaderService {
   /// Last successfully loaded context, if any.
   CourseContext? get current => _current;
 
-  /// Loads published courses and the signed-in user's enrollment (read-only).
+  /// Loads published courses and the signed-in user's enrollments.
   ///
   /// On any failure, caches and returns [CourseContext.empty] — never throws.
   Future<CourseContext> load() {
@@ -57,20 +69,14 @@ class CourseLoaderService {
 
       final published = await _catalog.loadPublishedCourses();
 
-      UserCourse? enrollment;
+      List<UserCourse> enrollments = const [];
       if (uid != null && uid.isNotEmpty) {
-        enrollment = await _userCourses.loadEnrollment(uid);
+        enrollments = await _userCourses.loadEnrollments(uid);
       }
-
-      final activeCourse = await _resolveActiveCourse(
-        published: published,
-        enrollment: enrollment,
-      );
 
       final context = CourseContext(
         publishedCourses: List<Course>.unmodifiable(published),
-        currentEnrollment: enrollment,
-        activeCourse: activeCourse,
+        enrollments: List<UserCourse>.unmodifiable(enrollments),
       );
       _current = context;
       return context;
@@ -87,26 +93,9 @@ class CourseLoaderService {
     _inFlight = null;
   }
 
-  Future<Course?> _resolveActiveCourse({
-    required List<Course> published,
-    required UserCourse? enrollment,
-  }) async {
-    if (enrollment == null) return null;
-    if (enrollment.status != UserCourseStatus.active) return null;
-    if (enrollment.courseId.isEmpty) return null;
-
-    for (final course in published) {
-      if (course.courseId == enrollment.courseId) return course;
-    }
-
-    // Enrollment may point at a course not in the published list.
-    try {
-      return await _courses.loadCourse(enrollment.courseId);
-    } catch (error, stack) {
-      debugPrint(
-        'CourseLoaderService active course lookup failed: $error\n$stack',
-      );
-      return null;
-    }
+  /// Test-only: inject a [CourseContext] without hitting Firestore.
+  @visibleForTesting
+  void debugSetCurrent(CourseContext? context) {
+    _current = context;
   }
 }

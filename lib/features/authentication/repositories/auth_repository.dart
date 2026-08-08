@@ -23,6 +23,11 @@ class AuthRepository {
 
   Future<void> _ensureGoogleInitialized() {
     if (_googleInitialized) return Future.value();
+    // Web admin uses Firebase Auth popup — GoogleSignIn plugin init not required.
+    if (kIsWeb) {
+      _googleInitialized = true;
+      return Future.value();
+    }
     return _googleInitFuture ??= () async {
       await _googleSignIn.initialize();
       _googleInitialized = true;
@@ -38,6 +43,10 @@ class AuthRepository {
   Future<AuthActionResult> signInWithGoogle() async {
     try {
       await _ensureGoogleInitialized();
+
+      if (kIsWeb) {
+        return _signInWithGooglePopup();
+      }
 
       if (!_googleSignIn.supportsAuthenticate()) {
         return const AuthActionResult.failure(
@@ -86,12 +95,36 @@ class AuthRepository {
     }
   }
 
+  /// Firebase Auth popup flow for Flutter Web (Admin shell).
+  Future<AuthActionResult> _signInWithGooglePopup() async {
+    try {
+      final provider = GoogleAuthProvider();
+      final userCredential = await _firebaseAuth.signInWithPopup(provider);
+      final user = _mapUser(userCredential.user);
+      if (user == null) {
+        return const AuthActionResult.failure(
+          'Google Sign-In succeeded but no user was returned.',
+        );
+      }
+      return AuthActionResult.success(user);
+    } on FirebaseAuthException catch (error, stack) {
+      debugPrint('FirebaseAuthException (web popup): ${error.code}\n$stack');
+      if (error.code == 'popup-closed-by-user' ||
+          error.code == 'cancelled-popup-request') {
+        return const AuthActionResult.cancelled();
+      }
+      return AuthActionResult.failure(_mapFirebaseError(error));
+    }
+  }
+
   Future<void> signOut() async {
     await _ensureGoogleInitialized();
-    try {
-      await _googleSignIn.signOut();
-    } catch (error, stack) {
-      debugPrint('Google signOut error: $error\n$stack');
+    if (!kIsWeb) {
+      try {
+        await _googleSignIn.signOut();
+      } catch (error, stack) {
+        debugPrint('Google signOut error: $error\n$stack');
+      }
     }
     await _firebaseAuth.signOut();
   }

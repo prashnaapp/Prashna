@@ -7,6 +7,7 @@ import '../../../authentication/services/auth_service.dart';
 import '../../../course_dashboard/presentation/screens/course_dashboard_screen.dart';
 import '../../../course_enrollment/service/course_enrollment_service.dart';
 import '../../../course_enrollment/service/course_loader_service.dart';
+import '../../../payments/service/payment_service.dart';
 import '../../../subscription/service/course_open_guard.dart';
 import '../../services/home_service.dart';
 import '../widgets/continue_learning_card.dart';
@@ -36,32 +37,71 @@ class HomeScreen extends StatelessWidget {
     );
 
     final courseContext = CourseLoaderService.instance.current;
-    final enrollment = courseContext?.currentEnrollment;
-    final active = courseContext?.activeCourse;
+    final enrollments = courseContext?.enrollments ?? const [];
 
     debugPrint('Enrollment activated');
     debugPrint(
       'Current CourseContext: '
       'published=${courseContext?.publishedCourses.length ?? 0} '
-      'hasEnrollment=${courseContext?.hasEnrollment} '
-      'hasActiveCourse=${courseContext?.hasActiveCourse}',
+      'enrollments=${enrollments.length} '
+      'hasEnrollment=${courseContext?.hasEnrollment}',
     );
-    debugPrint(
-      'Current Enrollment: '
-      'uid=${enrollment?.uid} '
-      'courseId=${enrollment?.courseId} '
-      'status=${enrollment?.status.name} '
-      'source=${enrollment?.source.name} '
-      'enrolledAt=${enrollment?.enrolledAt} '
-      'expiresAt=${enrollment?.expiresAt} '
-      'updatedAt=${enrollment?.updatedAt}',
+    for (final enrollment in enrollments) {
+      debugPrint(
+        'Enrollment: '
+        'uid=${enrollment.uid} '
+        'courseId=${enrollment.courseId} '
+        'status=${enrollment.status.name} '
+        'source=${enrollment.source.name} '
+        'enrolledAt=${enrollment.enrolledAt} '
+        'expiresAt=${enrollment.expiresAt} '
+        'updatedAt=${enrollment.updatedAt}',
+      );
+    }
+  }
+
+  // TEMP DEBUG (Milestone 27.1) — remove after verification.
+  Future<void> _debugSimulatePurchase() async {
+    final uid = AuthService.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) {
+      debugPrint('TEMP DEBUG (M27.1): No Firebase UID — sign in first.');
+      return;
+    }
+
+    final plans = await PaymentService.instance.loadActivePlans();
+    if (plans.isEmpty) {
+      debugPrint('No active payment plans.');
+      return;
+    }
+
+    final plan = plans.first;
+    await PaymentService.instance.purchaseCourse(
+      uid: uid,
+      courseId: plan.courseId,
+      plan: plan,
     );
+
+    final courseContext = CourseLoaderService.instance.current;
+    final enrollments = courseContext?.enrollments ?? const [];
+
+    debugPrint('Purchase simulation complete.');
+    for (final enrollment in enrollments) {
+      debugPrint(
+        'Enrollment: '
+        'uid=${enrollment.uid} '
+        'courseId=${enrollment.courseId} '
+        'status=${enrollment.status.name} '
+        'source=${enrollment.source.name} '
+        'enrolledAt=${enrollment.enrolledAt} '
+        'expiresAt=${enrollment.expiresAt} '
+        'updatedAt=${enrollment.updatedAt}',
+      );
+    }
     debugPrint(
-      'Active Course: '
-      'courseId=${active?.courseId} '
-      'title=${active?.title} '
-      'isFree=${active?.isFree} '
-      'isPublished=${active?.isPublished}',
+      'Current CourseContext: '
+      'published=${courseContext?.publishedCourses.length ?? 0} '
+      'enrollments=${enrollments.length} '
+      'hasEnrollment=${courseContext?.hasEnrollment}',
     );
   }
 
@@ -83,6 +123,13 @@ class HomeScreen extends StatelessWidget {
               onPressed: _debugActivateEnrollment,
               icon: const Icon(Icons.bug_report_rounded),
             ),
+          // TEMP DEBUG (Milestone 27.1) — remove after verification.
+          if (kDebugMode)
+            IconButton(
+              tooltip: 'TEMP: Simulate purchase',
+              onPressed: _debugSimulatePurchase,
+              icon: const Icon(Icons.shopping_cart_rounded),
+            ),
           IconButton(
             tooltip: 'Notifications',
             onPressed: () {},
@@ -96,10 +143,7 @@ class HomeScreen extends StatelessWidget {
           child: TabScrollView(
             padding: const EdgeInsets.only(top: AppSpacing.lg),
             children: [
-              const HomeEntrance(
-                index: 0,
-                child: WelcomeSection(),
-              ),
+              const HomeEntrance(index: 0, child: WelcomeSection()),
               HomeEntrance(
                 index: 1,
                 topSpacing: AppSpacing.xxl,

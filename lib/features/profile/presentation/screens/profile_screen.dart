@@ -5,10 +5,12 @@ import '../../../../navigation/tab_scroll_view.dart';
 import '../../../authentication/screens/login_screen.dart';
 import '../../../authentication/services/auth_service.dart';
 import '../../services/profile_service.dart';
+import '../profile_navigation.dart';
 import '../widgets/legal_section.dart';
 import '../widgets/logout_button.dart';
 import '../widgets/profile_header_card.dart';
 import '../widgets/settings_section.dart';
+import '../widgets/settings_tile.dart';
 import '../widgets/subscription_card.dart';
 import '../widgets/support_section.dart';
 
@@ -43,6 +45,18 @@ class ProfileScreen extends StatelessWidget {
               SubscriptionCard(
                 subscription: subscription,
                 onManage: () => _soon(context, 'Manage Subscription'),
+              ),
+              const SizedBox(height: AppSpacing.xxl),
+              Text('Activity', style: AppTextStyles.titleLarge(context)),
+              const SizedBox(height: AppSpacing.lg),
+              SettingsTile(
+                title: 'Test History',
+                subtitle: 'View your completed test attempts',
+                leading: const Icon(
+                  Icons.history_edu_outlined,
+                  color: AppColors.primary,
+                ),
+                onTap: () => openTestHistory(context),
               ),
               const SizedBox(height: AppSpacing.xxl),
               SettingsSection(

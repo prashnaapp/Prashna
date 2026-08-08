@@ -18,29 +18,20 @@ void openTestCategory({
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PaperWisePaperListScreen(
-          examId: examId,
-          title: category.title,
-        ),
+        builder: (_) =>
+            PaperWisePaperListScreen(examId: examId, title: category.title),
       ),
     );
     return;
   }
 
   if (category.type == TestCategoryType.mockTests) {
-    openMockTests(
-      context: context,
-      examId: examId,
-      title: category.title,
-    );
+    openMockTests(context: context, examId: examId, title: category.title);
     return;
   }
 
   if (category.type == TestCategoryType.previousYear) {
-    openPreviousPapers(
-      context: context,
-      title: category.title,
-    );
+    openPreviousPapers(context: context, examId: examId, title: category.title);
     return;
   }
 
@@ -64,10 +55,7 @@ void openPaperWiseParts({
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => PaperWisePartListScreen(
-        examId: examId,
-        paper: paper,
-      ),
+      builder: (_) => PaperWisePartListScreen(examId: examId, paper: paper),
     ),
   );
 }

@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../model/course_access_decision.dart';
+import '../presentation/subscription_navigation.dart';
 import 'subscription_access_service.dart';
 
 /// Guards course navigation with [SubscriptionAccessService].
 ///
 /// Returns a [CourseAccessDecision]. Navigates only when access is allowed.
-/// No payment UI — denied access is reported via an existing SnackBar pattern.
+/// Denied access opens the course subscription paywall.
 abstract final class CourseOpenGuard {
   /// Calls access evaluation for [courseId].
   ///
   /// - Allowed → runs [onAllowed] (existing navigation).
-  /// - Denied → does not navigate; shows a SnackBar; returns the decision.
+  /// - Denied → opens [CourseSubscriptionScreen] for [courseId].
+  /// - Context unavailable → SnackBar; no navigation.
   static Future<CourseAccessDecision> attemptOpen({
     required BuildContext context,
     required String courseId,
@@ -29,11 +31,22 @@ abstract final class CourseOpenGuard {
       return decision;
     }
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_messageFor(decision))),
+    if (!context.mounted) return decision;
+
+    if (decision.reason == CourseAccessReason.denied) {
+      await SubscriptionNavigation.openCourseSubscription(
+        context,
+        courseId: courseId,
       );
+      return decision;
     }
+
+    if (decision.reason == CourseAccessReason.contextUnavailable) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_messageFor(decision))));
+    }
+
     return decision;
   }
 

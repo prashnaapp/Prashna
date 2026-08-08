@@ -1,37 +1,64 @@
 import '../dummy/question_bank_dummy_data.dart';
 import '../models/question_models.dart';
+import '../../repository/question_cloud_repository.dart';
 
 /// Persistence boundary for questions.
-/// In-memory dummy today; swap for Firebase without changing callers.
+///
+/// Production list/get paths use [QuestionCloudRepository] (Firestore).
+/// [loadQuestionsSync] remains dummy-backed for legacy practice adapters only.
+///
+/// Local bookmark / attempted sets are unchanged (not cloud-migrated here).
 class QuestionRepository {
-  QuestionRepository._() {
+  QuestionRepository({QuestionCloudRepository? cloudRepository})
+    : _cloud = cloudRepository ?? QuestionCloudRepository() {
     _seedBookmarks();
   }
 
-  static final QuestionRepository instance = QuestionRepository._();
+  static final QuestionRepository instance = QuestionRepository();
 
+  final QuestionCloudRepository _cloud;
   final Set<String> _bookmarkedIds = {};
   final Set<String> _attemptedIds = {};
 
   void _seedBookmarks() {
+    // Legacy local seeds for in-memory bookmark/attempted filters only.
     _bookmarkedIds.addAll({'qb-2', 'qb-5', 'qb-10'});
     _attemptedIds.addAll({'qb-1', 'qb-2', 'qb-3', 'qb-4', 'qb-5', 'qb-6'});
   }
+
+  /// Production source: Firestore via [QuestionCloudRepository].
+  ///
+  /// Does **not** fall back to [QuestionBankDummyData] on failure.
   Future<List<Question>> loadQuestions({QuestionFilter? filter}) async {
-    return loadQuestionsSync(filter: filter);
-  }
-
-  /// Sync access for local dummy / in-memory backends.
-  /// Firebase-backed implementations should prefer [loadQuestions].
-  List<Question> loadQuestionsSync({QuestionFilter? filter}) {
-    return _applyFilter(QuestionBankDummyData.all, filter);
-  }
-
-  Future<Question?> getQuestionById(String id) async {
-    for (final question in QuestionBankDummyData.all) {
-      if (question.id == id) return question;
+    // Bookmark / attempted-positive filters are local — resolve by ID first.
+    if (filter?.bookmarked == true) {
+      final ids = _bookmarkedIds.toList(growable: false);
+      final questions = await _cloud.getByIds(ids);
+      return _applyLocalFilters(questions, filter);
     }
-    return null;
+    if (filter?.attempted == true) {
+      final ids = _attemptedIds.toList(growable: false);
+      final questions = await _cloud.getByIds(ids);
+      return _applyLocalFilters(questions, filter);
+    }
+
+    final questions = await _cloud.loadQuestions(filter: filter);
+    return _applyLocalFilters(questions, filter);
+  }
+
+  /// Sync access for legacy practice adapters only (dummy corpus).
+  ///
+  /// Prefer [loadQuestions] for Test Engine / production paths.
+  List<Question> loadQuestionsSync({QuestionFilter? filter}) {
+    return _applyLocalFilters(QuestionBankDummyData.all, filter);
+  }
+
+  Future<Question?> getQuestionById(String id) {
+    return _cloud.getQuestionById(id);
+  }
+
+  Future<List<Question>> getByIds(List<String> ids) {
+    return _cloud.getByIds(ids);
   }
 
   Future<List<Question>> getQuestionsByTopic(String topicId) {
@@ -48,8 +75,10 @@ class QuestionRepository {
 
   Future<List<Question>> searchQuestions(String query) async {
     final q = query.trim().toLowerCase();
-    if (q.isEmpty) return loadQuestions();
+    if (q.isEmpty) return const [];
 
+    // Unscoped full-text search is incompatible with course-scoped rules.
+    // Dummy-only helper — not used by Test Engine production paths.
     return QuestionBankDummyData.all.where((question) {
       if (!question.isActive) return false;
       if (question.question.toLowerCase().contains(q)) return true;
@@ -82,7 +111,10 @@ class QuestionRepository {
 
   bool isAttempted(String questionId) => _attemptedIds.contains(questionId);
 
-  List<Question> _applyFilter(List<Question> source, QuestionFilter? filter) {
+  List<Question> _applyLocalFilters(
+    List<Question> source,
+    QuestionFilter? filter,
+  ) {
     if (filter == null) {
       return source.where((q) => q.isActive).toList(growable: false);
     }

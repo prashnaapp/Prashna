@@ -7,12 +7,13 @@ import '../model/course_access_decision.dart';
 /// Read-only subscription / course access checks.
 ///
 /// Uses [CourseLoaderService.current] only — no Firestore, no payments.
+/// Authorization is always by exact [courseId] via [CourseContext.enrollmentFor].
 class SubscriptionAccessService {
   SubscriptionAccessService({
     CourseLoaderService? courseLoader,
     DateTime Function()? now,
-  })  : _courseLoader = courseLoader ?? CourseLoaderService.instance,
-        _now = now ?? DateTime.now;
+  }) : _courseLoader = courseLoader ?? CourseLoaderService.instance,
+       _now = now ?? DateTime.now;
 
   static final SubscriptionAccessService instance = SubscriptionAccessService();
 
@@ -29,17 +30,17 @@ class SubscriptionAccessService {
     return _hasValidEnrollmentFor(courseId);
   }
 
-  /// True when [currentEnrollment] is active and not expired.
-  ///
-  /// Reflects "has an active subscription/enrollment" in Phase A terms
-  /// (enrollment document), not a separate payments product.
+  /// True when the user has any active, non-expired enrollment.
   Future<bool> hasActiveSubscription() async {
-    final enrollment = _context?.currentEnrollment;
-    if (enrollment == null) return false;
-    return _isEnrollmentActive(enrollment);
+    final enrollments = _context?.enrollments;
+    if (enrollments == null || enrollments.isEmpty) return false;
+    for (final enrollment in enrollments) {
+      if (_isEnrollmentActive(enrollment)) return true;
+    }
+    return false;
   }
 
-  /// True when [courseId] is marked free in the loaded catalog / active course.
+  /// True when [courseId] is marked free in the loaded published catalog.
   Future<bool> isFreeCourse(String courseId) async {
     final course = _findCourse(courseId);
     return course?.isFree ?? false;
@@ -74,16 +75,12 @@ class SubscriptionAccessService {
       );
     }
 
-    return CourseAccessDecision.deny(
-      courseId,
-      CourseAccessReason.denied,
-    );
+    return CourseAccessDecision.deny(courseId, CourseAccessReason.denied);
   }
 
   bool _hasValidEnrollmentFor(String courseId) {
-    final enrollment = _context?.currentEnrollment;
+    final enrollment = _context?.enrollmentFor(courseId);
     if (enrollment == null) return false;
-    if (enrollment.courseId != courseId) return false;
     return _isEnrollmentActive(enrollment);
   }
 
@@ -101,9 +98,6 @@ class SubscriptionAccessService {
     for (final course in context.publishedCourses) {
       if (course.courseId == courseId) return course;
     }
-
-    final active = context.activeCourse;
-    if (active != null && active.courseId == courseId) return active;
 
     return null;
   }
