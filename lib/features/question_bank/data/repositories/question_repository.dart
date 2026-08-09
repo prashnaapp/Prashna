@@ -1,6 +1,7 @@
 import '../dummy/question_bank_dummy_data.dart';
 import '../models/question_models.dart';
 import '../../repository/question_cloud_repository.dart';
+import '../../../authentication/services/user_session_state_coordinator.dart';
 
 /// Persistence boundary for questions.
 ///
@@ -10,15 +11,20 @@ import '../../repository/question_cloud_repository.dart';
 /// Local bookmark / attempted sets are unchanged (not cloud-migrated here).
 class QuestionRepository {
   QuestionRepository({QuestionCloudRepository? cloudRepository})
-    : _cloud = cloudRepository ?? QuestionCloudRepository() {
+    : _cloudOverride = cloudRepository {
     _seedBookmarks();
   }
 
-  static final QuestionRepository instance = QuestionRepository();
+  static final QuestionRepository instance = QuestionRepository()
+    .._registerSessionReset();
 
-  final QuestionCloudRepository _cloud;
+  final QuestionCloudRepository? _cloudOverride;
+  QuestionCloudRepository? _cloudCache;
   final Set<String> _bookmarkedIds = {};
   final Set<String> _attemptedIds = {};
+
+  QuestionCloudRepository get _cloud =>
+      _cloudCache ??= _cloudOverride ?? QuestionCloudRepository();
 
   void _seedBookmarks() {
     // Legacy local seeds for in-memory bookmark/attempted filters only.
@@ -79,7 +85,8 @@ class QuestionRepository {
 
     // Unscoped full-text search is incompatible with course-scoped rules.
     // Dummy-only helper — not used by Test Engine production paths.
-    return QuestionBankDummyData.all.where((question) {
+    return QuestionBankDummyData.all
+        .where((question) {
       if (!question.isActive) return false;
       if (question.question.toLowerCase().contains(q)) return true;
       if (question.topicId.toLowerCase().contains(q)) return true;
@@ -88,7 +95,8 @@ class QuestionRepository {
         if (tag.toLowerCase().contains(q)) return true;
       }
       return false;
-    }).toList(growable: false);
+        })
+        .toList(growable: false);
   }
 
   Future<List<Question>> filterQuestions(QuestionFilter filter) {
@@ -107,6 +115,16 @@ class QuestionRepository {
     _attemptedIds.add(questionId);
   }
 
+  /// Clears local bookmark and attempted flags for the previous session.
+  void clear() {
+    _bookmarkedIds.clear();
+    _attemptedIds.clear();
+  }
+
+  void _registerSessionReset() {
+    UserSessionStateCoordinator.instance.register(clear);
+  }
+
   bool isBookmarked(String questionId) => _bookmarkedIds.contains(questionId);
 
   bool isAttempted(String questionId) => _attemptedIds.contains(questionId);
@@ -119,7 +137,8 @@ class QuestionRepository {
       return source.where((q) => q.isActive).toList(growable: false);
     }
 
-    return source.where((question) {
+    return source
+        .where((question) {
       if (filter.activeOnly && !question.isActive) return false;
       if (filter.courseId != null && question.courseId != filter.courseId) {
         return false;
@@ -155,6 +174,7 @@ class QuestionRepository {
         if (attempted != filter.attempted) return false;
       }
       return true;
-    }).toList(growable: false);
+        })
+        .toList(growable: false);
   }
 }

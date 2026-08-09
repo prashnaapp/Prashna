@@ -1,11 +1,13 @@
 import '../models/revision_models.dart';
+import '../../../authentication/services/user_session_state_coordinator.dart';
 
 /// Persistence for revision session metadata (Firebase-ready).
 /// Collection generation is derived from Question Bank + Progress.
 class RevisionRepository {
-  RevisionRepository._();
+  RevisionRepository();
 
-  static final RevisionRepository instance = RevisionRepository._();
+  static final RevisionRepository instance = RevisionRepository()
+    .._registerSessionReset();
 
   final List<RevisionCollectionType> _recentSessions = [];
 
@@ -15,6 +17,15 @@ class RevisionRepository {
     if (_recentSessions.length > 10) {
       _recentSessions.removeLast();
     }
+  }
+
+  /// Clears only local revision-session metadata.
+  void clear() {
+    _recentSessions.clear();
+  }
+
+  void _registerSessionReset() {
+    UserSessionStateCoordinator.instance.register(clear);
   }
 
   Future<List<RevisionCollectionType>> loadRecentSessionTypes() async {

@@ -9,13 +9,16 @@ import '../repository/user_profile_repository.dart';
 ///
 /// Auth stays in [AuthService]; this service owns only profile documents.
 class UserProfileService {
-  UserProfileService({
-    UserProfileRepository? repository,
-  }) : _repository = repository ?? UserProfileRepository();
+  UserProfileService({UserProfileRepository? repository})
+    : _repositoryOverride = repository;
 
   static final UserProfileService instance = UserProfileService();
 
-  final UserProfileRepository _repository;
+  final UserProfileRepository? _repositoryOverride;
+  UserProfileRepository? _repositoryCache;
+
+  UserProfileRepository get _repository =>
+      _repositoryCache ??= _repositoryOverride ?? UserProfileRepository();
   String? _cachedAppVersion;
 
   Future<UserProfile?> getProfile(String uid) => _repository.getByUid(uid);

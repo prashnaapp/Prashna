@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../../authentication/services/auth_service.dart';
+import '../../authentication/services/user_session_state_coordinator.dart';
 import '../../bookmarks/data/services/bookmark_service.dart';
 import '../../progress/services/progress_service.dart';
 import '../../question_bank/data/models/question_models.dart';
@@ -28,15 +28,20 @@ class RevisionService {
     SyllabusService? syllabusService,
     RevisionRepository? repository,
     RevisionCloudService? cloudService,
-  })  : _questions = questionService ?? QuestionService.instance,
-        _progress = progressService ?? ProgressService.instance,
-        _tests = testService ?? TestService(),
-        _bookmarks = bookmarkService ?? BookmarkService.instance,
-        _syllabus = syllabusService ?? SyllabusService.instance,
-        _repository = repository ?? RevisionRepository.instance,
-        _cloud = cloudService ?? RevisionCloudService.instance;
+    Future<void> Function(RevisionCloud snapshot)? cloudSync,
+    UserSessionStateCoordinator? sessionCoordinator,
+  }) : _questions = questionService ?? QuestionService.instance,
+       _progress = progressService ?? ProgressService.instance,
+       _tests = testService ?? TestService(),
+       _bookmarks = bookmarkService ?? BookmarkService.instance,
+       _syllabus = syllabusService ?? SyllabusService.instance,
+       _repository = repository ?? RevisionRepository.instance,
+       _cloudOverride = cloudService,
+       _cloudSyncOverride = cloudSync,
+       _sessions = sessionCoordinator ?? UserSessionStateCoordinator.instance;
 
-  static final RevisionService instance = RevisionService();
+  static final RevisionService instance = RevisionService()
+    .._registerSessionReset();
 
   final QuestionService _questions;
   final ProgressService _progress;
@@ -44,7 +49,13 @@ class RevisionService {
   final BookmarkService _bookmarks;
   final SyllabusService _syllabus;
   final RevisionRepository _repository;
-  final RevisionCloudService _cloud;
+  final UserSessionStateCoordinator _sessions;
+  final RevisionCloudService? _cloudOverride;
+  final Future<void> Function(RevisionCloud snapshot)? _cloudSyncOverride;
+  RevisionCloudService? _cloudCache;
+
+  RevisionCloudService get _cloud =>
+      _cloudCache ??= _cloudOverride ?? RevisionCloudService.instance;
 
   /// Coalesces rapid sync requests so only the latest snapshot is written.
   int _cloudSyncGeneration = 0;
@@ -110,15 +121,9 @@ class RevisionService {
     final stats = await _progress.loadMistakeStats();
     final frequent = stats.where((s) => s.wrongCount >= 2).toList();
     final ids = [for (final s in frequent) s.questionId];
-    final wrongCounts = {
-      for (final s in frequent) s.questionId: s.wrongCount,
-    };
+    final wrongCounts = {for (final s in frequent) s.questionId: s.wrongCount};
     scheduleCloudSync(courseId: courseId);
-    return _groupQuestions(
-      ids,
-      courseId: courseId,
-      wrongCounts: wrongCounts,
-    );
+    return _groupQuestions(ids, courseId: courseId, wrongCounts: wrongCounts);
   }
 
   Future<List<RevisionWeakTopicGroup>> loadWeakTopicGroups({
@@ -133,7 +138,9 @@ class RevisionService {
       final paperName = topic.paperName?.isNotEmpty == true
           ? topic.paperName!
           : (topic.paperId ?? 'Paper');
-      map.putIfAbsent(paperName, () => []).add(
+      map
+          .putIfAbsent(paperName, () => [])
+          .add(
             WeakTopicRevision(
               topicId: topic.topicId,
               topicName: topic.topicName,
@@ -146,16 +153,17 @@ class RevisionService {
           );
     }
 
-    final groups = map.entries
-        .map(
-          (e) => RevisionWeakTopicGroup(
-            paperName: e.key,
-            topics: e.value
-              ..sort((a, b) => a.accuracy.compareTo(b.accuracy)),
-          ),
-        )
-        .toList()
-      ..sort((a, b) => a.paperName.compareTo(b.paperName));
+    final groups =
+        map.entries
+            .map(
+              (e) => RevisionWeakTopicGroup(
+                paperName: e.key,
+                topics: e.value
+                  ..sort((a, b) => a.accuracy.compareTo(b.accuracy)),
+              ),
+            )
+            .toList()
+          ..sort((a, b) => a.paperName.compareTo(b.paperName));
 
     scheduleCloudSync(courseId: courseId);
     return groups;
@@ -165,7 +173,9 @@ class RevisionService {
     required WeakTopicRevision topic,
     int maxQuestions = 20,
   }) async {
+    final session = _sessions.capture();
     final questions = await _questions.getByTopic(topic.topicId);
+    if (!_sessions.isCurrent(session)) return null;
     final filtered = questions
         .where((q) => q.courseId == topic.courseId || topic.courseId.isEmpty)
         .toList();
@@ -173,7 +183,8 @@ class RevisionService {
     if (pool.isEmpty) return null;
 
     await _repository.recordSessionStarted(RevisionCollectionType.weakTopics);
-    scheduleCloudSync(courseId: topic.courseId);
+    if (!_sessions.isCurrent(session)) return null;
+    scheduleCloudSync(courseId: topic.courseId, session: session);
 
     return _tests.createTestFromQuestions(
       id: 'revision-weak-${topic.topicId}-${DateTime.now().millisecondsSinceEpoch}',
@@ -195,14 +206,17 @@ class RevisionService {
     int maxQuestions = 20,
     int? durationMinutes,
   }) async {
+    final session = _sessions.capture();
     if (collection.isEmpty) return null;
 
     final ids = collection.questionIds.take(maxQuestions).toList();
     final questions = await _questions.getByIds(ids);
+    if (!_sessions.isCurrent(session)) return null;
     if (questions.isEmpty) return null;
 
     await _repository.recordSessionStarted(collection.type);
-    scheduleCloudSync(courseId: courseId);
+    if (!_sessions.isCurrent(session)) return null;
+    scheduleCloudSync(courseId: courseId, session: session);
 
     return _tests.createTestFromQuestions(
       id: 'revision-${collection.type.name}-${DateTime.now().millisecondsSinceEpoch}',
@@ -221,14 +235,28 @@ class RevisionService {
     );
   }
 
+  /// Clears local revision-session state for the previous authenticated user.
+  /// Cloud revision documents are intentionally untouched.
+  void clear() {
+    _cloudSyncGeneration++;
+    _pendingCloudCourseId = null;
+    _repository.clear();
+  }
+
+  void _registerSessionReset() {
+    UserSessionStateCoordinator.instance.register(clear);
+  }
+
   /// Schedules a best-effort cloud mirror of current local revision lists.
   ///
   /// Safe to call after practice/tests update Progress mistake data.
-  void scheduleCloudSync({String? courseId}) {
+  void scheduleCloudSync({String? courseId, UserSessionIdentity? session}) {
     // TEMP DEBUG (Milestone 21.1)
     debugPrint('RevisionService.scheduleCloudSync() entered');
 
-    final uid = AuthService.instance.currentUser?.uid;
+    final identity = session ?? _sessions.capture();
+    if (!_sessions.isCurrent(identity)) return;
+    final uid = identity.uid;
     // TEMP DEBUG (Milestone 21.1)
     debugPrint('Current Firebase UID: ${uid ?? 'NULL'}');
 
@@ -243,36 +271,39 @@ class RevisionService {
 
     _pendingCloudCourseId = courseId;
     final generation = ++_cloudSyncGeneration;
-    unawaited(_runCloudSync(uid: uid, generation: generation));
+    unawaited(_runCloudSync(session: identity, generation: generation));
   }
 
   Future<void> _runCloudSync({
-    required String uid,
+    required UserSessionIdentity session,
     required int generation,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (generation != _cloudSyncGeneration) return;
+    if (!_sessions.isCurrent(session)) return;
 
     final courseId = _pendingCloudCourseId;
 
     try {
       final snapshot = await _buildCloudSnapshot(
-        uid: uid,
+        uid: session.uid!,
         courseId: courseId,
       );
       // TEMP DEBUG (Milestone 21.1)
-      debugPrint(
-        'wrongQuestions count: ${snapshot.wrongQuestions.length}',
-      );
-      debugPrint(
-        'weakQuestions count: ${snapshot.weakQuestions.length}',
-      );
+      debugPrint('wrongQuestions count: ${snapshot.wrongQuestions.length}');
+      debugPrint('weakQuestions count: ${snapshot.weakQuestions.length}');
       debugPrint(
         'frequentlyWrongQuestions count: '
         '${snapshot.frequentlyWrongQuestions.length}',
       );
-      if (generation != _cloudSyncGeneration) return;
-      await _cloud.syncSnapshot(snapshot);
+      if (generation != _cloudSyncGeneration || !_sessions.isCurrent(session)) {
+        return;
+      }
+      if (_cloudSyncOverride != null) {
+        await _cloudSyncOverride(snapshot);
+      } else {
+        await _cloud.syncSnapshot(snapshot);
+      }
     } catch (error, stack) {
       debugPrint('RevisionService cloud sync failed: $error\n$stack');
     }
@@ -289,10 +320,14 @@ class RevisionService {
       limit: 50,
     );
 
-    final wrongQuestions =
-        await _filterIdsForCourse(wrongIds, courseId: courseId);
-    final frequentlyWrongQuestions =
-        await _filterIdsForCourse(frequentIds, courseId: courseId);
+    final wrongQuestions = await _filterIdsForCourse(
+      wrongIds,
+      courseId: courseId,
+    );
+    final frequentlyWrongQuestions = await _filterIdsForCourse(
+      frequentIds,
+      courseId: courseId,
+    );
 
     final weakQuestions = <String>[];
     final seenWeak = <String>{};
@@ -363,8 +398,7 @@ class RevisionService {
 
     final map = <String, List<RevisionQuestionItem>>{};
     for (final item in items) {
-      final key =
-          '${item.courseName}||${item.paperName}||${item.chapterName}';
+      final key = '${item.courseName}||${item.paperName}||${item.chapterName}';
       map.putIfAbsent(key, () => []).add(item);
     }
 

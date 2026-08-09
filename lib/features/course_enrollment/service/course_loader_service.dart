@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../authentication/services/auth_service.dart';
+import '../../authentication/services/user_session_state_coordinator.dart';
 import '../model/course.dart';
 import '../model/course_context.dart';
 import '../model/user_course.dart';
@@ -23,7 +24,8 @@ class CourseLoaderService {
         _courseRepositoryOverride = courseRepository,
         _userCoursesOverride = userCourseRepository;
 
-  static final CourseLoaderService instance = CourseLoaderService();
+  static final CourseLoaderService instance = CourseLoaderService()
+    .._registerSessionReset();
 
   final CourseCatalogService? _catalogOverride;
   final CourseRepository? _courseRepositoryOverride;
@@ -32,16 +34,16 @@ class CourseLoaderService {
   CourseCatalogService? _catalogCache;
   UserCourseRepository? _userCoursesCache;
 
-  CourseCatalogService get _catalog =>
-      _catalogCache ??= _catalogOverride ??
+  CourseCatalogService get _catalog => _catalogCache ??=
+      _catalogOverride ??
           CourseCatalogService(courseRepository: _courseRepositoryOverride);
 
   UserCourseRepository get _userCourses =>
-      _userCoursesCache ??=
-          _userCoursesOverride ?? UserCourseRepository();
+      _userCoursesCache ??= _userCoursesOverride ?? UserCourseRepository();
 
   CourseContext? _current;
   Future<CourseContext>? _inFlight;
+  int _sessionGeneration = 0;
 
   /// Last successfully loaded context, if any.
   CourseContext? get current => _current;
@@ -50,20 +52,28 @@ class CourseLoaderService {
   ///
   /// On any failure, caches and returns [CourseContext.empty] — never throws.
   Future<CourseContext> load() {
-    return _inFlight ??= _loadInternal().whenComplete(() {
-      _inFlight = null;
+    final generation = _sessionGeneration;
+    final existing = _inFlight;
+    if (existing != null) return existing;
+
+    final request = _loadInternal(generation);
+    final tracked = request.whenComplete(() {
+      if (generation == _sessionGeneration) _inFlight = null;
     });
+    _inFlight = tracked;
+    return tracked;
   }
 
   /// Forces a fresh load so [current] reflects the latest Firestore state.
   ///
   /// Drops any in-flight [load] coalesce — used after enrollment activation.
   Future<CourseContext> reload() {
+    _sessionGeneration++;
     _inFlight = null;
     return load();
   }
 
-  Future<CourseContext> _loadInternal() async {
+  Future<CourseContext> _loadInternal(int generation) async {
     try {
       final uid = AuthService.instance.currentUser?.uid;
 
@@ -78,19 +88,27 @@ class CourseLoaderService {
         publishedCourses: List<Course>.unmodifiable(published),
         enrollments: List<UserCourse>.unmodifiable(enrollments),
       );
+      if (generation != _sessionGeneration) return CourseContext.empty;
       _current = context;
       return context;
     } catch (error, stack) {
       debugPrint('CourseLoaderService.load failed: $error\n$stack');
+      if (generation == _sessionGeneration) {
       _current = CourseContext.empty;
+      }
       return CourseContext.empty;
     }
   }
 
   /// Clears the in-memory cache (e.g. after sign-out in a later milestone).
   void clear() {
+    _sessionGeneration++;
     _current = null;
     _inFlight = null;
+  }
+
+  void _registerSessionReset() {
+    UserSessionStateCoordinator.instance.register(clear);
   }
 
   /// Test-only: inject a [CourseContext] without hitting Firestore.

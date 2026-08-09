@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../../authentication/services/auth_service.dart';
 import '../../progress_cloud/model/user_progress.dart';
 import '../../progress_cloud/service/progress_cloud_service.dart';
 import '../../syllabus/services/syllabus_service.dart';
 import '../../test_engine/data/models/test_engine_models.dart';
+import '../../authentication/services/user_session_state_coordinator.dart';
 import '../calculators/progress_calculator.dart';
 import '../data/models/attempt_analytics_models.dart';
 import '../data/models/progress_models.dart';
@@ -17,19 +17,42 @@ import '../data/repositories/progress_repository.dart';
 ///
 /// Local storage remains authoritative. Cloud sync is asynchronous and best-effort.
 class ProgressService {
-  ProgressService._();
+  ProgressService._({
+    ProgressRepository? repository,
+    Future<void> Function(UserProgress snapshot)? cloudSync,
+    UserSessionStateCoordinator? sessionCoordinator,
+  }) : _repository = repository ?? ProgressRepository.instance,
+       _cloudSyncOverride = cloudSync,
+       _sessions = sessionCoordinator ?? UserSessionStateCoordinator.instance;
 
-  static final ProgressService instance = ProgressService._();
+  static final ProgressService instance = ProgressService._()
+    .._registerSessionReset();
 
   final ProgressCalculator _calculator = ProgressCalculator();
-  final ProgressRepository _repository = ProgressRepository.instance;
-  final ProgressCloudService _cloud = ProgressCloudService.instance;
+  final ProgressRepository _repository;
+  final UserSessionStateCoordinator _sessions;
+  final Future<void> Function(UserProgress snapshot)? _cloudSyncOverride;
+  ProgressCloudService? _cloudCache;
   final Map<String, OverallProgress> _overallCache = {};
   final Map<String, double> _testMarkCredits = {};
 
   /// Coalesces rapid sync requests so only the latest snapshot is written.
   int _cloudSyncGeneration = 0;
   String? _pendingCloudCourseId;
+
+  ProgressCloudService get _cloud =>
+      _cloudCache ??= ProgressCloudService.instance;
+
+  @visibleForTesting
+  ProgressService.debug({
+    required ProgressRepository repository,
+    Future<void> Function(UserProgress snapshot)? cloudSync,
+    UserSessionStateCoordinator? sessionCoordinator,
+  }) : this._(
+         repository: repository,
+         cloudSync: cloudSync,
+         sessionCoordinator: sessionCoordinator,
+       );
 
   // ---------------------------------------------------------------------------
   // Attempt analytics (Progress Engine)
@@ -41,6 +64,7 @@ class ProgressService {
     required TestResult result,
     List<QuestionAttempt>? attempts,
   }) async {
+    final session = _sessions.capture();
     final attempt = AttemptHistory(
       attemptId: '${test.id}-${DateTime.now().millisecondsSinceEpoch}',
       testId: test.id,
@@ -63,6 +87,7 @@ class ProgressService {
     );
 
     await updateProgress(attempt);
+    if (!_sessions.isCurrent(session)) return;
 
     if (attempts != null) {
       final byId = {
@@ -80,9 +105,11 @@ class ProgressService {
       }
       if (wrongIds.isNotEmpty) {
         await _repository.recordQuestionMistakes(wrongQuestionIds: wrongIds);
+        if (!_sessions.isCurrent(session)) return;
       }
     }
 
+    if (!_sessions.isCurrent(session)) return;
     applyTestCompletion(
       examId: test.courseId,
       correctAnswers: result.correct,
@@ -91,7 +118,7 @@ class ProgressService {
 
     // Ensure attempt history is mirrored even if applyTestCompletion no-ops.
     // Coalesced with the schedule inside applyTestCompletion when both run.
-    _scheduleCloudSync(courseId: test.courseId);
+    _scheduleCloudSync(courseId: test.courseId, session: session);
   }
 
   Future<List<String>> loadWrongQuestionIds() =>
@@ -103,12 +130,10 @@ class ProgressService {
   Future<List<String>> loadRecentMistakeIds({
     Duration within = const Duration(days: 7),
     int limit = 20,
-  }) =>
-      _repository.loadRecentMistakeIds(within: within, limit: limit);
+  }) => _repository.loadRecentMistakeIds(within: within, limit: limit);
 
   Future<List<QuestionMistakeStat>> loadMistakeStats() =>
       _repository.loadMistakeStats();
-
 
   Future<void> updateProgress(AttemptHistory attempt) {
     return _repository.saveAttempt(attempt);
@@ -118,10 +143,7 @@ class ProgressService {
     return _repository.loadSummary(courseId: courseId);
   }
 
-  Future<List<AttemptHistory>> loadHistory({
-    String? courseId,
-    int? limit,
-  }) {
+  Future<List<AttemptHistory>> loadHistory({String? courseId, int? limit}) {
     return _repository.loadHistory(courseId: courseId, limit: limit);
   }
 
@@ -177,8 +199,11 @@ class ProgressService {
     final points = <PeriodProgressPoint>[];
 
     for (var i = days - 1; i >= 0; i--) {
-      final day = DateTime(now.year, now.month, now.day)
-          .subtract(Duration(days: i));
+      final day = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(Duration(days: i));
       final items = history.where((item) {
         final d = item.dateTime;
         return d.year == day.year && d.month == day.month && d.day == day.day;
@@ -315,17 +340,19 @@ class ProgressService {
     _overallCache.remove(examId);
 
     // Fire-and-forget — UI never awaits Firestore.
-    _scheduleCloudSync(courseId: examId);
+    _scheduleCloudSync(courseId: examId, session: _sessions.capture());
   }
 
   OverallProgress _withTestCredits(OverallProgress progress, String examId) {
     final credit = _testMarkCredits[examId] ?? 0;
     if (credit <= 0) return progress;
 
-    final covered =
-        (progress.coveredMarks + credit).clamp(0.0, progress.maxMarks).toDouble();
-    final remaining =
-        (progress.maxMarks - covered).clamp(0.0, progress.maxMarks).toDouble();
+    final covered = (progress.coveredMarks + credit)
+        .clamp(0.0, progress.maxMarks)
+        .toDouble();
+    final remaining = (progress.maxMarks - covered)
+        .clamp(0.0, progress.maxMarks)
+        .toDouble();
     final percent = progress.maxMarks <= 0
         ? 0.0
         : double.parse(
@@ -345,25 +372,28 @@ class ProgressService {
 
   /// Exam catalog from [SyllabusService] — same MVP list as Test Series.
   List<ExamProgressSummary> getExamSummaries() {
-    return SyllabusService.instance.getAllCourses().map((course) {
-      if (course.isAvailable) {
-        final seed = ProgressDummyData.examSeeds[course.id];
-        return ExamProgressSummary(
-          examId: course.id,
-          title: course.name,
-          maxMarks: seed?.maxMarks ?? course.totalMarks.toDouble(),
-          paperCount: seed?.papers.length ?? course.totalPapers,
-          isEnabled: true,
-        );
-      }
-      return ExamProgressSummary(
-        examId: course.id,
-        title: course.name,
-        maxMarks: 0,
-        paperCount: 0,
-        isEnabled: false,
-      );
-    }).toList(growable: false);
+    return SyllabusService.instance
+        .getAllCourses()
+        .map((course) {
+          if (course.isAvailable) {
+            final seed = ProgressDummyData.examSeeds[course.id];
+            return ExamProgressSummary(
+              examId: course.id,
+              title: course.name,
+              maxMarks: seed?.maxMarks ?? course.totalMarks.toDouble(),
+              paperCount: seed?.papers.length ?? course.totalPapers,
+              isEnabled: true,
+            );
+          }
+          return ExamProgressSummary(
+            examId: course.id,
+            title: course.name,
+            maxMarks: 0,
+            paperCount: 0,
+            isEnabled: false,
+          );
+        })
+        .toList(growable: false);
   }
 
   OverallProgress getOverallProgress(String examId) {
@@ -380,9 +410,9 @@ class ProgressService {
     required String examId,
     required String paperId,
   }) {
-    final paper = getOverallProgress(examId).papers.firstWhere(
-          (item) => item.id == paperId,
-        );
+    final paper = getOverallProgress(
+      examId,
+    ).papers.firstWhere((item) => item.id == paperId);
     return paper;
   }
 
@@ -391,9 +421,10 @@ class ProgressService {
     required String paperId,
     required String partId,
   }) {
-    return getPaperProgress(examId: examId, paperId: paperId).parts.firstWhere(
-          (item) => item.id == partId,
-        );
+    return getPaperProgress(
+      examId: examId,
+      paperId: paperId,
+    ).parts.firstWhere((item) => item.id == partId);
   }
 
   ChapterProgress getChapterProgress({
@@ -429,7 +460,7 @@ class ProgressService {
     }
     final accuracy =
         items.fold<double>(0, (sum, item) => sum + item.accuracy) /
-            items.length;
+        items.length;
     final score =
         items.fold<double>(0, (sum, item) => sum + item.score) / items.length;
     return PeriodProgressPoint(
@@ -443,14 +474,17 @@ class ProgressService {
 
   double _recentImprovement(List<AttemptHistory> history) {
     if (history.length < 2) return 0;
-    final sorted = [...history]..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    final sorted = [...history]
+      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
     final mid = sorted.length ~/ 2;
     final older = sorted.sublist(0, mid);
     final newer = sorted.sublist(mid);
     final olderAvg =
-        older.fold<double>(0, (sum, item) => sum + item.accuracy) / older.length;
+        older.fold<double>(0, (sum, item) => sum + item.accuracy) /
+        older.length;
     final newerAvg =
-        newer.fold<double>(0, (sum, item) => sum + item.accuracy) / newer.length;
+        newer.fold<double>(0, (sum, item) => sum + item.accuracy) /
+        newer.length;
     return double.parse((newerAvg - olderAvg).toStringAsFixed(1));
   }
 
@@ -460,8 +494,9 @@ class ProgressService {
     final accuracies = history.map((item) => item.accuracy).toList();
     final mean =
         accuracies.fold<double>(0, (sum, value) => sum + value) /
-            accuracies.length;
-    final variance = accuracies.fold<double>(
+        accuracies.length;
+    final variance =
+        accuracies.fold<double>(
           0,
           (sum, value) => sum + (value - mean) * (value - mean),
         ) /
@@ -520,22 +555,40 @@ class ProgressService {
   String _topicLabel(String topicId) =>
       'Topic ${topicId.replaceAll('topic-', '')}';
 
+  /// Clears in-memory state for the previous authenticated session.
+  ///
+  /// Cloud documents are intentionally untouched. Invalidating the sync
+  /// generation also prevents a delayed previous-session snapshot from being
+  /// written after the reset.
+  void clear() {
+    _repository.clear();
+    _overallCache.clear();
+    _testMarkCredits.clear();
+    _pendingCloudCourseId = null;
+    _cloudSyncGeneration++;
+  }
+
+  void _registerSessionReset() {
+    UserSessionStateCoordinator.instance.register(clear);
+  }
+
   // ---------------------------------------------------------------------------
   // Cloud sync (best-effort mirror of local progress)
   // ---------------------------------------------------------------------------
 
   /// Schedules an async Firestore sync. Rapid calls are coalesced so only the
   /// latest local snapshot is written (prevents duplicate overlapping writes).
-  void _scheduleCloudSync({required String courseId}) {
+  void _scheduleCloudSync({
+    required String courseId,
+    required UserSessionIdentity session,
+  }) {
     // TEMP DEBUG (Milestone 15.3)
     debugPrint('Cloud sync requested');
 
-    final user = AuthService.instance.currentUser;
-    final uid = user?.uid;
+    if (!_sessions.isCurrent(session)) return;
+    final uid = session.uid;
     // TEMP DEBUG (Milestone 15.3)
     debugPrint('Current Firebase UID: ${uid ?? 'NULL'}');
-    debugPrint('Current Firebase user email: ${user?.email ?? 'NULL'}');
-
     if (uid == null || uid.isEmpty) {
       // TEMP DEBUG (Milestone 15.3)
       debugPrint('_scheduleCloudSync returns early: YES (UID null/empty)');
@@ -548,24 +601,34 @@ class ProgressService {
     _pendingCloudCourseId = courseId;
     final generation = ++_cloudSyncGeneration;
 
-    unawaited(_runCloudSync(uid: uid, generation: generation));
+    unawaited(_runCloudSync(session: session, generation: generation));
   }
 
   Future<void> _runCloudSync({
-    required String uid,
+    required UserSessionIdentity session,
     required int generation,
   }) async {
     // Brief delay lets recordTestAttempt → applyTestCompletion collapse into one write.
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (generation != _cloudSyncGeneration) return;
+    if (!_sessions.isCurrent(session)) return;
 
     final courseId = _pendingCloudCourseId;
     if (courseId == null) return;
 
     try {
-      final snapshot = await _buildCloudSnapshot(uid: uid, courseId: courseId);
-      if (generation != _cloudSyncGeneration) return;
-      await _cloud.syncSnapshot(snapshot);
+      final snapshot = await _buildCloudSnapshot(
+        uid: session.uid!,
+        courseId: courseId,
+      );
+      if (generation != _cloudSyncGeneration || !_sessions.isCurrent(session)) {
+        return;
+      }
+      if (_cloudSyncOverride != null) {
+        await _cloudSyncOverride(snapshot);
+      } else {
+        await _cloud.syncSnapshot(snapshot);
+      }
     } catch (error, stack) {
       // Never crash — local progress already committed.
       debugPrint('ProgressService cloud sync failed: $error\n$stack');
@@ -579,8 +642,10 @@ class ProgressService {
     final summary = await generateSummary(courseId: courseId);
     final history = await loadHistory(courseId: courseId);
 
-    final questionsCorrect =
-        history.fold<int>(0, (sum, item) => sum + item.correct);
+    final questionsCorrect = history.fold<int>(
+      0,
+      (sum, item) => sum + item.correct,
+    );
     final questionsAttempted = history.fold<int>(
       0,
       (sum, item) => sum + item.correct + item.wrong + item.skipped,

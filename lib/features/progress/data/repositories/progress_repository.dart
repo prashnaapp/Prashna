@@ -17,12 +17,14 @@ class QuestionMistakeStat {
 /// Persistence boundary for attempt analytics.
 /// In-memory dummy today; swap for Firebase without changing ProgressService.
 class ProgressRepository {
-  ProgressRepository._() {
-    _history.addAll(AttemptHistoryDummyData.seed());
-    _seedMistakes();
+  ProgressRepository({bool seed = true}) {
+    if (seed) {
+      _history.addAll(AttemptHistoryDummyData.seed());
+      _seedMistakes();
+    }
   }
 
-  static final ProgressRepository instance = ProgressRepository._();
+  static final ProgressRepository instance = ProgressRepository();
 
   final List<AttemptHistory> _history = [];
   final Map<String, QuestionMistakeStat> _mistakes = {};
@@ -55,6 +57,7 @@ class ProgressRepository {
       lastWrongAt: now.subtract(const Duration(days: 4)),
     );
   }
+
   Future<void> saveAttempt(AttemptHistory attempt) async {
     _history.removeWhere((item) => item.attemptId == attempt.attemptId);
     _history.insert(0, attempt);
@@ -83,6 +86,12 @@ class ProgressRepository {
     }
   }
 
+  /// Clears only in-memory user state. It never touches cloud progress.
+  void clear() {
+    _history.clear();
+    _mistakes.clear();
+  }
+
   Future<List<QuestionMistakeStat>> loadMistakeStats() async {
     final items = _mistakes.values.toList()
       ..sort((a, b) => b.lastWrongAt.compareTo(a.lastWrongAt));
@@ -105,10 +114,11 @@ class ProgressRepository {
     int limit = 20,
   }) async {
     final cutoff = DateTime.now().subtract(within);
-    final recent = _mistakes.values
-        .where((item) => !item.lastWrongAt.isBefore(cutoff))
-        .toList()
-      ..sort((a, b) => b.lastWrongAt.compareTo(a.lastWrongAt));
+    final recent =
+        _mistakes.values
+            .where((item) => !item.lastWrongAt.isBefore(cutoff))
+            .toList()
+          ..sort((a, b) => b.lastWrongAt.compareTo(a.lastWrongAt));
     return recent.take(limit).map((item) => item.questionId).toList();
   }
 
@@ -151,17 +161,17 @@ class ProgressRepository {
     if (history.isEmpty) return ProgressSummary.empty;
 
     final totalTests = history.length;
-    final totalQuestions =
-        history.fold<int>(0, (sum, item) => sum + item.totalQuestions);
+    final totalQuestions = history.fold<int>(
+      0,
+      (sum, item) => sum + item.totalQuestions,
+    );
     final averageScore =
         history.fold<double>(0, (sum, item) => sum + item.score) / totalTests;
     final averageAccuracy =
         history.fold<double>(0, (sum, item) => sum + item.accuracy) /
-            totalTests;
-    final averageSeconds = history.fold<int>(
-          0,
-          (sum, item) => sum + item.timeTaken.inSeconds,
-        ) ~/
+        totalTests;
+    final averageSeconds =
+        history.fold<int>(0, (sum, item) => sum + item.timeTaken.inSeconds) ~/
         totalTests;
     final scores = history.map((item) => item.score).toList()..sort();
     final streaks = _computeStreaks(history);
@@ -207,8 +217,7 @@ class ProgressRepository {
     return map.values.map((bucket) {
       final total = bucket.correct + bucket.wrong + bucket.skipped;
       final answered = bucket.correct + bucket.wrong;
-      final accuracy =
-          answered == 0 ? 0.0 : (bucket.correct / answered) * 100;
+      final accuracy = answered == 0 ? 0.0 : (bucket.correct / answered) * 100;
       return TopicStatistics(
         topicId: bucket.id,
         topicName: bucket.name,
@@ -222,8 +231,7 @@ class ProgressRepository {
         paperName: bucket.paperName,
         courseId: bucket.courseId,
       );
-    }).toList()
-      ..sort((a, b) => a.topicName.compareTo(b.topicName));
+    }).toList()..sort((a, b) => a.topicName.compareTo(b.topicName));
   }
 
   List<PaperStatistics> _aggregatePapers(List<AttemptHistory> history) {
@@ -250,8 +258,7 @@ class ProgressRepository {
         averageScore: _round1(bucket.scoreSum / bucket.attempts),
         averagePercentage: _round1(bucket.percentageSum / bucket.attempts),
       );
-    }).toList()
-      ..sort((a, b) => a.paperName.compareTo(b.paperName));
+    }).toList()..sort((a, b) => a.paperName.compareTo(b.paperName));
   }
 
   List<CourseStatistics> _aggregateCourses(List<AttemptHistory> history) {
@@ -281,22 +288,24 @@ class ProgressRepository {
         averagePercentage: _round1(bucket.percentageSum / bucket.attempts),
         totalQuestions: bucket.questions,
       );
-    }).toList()
-      ..sort((a, b) => a.courseName.compareTo(b.courseName));
+    }).toList()..sort((a, b) => a.courseName.compareTo(b.courseName));
   }
 
   ({int current, int longest}) _computeStreaks(List<AttemptHistory> history) {
     if (history.isEmpty) return (current: 0, longest: 0);
 
-    final days = history
-        .map((item) => DateTime(
-              item.dateTime.year,
-              item.dateTime.month,
-              item.dateTime.day,
-            ))
-        .toSet()
-        .toList()
-      ..sort();
+    final days =
+        history
+            .map(
+              (item) => DateTime(
+                item.dateTime.year,
+                item.dateTime.month,
+                item.dateTime.day,
+              ),
+            )
+            .toSet()
+            .toList()
+          ..sort();
 
     var longest = 1;
     var run = 1;
@@ -317,8 +326,8 @@ class ProgressRepository {
     var cursor = days.contains(todayKey)
         ? todayKey
         : days.contains(yesterday)
-            ? yesterday
-            : null;
+        ? yesterday
+        : null;
     if (cursor != null) {
       while (days.contains(cursor)) {
         current += 1;

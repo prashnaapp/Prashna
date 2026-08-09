@@ -9,13 +9,34 @@ class AuthRepository {
   AuthRepository({
     FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
-  })  : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-        _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+    Stream<AuthUser?>? authStateChangesOverride,
+    bool skipInitialization = false,
+  }) : _firebaseAuthOverride = firebaseAuth,
+       _googleSignInOverride = googleSignIn,
+       // ignore: prefer_initializing_formals
+       _authStateChangesOverride = authStateChangesOverride,
+       // ignore: prefer_initializing_formals
+       _skipInitialization = skipInitialization;
 
-  final FirebaseAuth _firebaseAuth;
-  final GoogleSignIn _googleSignIn;
+  @visibleForTesting
+  AuthRepository.debug({required Stream<AuthUser?> authStateChanges})
+    : this(
+        authStateChangesOverride: authStateChanges,
+        skipInitialization: true,
+      );
+
+  final FirebaseAuth? _firebaseAuthOverride;
+  final GoogleSignIn? _googleSignInOverride;
+  final Stream<AuthUser?>? _authStateChangesOverride;
+  final bool _skipInitialization;
   bool _googleInitialized = false;
   Future<void>? _googleInitFuture;
+
+  FirebaseAuth get _firebaseAuth =>
+      _firebaseAuthOverride ?? FirebaseAuth.instance;
+
+  GoogleSignIn get _googleSignIn =>
+      _googleSignInOverride ?? GoogleSignIn.instance;
 
   Future<void> initialize() {
     return _ensureGoogleInitialized();
@@ -23,6 +44,10 @@ class AuthRepository {
 
   Future<void> _ensureGoogleInitialized() {
     if (_googleInitialized) return Future.value();
+    if (_skipInitialization) {
+      _googleInitialized = true;
+      return Future.value();
+    }
     // Web admin uses Firebase Auth popup — GoogleSignIn plugin init not required.
     if (kIsWeb) {
       _googleInitialized = true;
@@ -37,7 +62,8 @@ class AuthRepository {
   AuthUser? get currentUser => _mapUser(_firebaseAuth.currentUser);
 
   Stream<AuthUser?> authStateChanges() {
-    return _firebaseAuth.authStateChanges().map(_mapUser);
+    return _authStateChangesOverride ??
+        _firebaseAuth.authStateChanges().map(_mapUser);
   }
 
   Future<AuthActionResult> signInWithGoogle() async {
@@ -65,8 +91,9 @@ class AuthRepository {
       }
 
       final credential = GoogleAuthProvider.credential(idToken: idToken);
-      final userCredential =
-          await _firebaseAuth.signInWithCredential(credential);
+      final userCredential = await _firebaseAuth.signInWithCredential(
+        credential,
+      );
       final user = _mapUser(userCredential.user);
       if (user == null) {
         return const AuthActionResult.failure(
