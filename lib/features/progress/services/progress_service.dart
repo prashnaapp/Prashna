@@ -54,12 +54,18 @@ class ProgressService {
   final Set<String> _pendingCloudCourseIds = {};
 
   final Map<String, CourseProgressHydrationState> _hydrationStates = {};
+
+  /// Immutable cloud state captured at the start of the current hydration.
+  ///
+  /// [_hydratedCloud] advances after successful writes, while this baseline
+  /// remains fixed so the same session history is never counted twice.
+  final Map<String, UserProgress> _cloudBaseline = {};
   final Map<String, UserProgress> _hydratedCloud = {};
   final Map<String, Future<bool>> _hydrateInFlight = {};
 
-  CourseProgressCloudRepository get _courseCloud =>
-      _courseCloudCache ??= _courseCloudOverride ??
-          CourseProgressCloudRepository(sessionCoordinator: _sessions);
+  CourseProgressCloudRepository get _courseCloud => _courseCloudCache ??=
+      _courseCloudOverride ??
+      CourseProgressCloudRepository(sessionCoordinator: _sessions);
 
   @visibleForTesting
   ProgressService.debug({
@@ -590,6 +596,7 @@ class ProgressService {
     _testMarkCredits.clear();
     _pendingCloudCourseIds.clear();
     _hydrationStates.clear();
+    _cloudBaseline.clear();
     _hydratedCloud.clear();
     _hydrateInFlight.clear();
     _cloudSyncGeneration++;
@@ -662,6 +669,13 @@ class ProgressService {
 
     // Test seam: cloudSync override without a course repo skips network hydrate.
     if (_courseCloudOverride == null && _cloudSyncOverride != null) {
+      final initial = UserProgress.initial(
+        uid: uid,
+        courseId: courseId,
+        appVersion: '1.0.0',
+      );
+      _cloudBaseline[courseId] = initial;
+      _hydratedCloud[courseId] = initial;
       _hydrationStates[courseId] = CourseProgressHydrationState.hydrated;
       return true;
     }
@@ -681,18 +695,16 @@ class ProgressService {
         return true;
       }
 
-      await _courseCloud.createCourseIfMissing(
-        uid,
-        courseId,
-        session: session,
-      );
+      await _courseCloud.createCourseIfMissing(uid, courseId, session: session);
       if (!_sessions.isCurrent(session)) return false;
 
-      _hydratedCloud[courseId] = UserProgress.initial(
+      final initial = UserProgress.initial(
         uid: uid,
         courseId: courseId,
         appVersion: '1.0.0',
       );
+      _cloudBaseline[courseId] = initial;
+      _hydratedCloud[courseId] = initial;
       _hydrationStates[courseId] = CourseProgressHydrationState.hydrated;
       return true;
     } catch (error, stack) {
@@ -706,6 +718,7 @@ class ProgressService {
   }
 
   void _applyHydratedCourse(String courseId, UserProgress loaded) {
+    _cloudBaseline[courseId] = loaded;
     _hydratedCloud[courseId] = loaded;
     // Restore session mark credits from durable cloud counters so local UI
     // and later snapshots are not empty relative to cloud.
@@ -779,9 +792,7 @@ class ProgressService {
             _isEffectivelyEmptyProgress(snapshot) &&
             !_isEffectivelyEmptyProgress(prior)) {
           // Never replace durable cloud progress with an empty local snapshot.
-          debugPrint(
-            'Cloud sync skipped empty overwrite courseId=$courseId',
-          );
+          debugPrint('Cloud sync skipped empty overwrite courseId=$courseId');
           _pendingCloudCourseIds.remove(courseId);
           continue;
         }
@@ -823,130 +834,38 @@ class ProgressService {
     required String uid,
     required String courseId,
   }) async {
-    final summary = await generateSummary(courseId: courseId);
+    final baseline = _cloudBaseline[courseId];
+    if (baseline == null) {
+      throw StateError(
+        'Cannot build cloud snapshot before course hydration: $courseId',
+      );
+    }
+
     final history = await loadHistory(courseId: courseId);
 
-    final questionsCorrect = history.fold<int>(
+    final deltaCorrect = history.fold<int>(
       0,
       (sum, item) => sum + item.correct,
     );
-    final questionsAttempted = history.fold<int>(
+    final deltaAttempted = history.fold<int>(
       0,
       (sum, item) => sum + item.correct + item.wrong + item.skipped,
     );
-
-    var completion = 0.0;
-    var chaptersCompleted = 0;
-    var totalChapters = 0;
-    final papers = <String, dynamic>{};
-    final chapters = <String, dynamic>{};
-
-    final prior = _hydratedCloud[courseId];
-    if (prior != null) {
-      papers.addAll(prior.papers);
-      chapters.addAll(prior.chapters);
-      completion = prior.overall.completion.toDouble();
-      chaptersCompleted = prior.overall.chaptersCompleted;
-      totalChapters = prior.overall.totalChapters;
-    }
-
-    if (ProgressDummyData.examSeeds.containsKey(courseId)) {
-      try {
-        final overall = getOverallProgress(courseId);
-        // Local credits / live tree win for this course only — never merge
-        // another course's maps.
-        if (history.isNotEmpty || (_testMarkCredits[courseId] ?? 0) > 0) {
-          var nextCompletion = overall.progressPercent;
-          final nextPapers = <String, dynamic>{};
-          final nextChapters = <String, dynamic>{};
-          var nextChaptersCompleted = 0;
-          var nextTotalChapters = 0;
-          for (final paper in overall.papers) {
-            nextPapers[paper.id] = {
-              'id': paper.id,
-              'label': paper.label,
-              'maxMarks': paper.maxMarks,
-              'coveredMarks': paper.coveredMarks,
-              'progressPercent': paper.progressPercent,
-              'remainingMarks': paper.remainingMarks,
-            };
-            for (final part in paper.parts) {
-              for (final chapter in part.chapters) {
-                nextTotalChapters += 1;
-                if (chapter.progressPercent >= 75 ||
-                    chapter.status.toLowerCase() == 'completed') {
-                  nextChaptersCompleted += 1;
-                }
-                nextChapters[chapter.id] = {
-                  'id': chapter.id,
-                  'label': chapter.label,
-                  'paperId': paper.id,
-                  'partId': part.id,
-                  'maxMarks': chapter.maxMarks,
-                  'coveredMarks': chapter.coveredMarks,
-                  'progressPercent': chapter.progressPercent,
-                  'remainingMarks': chapter.remainingMarks,
-                  'status': chapter.status,
-                };
-              }
-            }
-          }
-
-          // Without new attempt history, never regress durable cloud progress
-          // using credit-only / structural local tree noise.
-          final priorCompletion = prior?.overall.completion.toDouble() ?? 0;
-          if (history.isEmpty &&
-              prior != null &&
-              priorCompletion > nextCompletion) {
-            completion = priorCompletion;
-            papers
-              ..clear()
-              ..addAll(prior.papers);
-            chapters
-              ..clear()
-              ..addAll(prior.chapters);
-            chaptersCompleted = prior.overall.chaptersCompleted;
-            totalChapters = prior.overall.totalChapters;
-          } else {
-            completion = nextCompletion;
-            papers
-              ..clear()
-              ..addAll(nextPapers);
-            chapters
-              ..clear()
-              ..addAll(nextChapters);
-            chaptersCompleted = nextChaptersCompleted;
-            totalChapters = nextTotalChapters;
-          }
-        }
-      } catch (error, stack) {
-        debugPrint(
-          'ProgressService cloud snapshot overall skipped: $error\n$stack',
-        );
-      }
-    }
-
-    final resolvedCorrect =
-        questionsCorrect > 0 ? questionsCorrect : (prior?.overall.questionsCorrect ?? 0);
-    final resolvedAttempted = questionsAttempted > 0
-        ? questionsAttempted
-        : (prior?.overall.questionsAttempted ?? 0);
 
     return UserProgress(
       uid: uid,
       courseId: courseId,
       overall: ProgressOverall(
-        completion: completion,
-        accuracy: history.isNotEmpty
-            ? summary.averageAccuracy
-            : (prior?.overall.accuracy ?? summary.averageAccuracy),
-        chaptersCompleted: chaptersCompleted,
-        totalChapters: totalChapters,
-        questionsAttempted: resolvedAttempted,
-        questionsCorrect: resolvedCorrect,
+        completion: baseline.overall.completion,
+        accuracy: baseline.overall.accuracy,
+        chaptersCompleted: baseline.overall.chaptersCompleted,
+        totalChapters: baseline.overall.totalChapters,
+        questionsAttempted:
+            baseline.overall.questionsAttempted + deltaAttempted,
+        questionsCorrect: baseline.overall.questionsCorrect + deltaCorrect,
       ),
-      papers: papers,
-      chapters: chapters,
+      papers: Map<String, dynamic>.from(baseline.papers),
+      chapters: Map<String, dynamic>.from(baseline.chapters),
       lastUpdated: null,
       appVersion: null,
       schemaVersion: UserProgress.currentSchemaVersion,

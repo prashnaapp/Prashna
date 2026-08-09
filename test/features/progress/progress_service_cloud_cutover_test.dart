@@ -48,6 +48,35 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 120));
   }
 
+  Future<void> seedCourse({
+    required String courseId,
+    required int completion,
+    required double accuracy,
+    required int chaptersCompleted,
+    required int totalChapters,
+    required int questionsAttempted,
+    required int questionsCorrect,
+    Map<String, dynamic> papers = const {},
+    Map<String, dynamic> chapters = const {},
+  }) {
+    return store.setCourse(uid, courseId, {
+      'uid': uid,
+      'courseId': courseId,
+      'overall': {
+        'completion': completion,
+        'accuracy': accuracy,
+        'chaptersCompleted': chaptersCompleted,
+        'totalChapters': totalChapters,
+        'questionsAttempted': questionsAttempted,
+        'questionsCorrect': questionsCorrect,
+      },
+      'papers': papers,
+      'chapters': chapters,
+      'appVersion': '1.0.0',
+      'schemaVersion': 1,
+    });
+  }
+
   test('1: initial hydration blocks sync until hydrated', () async {
     expect(
       progress.hydrationStateFor(courseA),
@@ -157,38 +186,26 @@ void main() {
   });
 
   test('5/6/7: course A/B sync isolation and switching', () async {
-    await progress.hydrateCourse(courseA);
-    progress.applyTestCompletion(
-      examId: courseA,
-      correctAnswers: 4,
-      totalQuestions: 5,
+    await seedCourse(
+      courseId: courseA,
+      completion: 29,
+      accuracy: 57.8,
+      chaptersCompleted: 4,
+      totalChapters: 60,
+      questionsAttempted: 51,
+      questionsCorrect: 32,
     );
-    await flushSync();
-
-    await progress.hydrateCourse(courseB);
-    progress.applyTestCompletion(
-      examId: courseB,
-      correctAnswers: 1,
-      totalQuestions: 5,
+    await seedCourse(
+      courseId: courseB,
+      completion: 10,
+      accuracy: 70,
+      chaptersCompleted: 1,
+      totalChapters: 40,
+      questionsAttempted: 10,
+      questionsCorrect: 7,
     );
-    await flushSync();
 
-    // Return to A with more progress.
-    progress.applyTestCompletion(
-      examId: courseA,
-      correctAnswers: 1,
-      totalQuestions: 5,
-    );
-    await flushSync();
-
-    final aWrites = synced.where((s) => s.courseId == courseA).toList();
-    final bWrites = synced.where((s) => s.courseId == courseB).toList();
-    expect(aWrites, isNotEmpty);
-    expect(bWrites, isNotEmpty);
-    expect(aWrites.every((s) => s.courseId == courseA), isTrue);
-    expect(bWrites.every((s) => s.courseId == courseB), isTrue);
-
-    // Direct course-repo writes also stay isolated when bypassing override.
+    // Direct course-repo writes stay isolated and use each course's baseline.
     final direct = ProgressService.debug(
       repository: ProgressRepository(seed: false),
       sessionCoordinator: coordinator,
@@ -197,16 +214,14 @@ void main() {
     coordinator.register(direct.clear);
     await direct.hydrateCourse(courseA);
     await direct.hydrateCourse(courseB);
-    direct.applyTestCompletion(
-      examId: courseA,
-      correctAnswers: 2,
-      totalQuestions: 2,
+    await direct.recordTestAttempt(
+      test: _test(courseId: courseA, id: 'course-a'),
+      result: _result(correct: 15, wrong: 5, total: 20),
     );
     await flushSync();
-    direct.applyTestCompletion(
-      examId: courseB,
-      correctAnswers: 1,
-      totalQuestions: 2,
+    await direct.recordTestAttempt(
+      test: _test(courseId: courseB, id: 'course-b'),
+      result: _result(correct: 4, wrong: 1, total: 5),
     );
     await flushSync();
 
@@ -216,6 +231,12 @@ void main() {
     expect(bDoc, isNotNull);
     expect(aDoc!['courseId'], courseA);
     expect(bDoc!['courseId'], courseB);
+    expect(aDoc['overall']['questionsAttempted'], 71);
+    expect(aDoc['overall']['questionsCorrect'], 47);
+    expect(bDoc['overall']['questionsAttempted'], 15);
+    expect(bDoc['overall']['questionsCorrect'], 11);
+    expect(aDoc['overall']['questionsCorrect'], isNot(11));
+    expect(bDoc['overall']['questionsCorrect'], isNot(47));
   });
 
   test('8: User A → User B clears old progress', () async {
@@ -280,35 +301,33 @@ void main() {
     expect(store.parentWriteAttempts, 0);
   });
 
-  test('12: production repository instance does not seed fake attempts', () async {
-    final repo = ProgressRepository(seed: false);
-    expect(await repo.loadHistory(), isEmpty);
-    expect(await repo.loadWrongQuestionIds(), isEmpty);
+  test(
+    '12: production repository instance does not seed fake attempts',
+    () async {
+      final repo = ProgressRepository(seed: false);
+      expect(await repo.loadHistory(), isEmpty);
+      expect(await repo.loadWrongQuestionIds(), isEmpty);
 
-    // Structural syllabus remains, but chapter seed scores are zero.
-    final overall = progress.getOverallProgress(courseA);
-    expect(overall.progressPercent, 0);
-  });
+      // Structural syllabus remains, but chapter seed scores are zero.
+      final overall = progress.getOverallProgress(courseA);
+      expect(overall.progressPercent, 0);
+    },
+  );
 
   test('empty local does not overwrite non-empty hydrated cloud', () async {
-    await store.setCourse(uid, courseA, {
-      'uid': uid,
-      'courseId': courseA,
-      'overall': {
-        'completion': 66,
-        'accuracy': 0.9,
-        'chaptersCompleted': 3,
-        'totalChapters': 5,
-        'questionsAttempted': 30,
-        'questionsCorrect': 27,
-      },
-      'papers': {
-        'paper-i': {'id': 'paper-i', 'progressPercent': 66},
-      },
-      'chapters': <String, dynamic>{},
-      'appVersion': '1.0.0',
-      'schemaVersion': 1,
-    });
+    final papers = _historicalPapers();
+    final chapters = _historicalChapters();
+    await seedCourse(
+      courseId: courseA,
+      completion: 29,
+      accuracy: 57.8,
+      chaptersCompleted: 4,
+      totalChapters: 60,
+      questionsAttempted: 51,
+      questionsCorrect: 32,
+      papers: papers,
+      chapters: chapters,
+    );
 
     final direct = ProgressService.debug(
       repository: ProgressRepository(seed: false),
@@ -318,15 +337,7 @@ void main() {
     coordinator.register(direct.clear);
     await direct.hydrateCourse(courseA);
 
-    // Schedule a sync without meaningful local attempt growth by forcing
-    // apply with 0/0 which no-ops — use generation bump via clear? Instead
-    // call apply with totalQuestions <= 0 which returns early.
-    // Trigger sync path via record with empty questions still schedules.
-    // Use applyTestCompletion with valid totals but then clear credits?
-    // Safer: hydrate then manually schedule by apply with 0 correct of 1
-    // which still marks non-empty local credits of 0 — empty check uses
-    // questionsAttempted from history which is empty and completion from
-    // prior cloud via snapshot builder.
+    // Schedule a sync without creating a local AttemptHistory entry.
     direct.applyTestCompletion(
       examId: courseA,
       correctAnswers: 0,
@@ -335,15 +346,252 @@ void main() {
     await flushSync();
 
     final cloud = await store.getCourse(uid, courseA);
-    // Snapshot may update with credits 0 but prior questions should be
-    // preserved by empty-overwrite guard when local is effectively empty.
-    expect(cloud!['overall']['completion'], 66);
+    expect(cloud!['overall']['completion'], 29);
+    expect(cloud['overall']['accuracy'], 57.8);
+    expect(cloud['overall']['chaptersCompleted'], 4);
+    expect(cloud['overall']['totalChapters'], 60);
+    expect(cloud['overall']['questionsAttempted'], 51);
+    expect(cloud['overall']['questionsCorrect'], 32);
+    expect(cloud['papers'], papers);
+    expect(cloud['chapters'], chapters);
+  });
+
+  test('hydrated cumulative baseline survives a new attempt', () async {
+    final papers = _historicalPapers();
+    final chapters = _historicalChapters();
+    await seedCourse(
+      courseId: courseA,
+      completion: 29,
+      accuracy: 57.8,
+      chaptersCompleted: 4,
+      totalChapters: 60,
+      questionsAttempted: 51,
+      questionsCorrect: 32,
+      papers: papers,
+      chapters: chapters,
+    );
+
+    expect(await progress.hydrateCourse(courseA), isTrue);
+    await progress.recordTestAttempt(
+      test: _test(courseId: courseA, id: 'new-test'),
+      result: _result(correct: 15, wrong: 5, total: 20),
+    );
+    await flushSync();
+
+    final snapshot = synced.last;
+    expect(snapshot.overall.questionsAttempted, 71);
+    expect(snapshot.overall.questionsCorrect, 47);
+    expect(snapshot.overall.completion, 29);
+    expect(snapshot.overall.accuracy, 57.8);
+    expect(snapshot.papers, papers);
+    expect(snapshot.chapters, chapters);
+  });
+
+  test('repeated sync uses the immutable hydration baseline', () async {
+    await seedCourse(
+      courseId: courseA,
+      completion: 29,
+      accuracy: 57.8,
+      chaptersCompleted: 4,
+      totalChapters: 60,
+      questionsAttempted: 51,
+      questionsCorrect: 32,
+    );
+    expect(await progress.hydrateCourse(courseA), isTrue);
+    await progress.recordTestAttempt(
+      test: _test(courseId: courseA, id: 'duplicate-test'),
+      result: _result(correct: 15, wrong: 5, total: 20),
+    );
+    await flushSync();
+    final first = synced.last;
+    progress.applyTestCompletion(
+      examId: courseA,
+      correctAnswers: 0,
+      totalQuestions: 1,
+    );
+    await flushSync();
+    final second = synced.last;
+    progress.applyTestCompletion(
+      examId: courseA,
+      correctAnswers: 0,
+      totalQuestions: 1,
+    );
+    await flushSync();
+    final third = synced.last;
+
+    for (final snapshot in [first, second, third]) {
+      expect(snapshot.overall.questionsAttempted, 71);
+      expect(snapshot.overall.questionsCorrect, 47);
+    }
+  });
+
+  test('two session attempts add both deltas exactly once', () async {
+    await seedCourse(
+      courseId: courseA,
+      completion: 29,
+      accuracy: 57.8,
+      chaptersCompleted: 4,
+      totalChapters: 60,
+      questionsAttempted: 51,
+      questionsCorrect: 32,
+    );
+    expect(await progress.hydrateCourse(courseA), isTrue);
+    await progress.recordTestAttempt(
+      test: _test(courseId: courseA, id: 'test-a'),
+      result: _result(correct: 15, wrong: 5, total: 20),
+    );
+    await progress.recordTestAttempt(
+      test: _test(courseId: courseA, id: 'test-b'),
+      result: _result(correct: 6, wrong: 4, total: 10),
+    );
+    await flushSync();
+
+    expect(synced.last.overall.questionsAttempted, 81);
+    expect(synced.last.overall.questionsCorrect, 53);
+  });
+
+  test('sign-out and sign-in establish a new cumulative baseline', () async {
+    await seedCourse(
+      courseId: courseA,
+      completion: 0,
+      accuracy: 0,
+      chaptersCompleted: 0,
+      totalChapters: 60,
+      questionsAttempted: 51,
+      questionsCorrect: 32,
+    );
+    final direct = ProgressService.debug(
+      repository: ProgressRepository(seed: false),
+      sessionCoordinator: coordinator,
+      courseCloudRepository: courseCloud,
+    );
+    coordinator.register(direct.clear);
+
+    expect(await direct.hydrateCourse(courseA), isTrue);
+    await direct.recordTestAttempt(
+      test: _test(courseId: courseA, id: 'session-a'),
+      result: _result(correct: 15, wrong: 5, total: 20),
+    );
+    await flushSync();
+    final afterA = await store.getCourse(uid, courseA);
+    expect(afterA!['overall']['questionsAttempted'], 71);
+    expect(afterA['overall']['questionsCorrect'], 47);
+
+    coordinator.handleAuthState(null);
+    coordinator.handleAuthState(const AuthUser(uid: uid));
+    expect(await direct.hydrateCourse(courseA), isTrue);
+    await direct.recordTestAttempt(
+      test: _test(courseId: courseA, id: 'session-b'),
+      result: _result(correct: 6, wrong: 4, total: 10),
+    );
+    await flushSync();
+    final afterB = await store.getCourse(uid, courseA);
+    expect(afterB!['overall']['questionsAttempted'], 81);
+    expect(afterB['overall']['questionsCorrect'], 53);
   });
 }
 
-Test _test({required String courseId}) {
+Map<String, dynamic> _historicalPapers() {
+  return {
+    'paper-i': {
+      'id': 'paper-i',
+      'label': 'Paper I',
+      'maxMarks': 150,
+      'coveredMarks': 55.5,
+      'progressPercent': 37,
+      'remainingMarks': 94.5,
+    },
+    'paper-ii': {
+      'id': 'paper-ii',
+      'label': 'Paper II',
+      'maxMarks': 150,
+      'coveredMarks': 33,
+      'progressPercent': 22,
+      'remainingMarks': 117,
+    },
+    'paper-iii': {
+      'id': 'paper-iii',
+      'label': 'Paper III',
+      'maxMarks': 150,
+      'coveredMarks': 10.5,
+      'progressPercent': 7,
+      'remainingMarks': 139.5,
+    },
+    'paper-iv': {
+      'id': 'paper-iv',
+      'label': 'Paper IV',
+      'maxMarks': 150,
+      'coveredMarks': 72,
+      'progressPercent': 48,
+      'remainingMarks': 78,
+    },
+  };
+}
+
+Map<String, dynamic> _historicalChapters() {
+  final progress = <String, dynamic>{
+    'chapter-1': {
+      'id': 'chapter-1',
+      'label': 'Chapter 1',
+      'paperId': 'paper-i',
+      'partId': 'part-i',
+      'maxMarks': 5,
+      'coveredMarks': 2,
+      'progressPercent': 40,
+      'remainingMarks': 3,
+      'status': 'Needs Focus',
+    },
+    'chapter-2': {
+      'id': 'chapter-2',
+      'label': 'Chapter 2',
+      'paperId': 'paper-ii',
+      'partId': 'part-i',
+      'maxMarks': 5,
+      'coveredMarks': 1.8,
+      'progressPercent': 36,
+      'remainingMarks': 3.2,
+      'status': 'Needs Focus',
+    },
+    'chapter-3': {
+      'id': 'chapter-3',
+      'label': 'Chapter 3',
+      'paperId': 'paper-iii',
+      'partId': 'part-i',
+      'maxMarks': 5,
+      'coveredMarks': 1.5,
+      'progressPercent': 30,
+      'remainingMarks': 3.5,
+      'status': 'Needs Focus',
+    },
+    'chapter-4': {
+      'id': 'chapter-4',
+      'label': 'Chapter 4',
+      'paperId': 'paper-iv',
+      'partId': 'part-i',
+      'maxMarks': 5,
+      'coveredMarks': 1.3,
+      'progressPercent': 26,
+      'remainingMarks': 3.7,
+      'status': 'Needs Focus',
+    },
+    'chapter-5': {
+      'id': 'chapter-5',
+      'label': 'Chapter 5',
+      'paperId': 'paper-iv',
+      'partId': 'part-ii',
+      'maxMarks': 5,
+      'coveredMarks': 1,
+      'progressPercent': 20,
+      'remainingMarks': 4,
+      'status': 'Not Started',
+    },
+  };
+  return progress;
+}
+
+Test _test({required String courseId, String id = 't'}) {
   return Test(
-    id: 't-$courseId',
+    id: '$id-$courseId',
     title: 'Test',
     courseId: courseId,
     duration: const Duration(minutes: 1),
@@ -356,13 +604,13 @@ Test _test({required String courseId}) {
   );
 }
 
-TestResult _result({required int correct, required int total}) {
+TestResult _result({required int correct, int wrong = 0, required int total}) {
   return TestResult(
     totalQuestions: total,
-    attempted: correct,
+    attempted: correct + wrong,
     correct: correct,
-    wrong: 0,
-    skipped: total - correct,
+    wrong: wrong,
+    skipped: total - correct - wrong,
     score: correct.toDouble(),
     accuracy: total == 0 ? 0 : correct / total,
     percentage: total == 0 ? 0 : (correct / total) * 100,
