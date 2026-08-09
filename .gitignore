@@ -14,6 +14,18 @@ migrate_working_dir/
 
 # Admin ops tooling (scripts/) — never commit secrets or node deps
 scripts/node_modules/
+
+# Firestore rules emulator tests — never commit node deps or emulator logs
+test/security/firestore_rules/node_modules/
+test/security/firestore_rules/firestore-debug.log
+test/security/firestore_rules/ui-debug.log
+*.log
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+database-debug.log
+pubsub-debug.log
+storage-debug.log
 **/serviceAccount*.json
 **/*-firebase-adminsdk-*.json
 **/google-services-private.json
