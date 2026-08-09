@@ -96,6 +96,24 @@ abstract final class TestCloudMapper {
     return errors;
   }
 
+  /// Validates the canonical persisted metadata before publication.
+  ///
+  /// Unlike create validation, publication always requires the model to carry
+  /// a non-empty ID because the document already exists.
+  static List<String> validateForPublication(
+    TestModel test, {
+    required String documentId,
+  }) {
+    final errors = validateForWrite(test, documentId: documentId);
+    if (documentId.trim().isEmpty && !errors.contains('Test ID is required.')) {
+      errors.insert(0, 'Test ID is required.');
+    }
+    if (test.id.trim().isEmpty && !errors.contains('Test ID is required.')) {
+      errors.insert(0, 'Test ID is required.');
+    }
+    return errors;
+  }
+
   /// Maps a canonical test to the existing Firestore schema.
   static Map<String, dynamic> toFirestore(
     TestModel test, {
@@ -154,7 +172,7 @@ abstract final class TestCloudMapper {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return 0;
     final parsed = num.tryParse(trimmed);
-    if (parsed == null || parsed.isNaN || parsed < 0) return null;
+    if (parsed == null || !parsed.isFinite || parsed < 0) return null;
     return parsed;
   }
 

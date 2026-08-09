@@ -33,6 +33,45 @@ void main() {
     );
   }
 
+  AdminTestService publishService({
+    required TestModel? current,
+    required void Function(bool isPublished) onPublished,
+  }) {
+    return AdminTestService(
+      testRepository: TestCloudRepository.withLoader(
+        (_) async => const [],
+        getById: (_) async => current,
+        setPublished: ({required testId, required isPublished}) async {
+          onPublished(isPublished);
+        },
+      ),
+    );
+  }
+
+  Future<void> expectPublishRejected({
+    required TestModel? current,
+    required String message,
+    String testId = 'test-1',
+  }) async {
+    var writes = 0;
+    final service = publishService(
+      current: current,
+      onPublished: (_) => writes++,
+    );
+
+    await expectLater(
+      service.publishTest(testId),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains(message),
+        ),
+      ),
+    );
+    expect(writes, 0);
+  }
+
   test('1: valid test metadata passes validation', () {
     expect(
       TestCloudMapper.validateForWrite(
@@ -204,13 +243,11 @@ void main() {
 
   test('19: publish sets isPublished true', () async {
     var published = false;
-    final repo = TestCloudRepository.withLoader(
-      (_) async => const [],
-      setPublished: ({required testId, required isPublished}) async {
-        published = isPublished;
-      },
+    final service = publishService(
+      current: sampleTest(id: 'test-1'),
+      onPublished: (value) => published = value,
     );
-    final service = AdminTestService(testRepository: repo);
+
     await service.publishTest('test-1');
     expect(published, isTrue);
     expect(
@@ -218,6 +255,108 @@ void main() {
       isTrue,
     );
   });
+
+  test(
+    'publication rejects an empty test ID before reading or writing',
+    () async {
+      await expectPublishRejected(
+        current: sampleTest(id: 'test-1'),
+        testId: ' ',
+        message: 'Test ID is required.',
+      );
+    },
+  );
+
+  test('publication rejects an empty persisted test ID', () async {
+    await expectPublishRejected(
+      current: sampleTest(id: ''),
+      message: 'Test ID is required.',
+    );
+  });
+
+  test('publication rejects persisted document/model ID drift', () async {
+    await expectPublishRejected(
+      current: sampleTest(id: 'different-id'),
+      message: 'Test ID must match the Firestore document ID.',
+    );
+  });
+
+  test('publication rejects a missing persisted test', () async {
+    await expectPublishRejected(current: null, message: 'Test was not found.');
+  });
+
+  test('publication rejects an empty title', () async {
+    await expectPublishRejected(
+      current: sampleTest(id: 'test-1', title: ' '),
+      message: 'Title is required.',
+    );
+  });
+
+  test('publication rejects an empty course', () async {
+    await expectPublishRejected(
+      current: sampleTest(id: 'test-1', examId: ' '),
+      message: 'Course is required.',
+    );
+  });
+
+  test('publication rejects an invalid persisted category', () async {
+    // An unsupported Firestore category is rejected by the admin mapper and
+    // therefore cannot produce a canonical test for publication.
+    await expectPublishRejected(current: null, message: 'Test was not found.');
+    expect(TestCloudMapper.parseCategory('unsupported'), isNull);
+  });
+
+  test('publication rejects zero and negative question counts', () async {
+    for (final count in [0, -1]) {
+      await expectPublishRejected(
+        current: sampleTest(id: 'test-1', questionCount: count),
+        message: 'Question count must be greater than zero.',
+      );
+    }
+  });
+
+  test('publication rejects negative total marks', () async {
+    await expectPublishRejected(
+      current: sampleTest(id: 'test-1', marks: -1),
+      message: 'Total marks must be zero or greater.',
+    );
+  });
+
+  test('publication rejects zero duration', () async {
+    await expectPublishRejected(
+      current: sampleTest(id: 'test-1', durationMinutes: 0),
+      message: 'Duration must be greater than zero.',
+    );
+  });
+
+  test('publication rejects invalid negative marking', () async {
+    await expectPublishRejected(
+      current: sampleTest(id: 'test-1', negativeMarking: '-0.25'),
+      message: 'Negative marking must be a valid non-negative number.',
+    );
+  });
+
+  test('publication rejects empty difficulty', () async {
+    await expectPublishRejected(
+      current: sampleTest(id: 'test-1', difficulty: ' '),
+      message: 'Difficulty is required.',
+    );
+  });
+
+  test(
+    'valid publication allows empty questionIds for dynamic selection',
+    () async {
+      var published = false;
+      final service = publishService(
+        current: sampleTest(id: 'test-1', questionIds: const []),
+        onPublished: (value) => published = value,
+      );
+
+      await service.publishTest('test-1');
+
+      expect(published, isTrue);
+    },
+  );
 
   test('admin loader is independent from student loader', () async {
     var studentLoaderCalled = false;

@@ -119,9 +119,12 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
       if (mounted) await _loadTests();
     } catch (error) {
       if (!mounted) return;
+      final message = error is FormatException
+          ? error.message
+          : 'Could not update test. Please try again.';
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Could not update test: $error')));
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 

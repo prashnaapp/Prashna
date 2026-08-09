@@ -57,8 +57,28 @@ class AdminTestService {
     return _tests.updateTest(test);
   }
 
-  Future<void> publishTest(String testId) {
-    return _tests.setTestPublished(testId, isPublished: true);
+  Future<void> publishTest(String testId) async {
+    final id = testId.trim();
+    if (id.isEmpty) {
+      throw const FormatException('Test ID is required.');
+    }
+
+    // Never trust the model that was rendered in the list. Re-read the
+    // authoritative admin document immediately before changing visibility.
+    final current = await _tests.getAdminTestById(id);
+    if (current == null) {
+      throw const FormatException('Test was not found.');
+    }
+
+    final errors = TestCloudMapper.validateForPublication(
+      current,
+      documentId: id,
+    );
+    if (errors.isNotEmpty) {
+      throw FormatException(errors.join(' '));
+    }
+
+    await _tests.setTestPublished(id, isPublished: true);
   }
 
   Future<void> unpublishTest(String testId) {
