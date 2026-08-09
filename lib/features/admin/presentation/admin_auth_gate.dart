@@ -19,6 +19,7 @@ class AdminAuthGate extends StatefulWidget {
     this.adminAuthService,
     this.authStateChanges,
     this.isAdminChecker,
+    this.authenticatedChild,
   });
 
   final AuthService? authService;
@@ -29,6 +30,7 @@ class AdminAuthGate extends StatefulWidget {
 
   /// Test override for claim verification (must mirror token claims).
   final Future<bool> Function({bool forceRefresh})? isAdminChecker;
+  final Widget? authenticatedChild;
 
   @override
   State<AdminAuthGate> createState() => _AdminAuthGateState();
@@ -120,10 +122,11 @@ class _AdminAuthGateState extends State<AdminAuthGate> {
           onSignOut: _signOut,
         );
       case AdminAuthPhase.dashboard:
-        return AdminDashboardScreen(
-          user: _user,
-          onSignOut: _signOut,
-        );
+        return widget.authenticatedChild ??
+            AdminDashboardScreen(
+              user: _user,
+              onSignOut: _signOut,
+            );
     }
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../authentication/models/auth_user.dart';
+import '../../admin_routes.dart';
 
 /// Minimal Admin dashboard shell — no Question/Test CRUD in this milestone.
 class AdminDashboardScreen extends StatelessWidget {
@@ -65,10 +66,11 @@ class AdminDashboardScreen extends StatelessWidget {
               Card(
                 child: ListTile(
                   title: const Text('Questions'),
-                  subtitle: const Text('Coming in a later milestone'),
-                  enabled: false,
-                  trailing: const Icon(Icons.lock_outline),
-                  onTap: null,
+                  subtitle: const Text('Create, edit, and deactivate questions'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).pushNamed(
+                    AdminRoutes.questions,
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),

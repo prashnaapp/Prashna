@@ -12,7 +12,11 @@ class QuestionCloudRepository {
   QuestionCloudRepository({this._firestore})
     : _loadQuestionsForTest = null,
       _getByIdForTest = null,
-      _getByIdsForTest = null;
+      _getByIdsForTest = null,
+      _createForTest = null,
+      _updateForTest = null,
+      _deactivateForTest = null,
+      _idGeneratorForTest = null;
 
   /// Unit-test constructor — does not touch Firestore.
   @visibleForTesting
@@ -20,10 +24,27 @@ class QuestionCloudRepository {
     Future<List<Question>> Function(QuestionFilter? filter)? loadQuestions,
     Future<Question?> Function(String id)? getById,
     Future<List<Question>> Function(List<String> ids)? getByIds,
+    Future<void> Function({
+      required String questionId,
+      required Map<String, dynamic> data,
+    })? create,
+    Future<void> Function({
+      required String questionId,
+      required Map<String, dynamic> data,
+    })? update,
+    Future<void> Function({
+      required String questionId,
+      required bool isActive,
+    })? deactivate,
+    String Function()? idGenerator,
   }) : _firestore = null,
        _loadQuestionsForTest = loadQuestions,
        _getByIdForTest = getById,
-       _getByIdsForTest = getByIds;
+       _getByIdsForTest = getByIds,
+       _createForTest = create,
+       _updateForTest = update,
+       _deactivateForTest = deactivate,
+       _idGeneratorForTest = idGenerator;
 
   static const String collectionName = 'questions';
 
@@ -32,6 +53,19 @@ class QuestionCloudRepository {
       _loadQuestionsForTest;
   final Future<Question?> Function(String id)? _getByIdForTest;
   final Future<List<Question>> Function(List<String> ids)? _getByIdsForTest;
+  final Future<void> Function({
+    required String questionId,
+    required Map<String, dynamic> data,
+  })? _createForTest;
+  final Future<void> Function({
+    required String questionId,
+    required Map<String, dynamic> data,
+  })? _updateForTest;
+  final Future<void> Function({
+    required String questionId,
+    required bool isActive,
+  })? _deactivateForTest;
+  final String Function()? _idGeneratorForTest;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
@@ -175,6 +209,102 @@ class QuestionCloudRepository {
       rethrow;
     } catch (error, stack) {
       debugPrint('QuestionCloudRepository.getByIds: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Creates a question with a generated Firestore ID.
+  ///
+  /// The generated ID is also stored in the document's `id` field.
+  Future<String> createQuestion(Question question) async {
+    final testCreate = _createForTest;
+    final questionId = _idGeneratorForTest?.call() ??
+        (testCreate != null
+            ? 'admin-${DateTime.now().microsecondsSinceEpoch}'
+            : _questions.doc().id);
+    final data = QuestionCloudMapper.toFirestore(
+      question,
+      includeCreatedAt: true,
+      documentId: questionId,
+    );
+    // New content always starts active. Deactivation is an explicit later
+    // mutation through setQuestionActive.
+    data['isActive'] = true;
+    try {
+      if (testCreate != null) {
+        await testCreate(questionId: questionId, data: data);
+      } else {
+        await _questions.doc(questionId).set(data);
+      }
+      return questionId;
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in QuestionCloudRepository.createQuestion: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('QuestionCloudRepository.createQuestion: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Updates all editable fields while preserving `createdAt`.
+  Future<void> updateQuestion(Question question) async {
+    final questionId = question.id.trim();
+    if (questionId.isEmpty) {
+      throw const FormatException('Question ID is required for update.');
+    }
+    final data = QuestionCloudMapper.toFirestore(
+      question,
+      documentId: questionId,
+    );
+    try {
+      final testUpdate = _updateForTest;
+      if (testUpdate != null) {
+        await testUpdate(questionId: questionId, data: data);
+      } else {
+        await _questions.doc(questionId).update(data);
+      }
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in QuestionCloudRepository.updateQuestion: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('QuestionCloudRepository.updateQuestion: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Soft-deactivates or reactivates a question.
+  Future<void> setQuestionActive(
+    String questionId, {
+    required bool isActive,
+  }) async {
+    final id = questionId.trim();
+    if (id.isEmpty) {
+      throw const FormatException('Question ID is required.');
+    }
+    final data = QuestionCloudMapper.toDeactivateMap(isActive: isActive);
+    try {
+      final testDeactivate = _deactivateForTest;
+      if (testDeactivate != null) {
+        await testDeactivate(questionId: id, isActive: isActive);
+      } else {
+        await _questions.doc(id).update(data);
+      }
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in QuestionCloudRepository.setQuestionActive: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint(
+        'QuestionCloudRepository.setQuestionActive: $error\n$stack',
+      );
       rethrow;
     }
   }

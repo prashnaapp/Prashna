@@ -3,4 +3,7 @@ abstract final class AdminRoutes {
   static const root = '/admin';
   static const login = '/admin/login';
   static const dashboard = '/admin/dashboard';
+  static const questions = '/admin/questions';
+  static const questionCreate = '/admin/questions/create';
+  static const questionEdit = '/admin/questions/edit';
 }
