@@ -38,6 +38,7 @@ class CourseProgressCloudRepository {
     UserSessionIdentity? session,
   }) async {
     _validateOwnership(uid: uid, courseId: courseId);
+    _requireSessionUidMatchesPath(session, uid);
     try {
       final data = await _store.getCourse(uid, courseId);
       if (!_isSessionCurrent(session)) return null;
@@ -75,6 +76,7 @@ class CourseProgressCloudRepository {
     UserSessionIdentity? session,
   }) async {
     _validateUid(uid);
+    _requireSessionUidMatchesPath(session, uid);
     try {
       final raw = await _store.listCourses(uid);
       if (!_isSessionCurrent(session)) return const [];
@@ -112,13 +114,21 @@ class CourseProgressCloudRepository {
   }
 
   /// Creates a zeroed course document when missing. Never overwrites existing.
+  ///
+  /// Uses create-only store semantics so a concurrent [updateCourse] cannot be
+  /// wiped by a late create.
   Future<void> createCourseIfMissing(
     String uid,
     String courseId, {
     UserSessionIdentity? session,
   }) async {
     _validateOwnership(uid: uid, courseId: courseId);
+    _requireSessionUidMatchesPath(session, uid);
     try {
+      if (!_isSessionCurrent(session)) return;
+
+      // Fast path: skip payload work when already present. Safety still comes
+      // from create-only write below (not from this exists check).
       final exists = await _store.courseExists(uid, courseId);
       if (!_isSessionCurrent(session)) return;
       if (exists) return;
@@ -131,7 +141,7 @@ class CourseProgressCloudRepository {
         courseId: courseId,
         appVersion: appVersion,
       );
-      await _store.setCourse(
+      await _store.createCourseIfAbsent(
         uid,
         courseId,
         initial.toCourseCreateMap(appVersion: appVersion),
@@ -161,6 +171,7 @@ class CourseProgressCloudRepository {
     UserSessionIdentity? session,
   }) async {
     _validateOwnership(uid: uid, courseId: courseId);
+    _requireSessionUidMatchesPath(session, uid);
     if (snapshot.uid != uid) {
       throw ArgumentError(
         'Snapshot uid "${snapshot.uid}" does not match path uid "$uid"',
@@ -219,6 +230,21 @@ class CourseProgressCloudRepository {
     }
     if (trimmed.contains('/') || trimmed.contains('..')) {
       throw ArgumentError('courseId contains illegal path characters');
+    }
+  }
+
+  /// When [session] is supplied, path [uid] must match [UserSessionIdentity.uid]
+  /// before any Firestore I/O. Generation freshness is checked separately via
+  /// [_isSessionCurrent] around awaits.
+  void _requireSessionUidMatchesPath(
+    UserSessionIdentity? session,
+    String uid,
+  ) {
+    if (session == null) return;
+    if (session.uid != uid) {
+      throw ArgumentError(
+        'Session uid "${session.uid}" does not match path uid "$uid"',
+      );
     }
   }
 

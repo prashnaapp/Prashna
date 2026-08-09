@@ -65,11 +65,31 @@ service cloud.firestore {
     // ============================================================
     // USER PROGRESS
     // ============================================================
+    // Legacy parent: user_progress/{userId}
+    // Per-course:     user_progress/{userId}/courses/{courseId}
     match /user_progress/{userId} {
       allow read, create, update: if request.auth != null
         && request.auth.uid == userId;
 
       allow delete: if false;
+
+      match /courses/{courseId} {
+        allow read: if request.auth != null
+          && request.auth.uid == userId;
+
+        allow create: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.uid == userId
+          && request.resource.data.courseId == courseId;
+
+        allow update: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.courseId == resource.data.courseId;
+
+        allow delete: if false;
+      }
     }
 
 

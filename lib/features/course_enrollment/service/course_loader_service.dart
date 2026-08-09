@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../authentication/services/auth_service.dart';
 import '../../authentication/services/user_session_state_coordinator.dart';
+import '../../progress/services/progress_service.dart';
 import '../model/course.dart';
 import '../model/course_context.dart';
 import '../model/user_course.dart';
@@ -90,6 +93,16 @@ class CourseLoaderService {
       );
       if (generation != _sessionGeneration) return CourseContext.empty;
       _current = context;
+
+      // Best-effort per-course progress hydrate (never blocks course load).
+      if (enrollments.isNotEmpty) {
+        unawaited(
+          ProgressService.instance.hydrateCourses(
+            enrollments.map((e) => e.courseId),
+          ),
+        );
+      }
+
       return context;
     } catch (error, stack) {
       debugPrint('CourseLoaderService.load failed: $error\n$stack');

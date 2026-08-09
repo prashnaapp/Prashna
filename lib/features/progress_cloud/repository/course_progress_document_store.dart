@@ -17,6 +17,16 @@ abstract class CourseProgressDocumentStore {
     String courseId,
     Map<String, dynamic> data,
   );
+
+  /// Creates the course document only when absent.
+  ///
+  /// Returns `true` when a new document was written, `false` when one already
+  /// existed. Must never overwrite existing progress.
+  Future<bool> createCourseIfAbsent(
+    String uid,
+    String courseId,
+    Map<String, dynamic> data,
+  );
 }
 
 /// Firestore implementation of [CourseProgressDocumentStore].
@@ -81,6 +91,23 @@ class FirestoreCourseProgressDocumentStore
       SetOptions(merge: false),
     );
   }
+
+  @override
+  Future<bool> createCourseIfAbsent(
+    String uid,
+    String courseId,
+    Map<String, dynamic> data,
+  ) async {
+    // Flutter cloud_firestore has no DocumentReference.create(); a transaction
+    // provides atomic create-only semantics (no overwrite of concurrent writes).
+    final ref = courseDocRef(uid, courseId);
+    return _firestore.runTransaction<bool>((transaction) async {
+      final snapshot = await transaction.get(ref);
+      if (snapshot.exists) return false;
+      transaction.set(ref, data);
+      return true;
+    });
+  }
 }
 
 /// In-memory store for unit tests. Never touches Firebase or parent docs.
@@ -121,5 +148,17 @@ class InMemoryCourseProgressDocumentStore
   ) async {
     final userCourses = _byUid.putIfAbsent(uid, () => {});
     userCourses[courseId] = Map<String, dynamic>.from(data);
+  }
+
+  @override
+  Future<bool> createCourseIfAbsent(
+    String uid,
+    String courseId,
+    Map<String, dynamic> data,
+  ) async {
+    final userCourses = _byUid.putIfAbsent(uid, () => {});
+    if (userCourses.containsKey(courseId)) return false;
+    userCourses[courseId] = Map<String, dynamic>.from(data);
+    return true;
   }
 }

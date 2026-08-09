@@ -17,14 +17,16 @@ class QuestionMistakeStat {
 /// Persistence boundary for attempt analytics.
 /// In-memory dummy today; swap for Firebase without changing ProgressService.
 class ProgressRepository {
-  ProgressRepository({bool seed = true}) {
+  /// When [seed] is true, loads fixture attempt/mistake data (tests only).
+  /// Production [instance] uses [seed] `false` — cloud + live attempts are SoT.
+  ProgressRepository({bool seed = false}) {
     if (seed) {
       _history.addAll(AttemptHistoryDummyData.seed());
       _seedMistakes();
     }
   }
 
-  static final ProgressRepository instance = ProgressRepository();
+  static final ProgressRepository instance = ProgressRepository(seed: false);
 
   final List<AttemptHistory> _history = [];
   final Map<String, QuestionMistakeStat> _mistakes = {};

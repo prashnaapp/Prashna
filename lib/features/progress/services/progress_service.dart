@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../progress_cloud/model/user_progress.dart';
-import '../../progress_cloud/service/progress_cloud_service.dart';
+import '../../progress_cloud/repository/course_progress_cloud_repository.dart';
 import '../../syllabus/services/syllabus_service.dart';
 import '../../test_engine/data/models/test_engine_models.dart';
 import '../../authentication/services/user_session_state_coordinator.dart';
@@ -13,17 +13,29 @@ import '../data/models/progress_models.dart';
 import '../data/progress_dummy_data.dart';
 import '../data/repositories/progress_repository.dart';
 
-/// Single source of truth for syllabus progress + attempt analytics.
+/// Per-course cloud hydration lifecycle for progress cutover.
+enum CourseProgressHydrationState {
+  notHydrated,
+  hydrating,
+  hydrated,
+  hydrationFailed,
+}
+
+/// Syllabus progress + attempt analytics.
 ///
-/// Local storage remains authoritative. Cloud sync is asynchronous and best-effort.
+/// Durable authority is `user_progress/{uid}/courses/{courseId}`.
+/// Local state is a session cache: hydrate before sync; never wipe cloud with
+/// empty pre-hydration snapshots.
 class ProgressService {
   ProgressService._({
     ProgressRepository? repository,
     Future<void> Function(UserProgress snapshot)? cloudSync,
     UserSessionStateCoordinator? sessionCoordinator,
+    CourseProgressCloudRepository? courseCloudRepository,
   }) : _repository = repository ?? ProgressRepository.instance,
        _cloudSyncOverride = cloudSync,
-       _sessions = sessionCoordinator ?? UserSessionStateCoordinator.instance;
+       _sessions = sessionCoordinator ?? UserSessionStateCoordinator.instance,
+       _courseCloudOverride = courseCloudRepository;
 
   static final ProgressService instance = ProgressService._()
     .._registerSessionReset();
@@ -32,27 +44,39 @@ class ProgressService {
   final ProgressRepository _repository;
   final UserSessionStateCoordinator _sessions;
   final Future<void> Function(UserProgress snapshot)? _cloudSyncOverride;
-  ProgressCloudService? _cloudCache;
+  final CourseProgressCloudRepository? _courseCloudOverride;
+  CourseProgressCloudRepository? _courseCloudCache;
   final Map<String, OverallProgress> _overallCache = {};
   final Map<String, double> _testMarkCredits = {};
 
-  /// Coalesces rapid sync requests so only the latest snapshot is written.
+  /// Coalesces rapid sync requests; pending set is per-course.
   int _cloudSyncGeneration = 0;
-  String? _pendingCloudCourseId;
+  final Set<String> _pendingCloudCourseIds = {};
 
-  ProgressCloudService get _cloud =>
-      _cloudCache ??= ProgressCloudService.instance;
+  final Map<String, CourseProgressHydrationState> _hydrationStates = {};
+  final Map<String, UserProgress> _hydratedCloud = {};
+  final Map<String, Future<bool>> _hydrateInFlight = {};
+
+  CourseProgressCloudRepository get _courseCloud =>
+      _courseCloudCache ??= _courseCloudOverride ??
+          CourseProgressCloudRepository(sessionCoordinator: _sessions);
 
   @visibleForTesting
   ProgressService.debug({
     required ProgressRepository repository,
     Future<void> Function(UserProgress snapshot)? cloudSync,
     UserSessionStateCoordinator? sessionCoordinator,
+    CourseProgressCloudRepository? courseCloudRepository,
   }) : this._(
          repository: repository,
          cloudSync: cloudSync,
          sessionCoordinator: sessionCoordinator,
+         courseCloudRepository: courseCloudRepository,
        );
+
+  @visibleForTesting
+  CourseProgressHydrationState hydrationStateFor(String courseId) =>
+      _hydrationStates[courseId] ?? CourseProgressHydrationState.notHydrated;
 
   // ---------------------------------------------------------------------------
   // Attempt analytics (Progress Engine)
@@ -564,7 +588,10 @@ class ProgressService {
     _repository.clear();
     _overallCache.clear();
     _testMarkCredits.clear();
-    _pendingCloudCourseId = null;
+    _pendingCloudCourseIds.clear();
+    _hydrationStates.clear();
+    _hydratedCloud.clear();
+    _hydrateInFlight.clear();
     _cloudSyncGeneration++;
   }
 
@@ -573,34 +600,141 @@ class ProgressService {
   }
 
   // ---------------------------------------------------------------------------
-  // Cloud sync (best-effort mirror of local progress)
+  // Cloud hydration + per-course sync
   // ---------------------------------------------------------------------------
 
-  /// Schedules an async Firestore sync. Rapid calls are coalesced so only the
-  /// latest local snapshot is written (prevents duplicate overlapping writes).
+  /// Hydrates one course from `user_progress/{uid}/courses/{courseId}`.
+  ///
+  /// Missing docs are created with create-only semantics. Failures block sync
+  /// for that course (no zero wipe).
+  Future<bool> hydrateCourse(String courseId) async {
+    final session = _sessions.capture();
+    return _ensureCourseHydrated(courseId, session);
+  }
+
+  /// Hydrates each known course id (e.g. enrollments after [CourseLoaderService]).
+  Future<void> hydrateCourses(Iterable<String> courseIds) async {
+    final session = _sessions.capture();
+    for (final courseId in courseIds) {
+      if (!_sessions.isCurrent(session)) return;
+      final trimmed = courseId.trim();
+      if (trimmed.isEmpty) continue;
+      await _ensureCourseHydrated(trimmed, session);
+    }
+  }
+
+  Future<bool> _ensureCourseHydrated(
+    String courseId,
+    UserSessionIdentity session,
+  ) async {
+    final existingState = _hydrationStates[courseId];
+    if (existingState == CourseProgressHydrationState.hydrated) {
+      return true;
+    }
+    if (existingState == CourseProgressHydrationState.hydrationFailed) {
+      return false;
+    }
+
+    final inFlight = _hydrateInFlight[courseId];
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final future = _hydrateCourseInternal(courseId, session);
+    _hydrateInFlight[courseId] = future;
+    try {
+      return await future;
+    } finally {
+      _hydrateInFlight.remove(courseId);
+    }
+  }
+
+  Future<bool> _hydrateCourseInternal(
+    String courseId,
+    UserSessionIdentity session,
+  ) async {
+    if (!_sessions.isCurrent(session)) return false;
+    final uid = session.uid;
+    if (uid == null || uid.isEmpty) {
+      _hydrationStates[courseId] = CourseProgressHydrationState.hydrationFailed;
+      return false;
+    }
+
+    // Test seam: cloudSync override without a course repo skips network hydrate.
+    if (_courseCloudOverride == null && _cloudSyncOverride != null) {
+      _hydrationStates[courseId] = CourseProgressHydrationState.hydrated;
+      return true;
+    }
+
+    _hydrationStates[courseId] = CourseProgressHydrationState.hydrating;
+    try {
+      final loaded = await _courseCloud.loadCourse(
+        uid,
+        courseId,
+        session: session,
+      );
+      if (!_sessions.isCurrent(session)) return false;
+
+      if (loaded != null) {
+        _applyHydratedCourse(courseId, loaded);
+        _hydrationStates[courseId] = CourseProgressHydrationState.hydrated;
+        return true;
+      }
+
+      await _courseCloud.createCourseIfMissing(
+        uid,
+        courseId,
+        session: session,
+      );
+      if (!_sessions.isCurrent(session)) return false;
+
+      _hydratedCloud[courseId] = UserProgress.initial(
+        uid: uid,
+        courseId: courseId,
+        appVersion: '1.0.0',
+      );
+      _hydrationStates[courseId] = CourseProgressHydrationState.hydrated;
+      return true;
+    } catch (error, stack) {
+      debugPrint(
+        'ProgressService.hydrateCourse failed courseId=$courseId: '
+        '$error\n$stack',
+      );
+      _hydrationStates[courseId] = CourseProgressHydrationState.hydrationFailed;
+      return false;
+    }
+  }
+
+  void _applyHydratedCourse(String courseId, UserProgress loaded) {
+    _hydratedCloud[courseId] = loaded;
+    // Restore session mark credits from durable cloud counters so local UI
+    // and later snapshots are not empty relative to cloud.
+    final cloudCorrect = loaded.overall.questionsCorrect.toDouble();
+    if (cloudCorrect > (_testMarkCredits[courseId] ?? 0)) {
+      _testMarkCredits[courseId] = cloudCorrect;
+    }
+    _overallCache.remove(courseId);
+  }
+
+  /// Schedules an async per-course Firestore sync after local mutation.
   void _scheduleCloudSync({
     required String courseId,
     required UserSessionIdentity session,
   }) {
-    // TEMP DEBUG (Milestone 15.3)
-    debugPrint('Cloud sync requested');
+    debugPrint('Cloud sync requested courseId=$courseId');
 
     if (!_sessions.isCurrent(session)) return;
     final uid = session.uid;
-    // TEMP DEBUG (Milestone 15.3)
-    debugPrint('Current Firebase UID: ${uid ?? 'NULL'}');
-    if (uid == null || uid.isEmpty) {
-      // TEMP DEBUG (Milestone 15.3)
-      debugPrint('_scheduleCloudSync returns early: YES (UID null/empty)');
+    if (uid == null || uid.isEmpty) return;
+
+    if (_hydrationStates[courseId] ==
+        CourseProgressHydrationState.hydrationFailed) {
+      debugPrint('Cloud sync blocked: hydrationFailed courseId=$courseId');
       return;
     }
 
-    // TEMP DEBUG (Milestone 15.3)
-    debugPrint('_scheduleCloudSync returns early: NO');
-
-    _pendingCloudCourseId = courseId;
+    _pendingCloudCourseIds.add(courseId);
     final generation = ++_cloudSyncGeneration;
-
     unawaited(_runCloudSync(session: session, generation: generation));
   }
 
@@ -608,31 +742,81 @@ class ProgressService {
     required UserSessionIdentity session,
     required int generation,
   }) async {
-    // Brief delay lets recordTestAttempt → applyTestCompletion collapse into one write.
+    // Brief delay lets recordTestAttempt → applyTestCompletion collapse.
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (generation != _cloudSyncGeneration) return;
     if (!_sessions.isCurrent(session)) return;
 
-    final courseId = _pendingCloudCourseId;
-    if (courseId == null) return;
+    final courseIds = Set<String>.from(_pendingCloudCourseIds);
+    if (courseIds.isEmpty) return;
 
-    try {
-      final snapshot = await _buildCloudSnapshot(
-        uid: session.uid!,
-        courseId: courseId,
-      );
+    for (final courseId in courseIds) {
       if (generation != _cloudSyncGeneration || !_sessions.isCurrent(session)) {
         return;
       }
-      if (_cloudSyncOverride != null) {
-        await _cloudSyncOverride(snapshot);
-      } else {
-        await _cloud.syncSnapshot(snapshot);
+
+      final hydrated = await _ensureCourseHydrated(courseId, session);
+      if (generation != _cloudSyncGeneration || !_sessions.isCurrent(session)) {
+        return;
       }
-    } catch (error, stack) {
-      // Never crash — local progress already committed.
-      debugPrint('ProgressService cloud sync failed: $error\n$stack');
+      if (!hydrated) {
+        _pendingCloudCourseIds.remove(courseId);
+        continue;
+      }
+
+      try {
+        final snapshot = await _buildCloudSnapshot(
+          uid: session.uid!,
+          courseId: courseId,
+        );
+        if (generation != _cloudSyncGeneration ||
+            !_sessions.isCurrent(session)) {
+          return;
+        }
+
+        final prior = _hydratedCloud[courseId];
+        if (prior != null &&
+            _isEffectivelyEmptyProgress(snapshot) &&
+            !_isEffectivelyEmptyProgress(prior)) {
+          // Never replace durable cloud progress with an empty local snapshot.
+          debugPrint(
+            'Cloud sync skipped empty overwrite courseId=$courseId',
+          );
+          _pendingCloudCourseIds.remove(courseId);
+          continue;
+        }
+
+        if (_cloudSyncOverride != null) {
+          await _cloudSyncOverride(snapshot);
+        } else {
+          await _courseCloud.updateCourse(
+            session.uid!,
+            courseId,
+            snapshot,
+            session: session,
+          );
+        }
+        if (!_sessions.isCurrent(session)) return;
+        _hydratedCloud[courseId] = snapshot;
+        _pendingCloudCourseIds.remove(courseId);
+      } catch (error, stack) {
+        debugPrint(
+          'ProgressService cloud sync failed courseId=$courseId: '
+          '$error\n$stack',
+        );
+      }
     }
+  }
+
+  bool _isEffectivelyEmptyProgress(UserProgress progress) {
+    final overall = progress.overall;
+    if (overall.questionsAttempted > 0 || overall.questionsCorrect > 0) {
+      return false;
+    }
+    if (overall.completion > 0 || overall.chaptersCompleted > 0) {
+      return false;
+    }
+    return true;
   }
 
   Future<UserProgress> _buildCloudSnapshot({
@@ -657,38 +841,82 @@ class ProgressService {
     final papers = <String, dynamic>{};
     final chapters = <String, dynamic>{};
 
+    final prior = _hydratedCloud[courseId];
+    if (prior != null) {
+      papers.addAll(prior.papers);
+      chapters.addAll(prior.chapters);
+      completion = prior.overall.completion.toDouble();
+      chaptersCompleted = prior.overall.chaptersCompleted;
+      totalChapters = prior.overall.totalChapters;
+    }
+
     if (ProgressDummyData.examSeeds.containsKey(courseId)) {
       try {
         final overall = getOverallProgress(courseId);
-        completion = overall.progressPercent;
-        for (final paper in overall.papers) {
-          papers[paper.id] = {
-            'id': paper.id,
-            'label': paper.label,
-            'maxMarks': paper.maxMarks,
-            'coveredMarks': paper.coveredMarks,
-            'progressPercent': paper.progressPercent,
-            'remainingMarks': paper.remainingMarks,
-          };
-          for (final part in paper.parts) {
-            for (final chapter in part.chapters) {
-              totalChapters += 1;
-              if (chapter.progressPercent >= 75 ||
-                  chapter.status.toLowerCase() == 'completed') {
-                chaptersCompleted += 1;
+        // Local credits / live tree win for this course only — never merge
+        // another course's maps.
+        if (history.isNotEmpty || (_testMarkCredits[courseId] ?? 0) > 0) {
+          var nextCompletion = overall.progressPercent;
+          final nextPapers = <String, dynamic>{};
+          final nextChapters = <String, dynamic>{};
+          var nextChaptersCompleted = 0;
+          var nextTotalChapters = 0;
+          for (final paper in overall.papers) {
+            nextPapers[paper.id] = {
+              'id': paper.id,
+              'label': paper.label,
+              'maxMarks': paper.maxMarks,
+              'coveredMarks': paper.coveredMarks,
+              'progressPercent': paper.progressPercent,
+              'remainingMarks': paper.remainingMarks,
+            };
+            for (final part in paper.parts) {
+              for (final chapter in part.chapters) {
+                nextTotalChapters += 1;
+                if (chapter.progressPercent >= 75 ||
+                    chapter.status.toLowerCase() == 'completed') {
+                  nextChaptersCompleted += 1;
+                }
+                nextChapters[chapter.id] = {
+                  'id': chapter.id,
+                  'label': chapter.label,
+                  'paperId': paper.id,
+                  'partId': part.id,
+                  'maxMarks': chapter.maxMarks,
+                  'coveredMarks': chapter.coveredMarks,
+                  'progressPercent': chapter.progressPercent,
+                  'remainingMarks': chapter.remainingMarks,
+                  'status': chapter.status,
+                };
               }
-              chapters[chapter.id] = {
-                'id': chapter.id,
-                'label': chapter.label,
-                'paperId': paper.id,
-                'partId': part.id,
-                'maxMarks': chapter.maxMarks,
-                'coveredMarks': chapter.coveredMarks,
-                'progressPercent': chapter.progressPercent,
-                'remainingMarks': chapter.remainingMarks,
-                'status': chapter.status,
-              };
             }
+          }
+
+          // Without new attempt history, never regress durable cloud progress
+          // using credit-only / structural local tree noise.
+          final priorCompletion = prior?.overall.completion.toDouble() ?? 0;
+          if (history.isEmpty &&
+              prior != null &&
+              priorCompletion > nextCompletion) {
+            completion = priorCompletion;
+            papers
+              ..clear()
+              ..addAll(prior.papers);
+            chapters
+              ..clear()
+              ..addAll(prior.chapters);
+            chaptersCompleted = prior.overall.chaptersCompleted;
+            totalChapters = prior.overall.totalChapters;
+          } else {
+            completion = nextCompletion;
+            papers
+              ..clear()
+              ..addAll(nextPapers);
+            chapters
+              ..clear()
+              ..addAll(nextChapters);
+            chaptersCompleted = nextChaptersCompleted;
+            totalChapters = nextTotalChapters;
           }
         }
       } catch (error, stack) {
@@ -698,21 +926,30 @@ class ProgressService {
       }
     }
 
+    final resolvedCorrect =
+        questionsCorrect > 0 ? questionsCorrect : (prior?.overall.questionsCorrect ?? 0);
+    final resolvedAttempted = questionsAttempted > 0
+        ? questionsAttempted
+        : (prior?.overall.questionsAttempted ?? 0);
+
     return UserProgress(
       uid: uid,
       courseId: courseId,
       overall: ProgressOverall(
         completion: completion,
-        accuracy: summary.averageAccuracy,
+        accuracy: history.isNotEmpty
+            ? summary.averageAccuracy
+            : (prior?.overall.accuracy ?? summary.averageAccuracy),
         chaptersCompleted: chaptersCompleted,
         totalChapters: totalChapters,
-        questionsAttempted: questionsAttempted,
-        questionsCorrect: questionsCorrect,
+        questionsAttempted: resolvedAttempted,
+        questionsCorrect: resolvedCorrect,
       ),
       papers: papers,
       chapters: chapters,
       lastUpdated: null,
       appVersion: null,
+      schemaVersion: UserProgress.currentSchemaVersion,
     );
   }
 }

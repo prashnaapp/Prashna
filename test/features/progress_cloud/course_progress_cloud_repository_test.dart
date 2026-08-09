@@ -78,6 +78,56 @@ void main() {
       expect(loaded!.overall.completion, 42);
     });
 
+    test('createCourseIfMissing cannot overwrite concurrent update', () async {
+      final gate = Completer<void>();
+      final gated = _GatedCreateStore(store, gate);
+      final racingRepo = CourseProgressCloudRepository(
+        store: gated,
+        appVersionResolver: () async => '1.0.0',
+      );
+
+      final pending = racingRepo.createCourseIfMissing(uid, courseA);
+      await gated.enteredCreate;
+
+      // Concurrent real progress write while create-only write is gated.
+      await store.setCourse(uid, courseA, {
+        'uid': uid,
+        'courseId': courseA,
+        'overall': ProgressOverall(
+          completion: 77,
+          accuracy: 0.8,
+          chaptersCompleted: 2,
+          totalChapters: 5,
+          questionsAttempted: 20,
+          questionsCorrect: 16,
+        ).toMap(),
+        'papers': {'paper-i': {'id': 'paper-i', 'progressPercent': 77}},
+        'chapters': {
+          'ch-1': {'id': 'ch-1', 'paperId': 'paper-i', 'progressPercent': 77},
+        },
+        'appVersion': '1.0.0',
+        'schemaVersion': UserProgress.currentSchemaVersion,
+      });
+      gate.complete();
+      await pending;
+
+      final loaded = await repo.loadCourse(uid, courseA);
+      expect(loaded!.overall.completion, 77);
+      expect(loaded.papers['paper-i'], isNotNull);
+    });
+
+    test('duplicate createCourseIfMissing attempts are safe', () async {
+      await Future.wait([
+        repo.createCourseIfMissing(uid, courseA),
+        repo.createCourseIfMissing(uid, courseA),
+        repo.createCourseIfMissing(uid, courseA),
+      ]);
+      final loaded = await repo.loadCourse(uid, courseA);
+      expect(loaded, isNotNull);
+      expect(loaded!.overall.completion, 0);
+      expect((await store.listCourses(uid)).keys, [courseA]);
+    });
+
     test('A/B isolation: updateCourse A does not affect B', () async {
       await repo.updateCourse(uid, courseA, snapshot(courseId: courseA, completion: 11));
       await repo.updateCourse(uid, courseB, snapshot(courseId: courseB, completion: 22));
@@ -186,6 +236,64 @@ void main() {
     });
   });
 
+  group('CourseProgressCloudRepository session uid binding', () {
+    test('matching uid/session succeeds', () async {
+      final coordinator = UserSessionStateCoordinator.debug();
+      final store = InMemoryCourseProgressDocumentStore();
+      final repo = CourseProgressCloudRepository(
+        store: store,
+        sessionCoordinator: coordinator,
+        appVersionResolver: () async => '1.0.0',
+      );
+
+      coordinator.handleAuthState(const AuthUser(uid: uid));
+      final session = coordinator.capture();
+
+      await repo.createCourseIfMissing(uid, courseA, session: session);
+      await repo.updateCourse(
+        uid,
+        courseA,
+        snapshot(courseId: courseA, completion: 12),
+        session: session,
+      );
+      final loaded = await repo.loadCourse(uid, courseA, session: session);
+      expect(loaded!.overall.completion, 12);
+    });
+
+    test('mismatched uid/session is rejected before write', () async {
+      final coordinator = UserSessionStateCoordinator.debug();
+      final store = InMemoryCourseProgressDocumentStore();
+      final repo = CourseProgressCloudRepository(
+        store: store,
+        sessionCoordinator: coordinator,
+        appVersionResolver: () async => '1.0.0',
+      );
+
+      coordinator.handleAuthState(const AuthUser(uid: 'user-b'));
+      final sessionB = coordinator.capture();
+
+      await expectLater(
+        repo.updateCourse(
+          uid,
+          courseA,
+          snapshot(courseId: courseA, completion: 9),
+          session: sessionB,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      await expectLater(
+        repo.createCourseIfMissing(uid, courseA, session: sessionB),
+        throwsA(isA<ArgumentError>()),
+      );
+      await expectLater(
+        repo.loadCourse(uid, courseA, session: sessionB),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(await store.listCourses(uid), isEmpty);
+      expect(await store.listCourses('user-b'), isEmpty);
+    });
+  });
+
   group('CourseProgressCloudRepository stale session', () {
     test('stale updateCourse does not write after A→B', () async {
       final coordinator = UserSessionStateCoordinator.debug();
@@ -268,6 +376,30 @@ void main() {
       final loaded = await future;
       expect(loaded, isNull);
     });
+
+    test('stale createCourseIfMissing does not write after A→B', () async {
+      final coordinator = UserSessionStateCoordinator.debug();
+      final store = InMemoryCourseProgressDocumentStore();
+      final versionGate = Completer<String>();
+      final repo = CourseProgressCloudRepository(
+        store: store,
+        sessionCoordinator: coordinator,
+        appVersionResolver: () => versionGate.future,
+      );
+
+      coordinator.handleAuthState(const AuthUser(uid: uid));
+      final sessionA = coordinator.capture();
+      final pending =
+          repo.createCourseIfMissing(uid, courseA, session: sessionA);
+
+      await Future<void>.delayed(Duration.zero);
+      coordinator.handleAuthState(const AuthUser(uid: 'user-b'));
+      versionGate.complete('1.0.0');
+      await pending;
+
+      expect(await store.listCourses(uid), isEmpty);
+      expect(await store.listCourses('user-b'), isEmpty);
+    });
   });
 
   group('UserProgress course maps', () {
@@ -328,6 +460,60 @@ class _DelayedGetStore implements CourseProgressDocumentStore {
     Map<String, dynamic> data,
   ) {
     return _inner.setCourse(uid, courseId, data);
+  }
+
+  @override
+  Future<bool> createCourseIfAbsent(
+    String uid,
+    String courseId,
+    Map<String, dynamic> data,
+  ) {
+    return _inner.createCourseIfAbsent(uid, courseId, data);
+  }
+}
+
+/// Gates create-only writes so a concurrent update can land first.
+class _GatedCreateStore implements CourseProgressDocumentStore {
+  _GatedCreateStore(this._inner, this._gate);
+
+  final CourseProgressDocumentStore _inner;
+  final Completer<void> _gate;
+  final Completer<void> _enteredCreate = Completer<void>();
+
+  Future<void> get enteredCreate => _enteredCreate.future;
+
+  @override
+  Future<bool> courseExists(String uid, String courseId) =>
+      _inner.courseExists(uid, courseId);
+
+  @override
+  Future<Map<String, dynamic>?> getCourse(String uid, String courseId) =>
+      _inner.getCourse(uid, courseId);
+
+  @override
+  Future<Map<String, Map<String, dynamic>>> listCourses(String uid) =>
+      _inner.listCourses(uid);
+
+  @override
+  Future<void> setCourse(
+    String uid,
+    String courseId,
+    Map<String, dynamic> data,
+  ) {
+    return _inner.setCourse(uid, courseId, data);
+  }
+
+  @override
+  Future<bool> createCourseIfAbsent(
+    String uid,
+    String courseId,
+    Map<String, dynamic> data,
+  ) async {
+    if (!_enteredCreate.isCompleted) {
+      _enteredCreate.complete();
+    }
+    await _gate.future;
+    return _inner.createCourseIfAbsent(uid, courseId, data);
   }
 }
 

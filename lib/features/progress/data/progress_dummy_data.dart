@@ -1,5 +1,9 @@
 import 'models/progress_seed_models.dart';
 
+/// Syllabus structure (course / paper / part / chapter IDs and max marks).
+///
+/// Chapter score percents are intentionally zero — student progress truth comes
+/// from cloud hydration + live attempt credits, not fabricated seed scores.
 abstract final class ProgressDummyData {
   static const groupII = 'group-ii';
   static const groupIII = 'group-iii';
@@ -19,9 +23,9 @@ abstract final class ProgressDummyData {
         label: 'Paper I',
         maxMarks: 150,
         parts: [
-          _part('part-i', 'Part I', 50, [78, 52, 40, 30, 36]),
-          _part('part-ii', 'Part II', 50, [60, 48, 35, 25, 20]),
-          _part('part-iii', 'Part III', 50, [40, 30, 25, 20, 15]),
+          _part('part-i', 'Part I', 50, const [0, 0, 0, 0, 0]),
+          _part('part-ii', 'Part II', 50, const [0, 0, 0, 0, 0]),
+          _part('part-iii', 'Part III', 50, const [0, 0, 0, 0, 0]),
         ],
       ),
       PaperScoreSeed(
@@ -29,9 +33,9 @@ abstract final class ProgressDummyData {
         label: 'Paper II',
         maxMarks: 150,
         parts: [
-          _part('part-i', 'Part I', 50, [90, 60, 20, 0, 0]),
-          _part('part-ii', 'Part II', 50, [30, 25, 20, 15, 10]),
-          _part('part-iii', 'Part III', 50, [20, 15, 12, 8, 5]),
+          _part('part-i', 'Part I', 50, const [0, 0, 0, 0, 0]),
+          _part('part-ii', 'Part II', 50, const [0, 0, 0, 0, 0]),
+          _part('part-iii', 'Part III', 50, const [0, 0, 0, 0, 0]),
         ],
       ),
       PaperScoreSeed(
@@ -39,9 +43,9 @@ abstract final class ProgressDummyData {
         label: 'Paper III',
         maxMarks: 150,
         parts: [
-          _part('part-i', 'Part I', 50, [15, 12, 10, 8, 5]),
-          _part('part-ii', 'Part II', 50, [10, 8, 6, 5, 4]),
-          _part('part-iii', 'Part III', 50, [8, 6, 5, 4, 3]),
+          _part('part-i', 'Part I', 50, const [0, 0, 0, 0, 0]),
+          _part('part-ii', 'Part II', 50, const [0, 0, 0, 0, 0]),
+          _part('part-iii', 'Part III', 50, const [0, 0, 0, 0, 0]),
         ],
       ),
       PaperScoreSeed(
@@ -49,9 +53,9 @@ abstract final class ProgressDummyData {
         label: 'Paper IV',
         maxMarks: 150,
         parts: [
-          _part('part-i', 'Part I', 50, [95, 85, 70, 60, 55]),
-          _part('part-ii', 'Part II', 50, [50, 45, 40, 35, 30]),
-          _part('part-iii', 'Part III', 50, [40, 35, 30, 25, 20]),
+          _part('part-i', 'Part I', 50, const [0, 0, 0, 0, 0]),
+          _part('part-ii', 'Part II', 50, const [0, 0, 0, 0, 0]),
+          _part('part-iii', 'Part III', 50, const [0, 0, 0, 0, 0]),
         ],
       ),
     ],
@@ -67,9 +71,9 @@ abstract final class ProgressDummyData {
         label: 'Paper I',
         maxMarks: 150,
         parts: [
-          _part('part-i', 'Part I', 50, [50, 40, 30, 25, 20]),
-          _part('part-ii', 'Part II', 50, [35, 30, 25, 20, 15]),
-          _part('part-iii', 'Part III', 50, [25, 20, 15, 12, 10]),
+          _part('part-i', 'Part I', 50, const [0, 0, 0, 0, 0]),
+          _part('part-ii', 'Part II', 50, const [0, 0, 0, 0, 0]),
+          _part('part-iii', 'Part III', 50, const [0, 0, 0, 0, 0]),
         ],
       ),
       PaperScoreSeed(
@@ -77,9 +81,9 @@ abstract final class ProgressDummyData {
         label: 'Paper II',
         maxMarks: 150,
         parts: [
-          _part('part-i', 'Part I', 50, [45, 35, 30, 25, 20]),
-          _part('part-ii', 'Part II', 50, [30, 25, 20, 18, 15]),
-          _part('part-iii', 'Part III', 50, [20, 18, 15, 12, 10]),
+          _part('part-i', 'Part I', 50, const [0, 0, 0, 0, 0]),
+          _part('part-ii', 'Part II', 50, const [0, 0, 0, 0, 0]),
+          _part('part-iii', 'Part III', 50, const [0, 0, 0, 0, 0]),
         ],
       ),
       PaperScoreSeed(
@@ -87,9 +91,9 @@ abstract final class ProgressDummyData {
         label: 'Paper III',
         maxMarks: 150,
         parts: [
-          _part('part-i', 'Part I', 50, [40, 30, 25, 20, 15]),
-          _part('part-ii', 'Part II', 50, [28, 22, 18, 15, 12]),
-          _part('part-iii', 'Part III', 50, [18, 15, 12, 10, 8]),
+          _part('part-i', 'Part I', 50, const [0, 0, 0, 0, 0]),
+          _part('part-ii', 'Part II', 50, const [0, 0, 0, 0, 0]),
+          _part('part-iii', 'Part III', 50, const [0, 0, 0, 0, 0]),
         ],
       ),
     ],
