@@ -10,14 +10,41 @@ import '../data/test_cloud_mapper.dart';
 class TestCloudRepository {
   TestCloudRepository({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance,
-      _loadPublishedTestsForTest = null;
+      _loadPublishedTestsForTest = null,
+      _loadAdminTestsForTest = null,
+      _getByIdForTest = null,
+      _createForTest = null,
+      _updateForTest = null,
+      _setPublishedForTest = null,
+      _idGeneratorForTest = null;
 
   /// Unit-test constructor — does not touch Firestore.
   @visibleForTesting
   TestCloudRepository.withLoader(
     Future<List<TestModel>> Function(String courseId)
-        this._loadPublishedTestsForTest,
-  ) : _firestore = null;
+    this._loadPublishedTestsForTest, {
+    Future<List<TestModel>> Function(String courseId)? loadAdminTests,
+    Future<TestModel?> Function(String testId)? getById,
+    Future<void> Function({
+      required String testId,
+      required Map<String, dynamic> data,
+    })?
+    create,
+    Future<void> Function({
+      required String testId,
+      required Map<String, dynamic> data,
+    })?
+    update,
+    Future<void> Function({required String testId, required bool isPublished})?
+    setPublished,
+    String Function()? idGenerator,
+  }) : _firestore = null,
+       _loadAdminTestsForTest = loadAdminTests,
+       _getByIdForTest = getById,
+       _createForTest = create,
+       _updateForTest = update,
+       _setPublishedForTest = setPublished,
+       _idGeneratorForTest = idGenerator;
 
   static const String collectionName = 'tests';
 
@@ -25,7 +52,26 @@ class TestCloudRepository {
 
   /// Optional override for unit tests — never used in production.
   final Future<List<TestModel>> Function(String courseId)?
-      _loadPublishedTestsForTest;
+  _loadPublishedTestsForTest;
+  final Future<List<TestModel>> Function(String courseId)?
+  _loadAdminTestsForTest;
+  final Future<TestModel?> Function(String testId)? _getByIdForTest;
+  final Future<void> Function({
+    required String testId,
+    required Map<String, dynamic> data,
+  })?
+  _createForTest;
+  final Future<void> Function({
+    required String testId,
+    required Map<String, dynamic> data,
+  })?
+  _updateForTest;
+  final Future<void> Function({
+    required String testId,
+    required bool isPublished,
+  })?
+  _setPublishedForTest;
+  final String Function()? _idGeneratorForTest;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
@@ -71,6 +117,159 @@ class TestCloudRepository {
       rethrow;
     } catch (error, stack) {
       debugPrint('TestCloudRepository.loadPublishedTests: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Admin-visible tests for exactly [courseId], including drafts.
+  Future<List<TestModel>> loadAdminTests(String courseId) async {
+    final testLoader = _loadAdminTestsForTest;
+    if (testLoader != null) {
+      return testLoader(courseId);
+    }
+
+    try {
+      final snapshot = await _tests
+          .where('courseId', isEqualTo: courseId)
+          .get();
+
+      final tests = <TestModel>[];
+      for (final doc in snapshot.docs) {
+        final mapped = TestCloudMapper.fromFirestoreAdmin(doc.id, doc.data());
+        if (mapped == null) continue;
+        if (mapped.examId != courseId) continue;
+        tests.add(mapped);
+      }
+      return tests;
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in TestCloudRepository.loadAdminTests: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('TestCloudRepository.loadAdminTests: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Loads a single test for admin editing, including drafts.
+  Future<TestModel?> getAdminTestById(String testId) async {
+    final testGet = _getByIdForTest;
+    if (testGet != null) return testGet(testId);
+
+    final id = testId.trim();
+    if (id.isEmpty) return null;
+
+    try {
+      final snapshot = await _tests.doc(id).get();
+      if (!snapshot.exists || snapshot.data() == null) return null;
+      return TestCloudMapper.fromFirestoreAdmin(id, snapshot.data()!);
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in TestCloudRepository.getAdminTestById: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('TestCloudRepository.getAdminTestById: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Creates a test with a generated Firestore ID.
+  Future<String> createTest(TestModel test) async {
+    final testCreate = _createForTest;
+    final testId =
+        _idGeneratorForTest?.call() ??
+        (testCreate != null
+            ? 'admin-${DateTime.now().microsecondsSinceEpoch}'
+            : _tests.doc().id);
+    final data = TestCloudMapper.toFirestore(
+      TestModel(
+        id: testId,
+        examId: test.examId,
+        category: test.category,
+        title: test.title,
+        questionCount: test.questionCount,
+        marks: test.marks,
+        durationMinutes: test.durationMinutes,
+        negativeMarking: test.negativeMarking,
+        difficulty: test.difficulty,
+        questionIds: const [],
+        isPublished: false,
+      ),
+      documentId: testId,
+    );
+    try {
+      if (testCreate != null) {
+        await testCreate(testId: testId, data: data);
+      } else {
+        await _tests.doc(testId).set(data);
+      }
+      return testId;
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in TestCloudRepository.createTest: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('TestCloudRepository.createTest: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Updates editable metadata while preserving stored [questionIds].
+  Future<void> updateTest(TestModel test) async {
+    final testId = test.id.trim();
+    if (testId.isEmpty) {
+      throw const FormatException('Test ID is required for update.');
+    }
+    final data = TestCloudMapper.toFirestore(test, documentId: testId);
+    data.remove('questionIds');
+    try {
+      if (_updateForTest != null) {
+        await _updateForTest(testId: testId, data: data);
+      } else {
+        await _tests.doc(testId).update(data);
+      }
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in TestCloudRepository.updateTest: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('TestCloudRepository.updateTest: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Sets catalog visibility without changing other metadata.
+  Future<void> setTestPublished(
+    String testId, {
+    required bool isPublished,
+  }) async {
+    final id = testId.trim();
+    if (id.isEmpty) {
+      throw const FormatException('Test ID is required.');
+    }
+    final data = TestCloudMapper.toPublishMap(isPublished: isPublished);
+    try {
+      if (_setPublishedForTest != null) {
+        await _setPublishedForTest(testId: id, isPublished: isPublished);
+      } else {
+        await _tests.doc(id).update(data);
+      }
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in TestCloudRepository.setTestPublished: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('TestCloudRepository.setTestPublished: $error\n$stack');
       rethrow;
     }
   }

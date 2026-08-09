@@ -6,4 +6,7 @@ abstract final class AdminRoutes {
   static const questions = '/admin/questions';
   static const questionCreate = '/admin/questions/create';
   static const questionEdit = '/admin/questions/edit';
+  static const tests = '/admin/tests';
+  static const testCreate = '/admin/tests/create';
+  static const testEdit = '/admin/tests/edit';
 }

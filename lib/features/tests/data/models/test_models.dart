@@ -30,6 +30,7 @@ class TestModel {
     required this.negativeMarking,
     required this.difficulty,
     this.questionIds = const [],
+    this.isPublished = false,
   });
 
   final String id;
@@ -45,6 +46,9 @@ class TestModel {
   /// Optional ordered Firestore question IDs for fixed assignment.
   /// Empty → existing dynamic Question Bank selection.
   final List<String> questionIds;
+
+  /// Catalog visibility. Student paths only surface published tests.
+  final bool isPublished;
 }
 
 class InstructionModel {
