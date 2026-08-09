@@ -1,30 +1,43 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
-
+import '../entitlement_mutation_forbidden.dart';
 import '../model/course.dart';
 import '../model/user_course.dart';
 import '../repository/course_repository.dart';
 import '../repository/user_course_repository.dart';
 import 'course_loader_service.dart';
 
-/// App-facing API for course catalog + enrollment.
+/// App-facing API for course catalog + enrollment reads.
 ///
-/// Activation writes to `user_courses/{uid}/courses/{courseId}` then reloads
-/// [CourseLoaderService]. Does not redesign payments.
+/// IMMEDIATE ENTITLEMENT LOCKDOWN:
+/// Student clients must not create/update enrollments (paid or free).
+/// Free-course access is granted via authoritative `courses/{id}.isFree`
+/// (see [SubscriptionAccessService] / Firestore `canAccessCourse`).
+/// Paid entitlements require a future trusted backend writer.
 class CourseEnrollmentService {
   CourseEnrollmentService({
     CourseRepository? courseRepository,
     UserCourseRepository? userCourseRepository,
     CourseLoaderService? courseLoader,
-  }) : _courses = courseRepository ?? CourseRepository(),
-       _userCourses = userCourseRepository ?? UserCourseRepository(),
-       _loader = courseLoader ?? CourseLoaderService.instance;
+  })  : _coursesOverride = courseRepository,
+        _userCoursesOverride = userCourseRepository,
+        _loaderOverride = courseLoader;
 
   static final CourseEnrollmentService instance = CourseEnrollmentService();
 
-  final CourseRepository _courses;
-  final UserCourseRepository _userCourses;
-  final CourseLoaderService _loader;
+  final CourseRepository? _coursesOverride;
+  final UserCourseRepository? _userCoursesOverride;
+  final CourseLoaderService? _loaderOverride;
+
+  CourseRepository? _coursesCache;
+  UserCourseRepository? _userCoursesCache;
+
+  CourseRepository get _courses =>
+      _coursesOverride ?? (_coursesCache ??= CourseRepository());
+
+  UserCourseRepository get _userCourses =>
+      _userCoursesOverride ?? (_userCoursesCache ??= UserCourseRepository());
+
+  CourseLoaderService get _loader =>
+      _loaderOverride ?? CourseLoaderService.instance;
 
   Future<List<Course>> loadPublishedCourses() =>
       _courses.loadPublishedCourses();
@@ -37,72 +50,34 @@ class CourseEnrollmentService {
   Future<UserCourse?> loadEnrollment(String uid, String courseId) =>
       _userCourses.loadEnrollment(uid, courseId);
 
-  Future<void> createEnrollment(UserCourse enrollment) =>
-      _userCourses.createEnrollment(enrollment);
+  /// Disabled: clients must not create enrollment documents.
+  Future<void> createEnrollment(UserCourse enrollment) async {
+    throw const EntitlementMutationForbidden();
+  }
 
-  Future<void> updateEnrollment(UserCourse enrollment) =>
-      _userCourses.updateEnrollment(enrollment);
+  /// Disabled: clients must not update enrollment documents.
+  Future<void> updateEnrollment(UserCourse enrollment) async {
+    throw const EntitlementMutationForbidden();
+  }
 
-  /// Creates or updates `user_courses/{uid}/courses/{courseId}` as active,
-  /// then reloads [CourseLoaderService] so [CourseContext] reflects it.
+  /// Disabled: clients must not activate or renew entitlements.
   ///
-  /// Other course enrollments are left unchanged.
-  /// [enrolledAt] is set only on first activation for that courseId.
+  /// Previously this wrote `status: active` with a client-chosen `expiresAt`
+  /// and `source`, which allowed unpaid paid-course access.
   Future<void> activateEnrollment({
     required String uid,
     required String courseId,
     required String source,
     DateTime? expiresAt,
   }) async {
-    // TEMP DEBUG (Milestone 25.1) — remove after verification.
-    try {
-      debugPrint('activateEnrollment started');
-      debugPrint('uid: $uid');
-      debugPrint('courseId: $courseId');
-
-      debugPrint('Before loadEnrollment()');
-      final existing = await _userCourses.loadEnrollment(uid, courseId);
-      debugPrint('After loadEnrollment()');
-      debugPrint(
-        'Existing enrollment found? ${existing == null ? 'NO' : 'YES'}',
-      );
-
-      final parsedSource = UserCourse.sourceFromString(source);
-
-      final enrollment = UserCourse(
-        uid: uid,
-        courseId: courseId,
-        enrolledAt: existing?.enrolledAt,
-        status: UserCourseStatus.active,
-        source: parsedSource,
-        expiresAt: expiresAt,
-      );
-
-      if (existing == null) {
-        debugPrint('Before createEnrollment()');
-        await _userCourses.createEnrollment(enrollment);
-        debugPrint('After createEnrollment()');
-      } else {
-        debugPrint('Before updateEnrollment()');
-        await _userCourses.updateEnrollment(enrollment);
-        debugPrint('After updateEnrollment()');
-      }
-
-      debugPrint('Before loader.reload()');
-      await _loader.reload();
-      debugPrint('After loader.reload()');
-
-      debugPrint('activateEnrollment finished');
-    } catch (error, stack) {
-      debugPrint('activateEnrollment exception type: ${error.runtimeType}');
-      if (error is FirebaseException) {
-        debugPrint('activateEnrollment Firebase code: ${error.code}');
-        debugPrint('activateEnrollment message: ${error.message}');
-      } else {
-        debugPrint('activateEnrollment message: $error');
-      }
-      debugPrint('activateEnrollment stack trace:\n$stack');
-      rethrow;
-    }
+    throw const EntitlementMutationForbidden(
+      'Client enrollment activation is disabled. '
+      'Paid access requires a trusted payment backend.',
+    );
   }
+
+  /// Reloads [CourseLoaderService] after an external entitlement change.
+  ///
+  /// Intended for a future backend-driven refresh path; does not write.
+  Future<void> reloadCourseContext() => _loader.reload();
 }

@@ -112,11 +112,13 @@ class UserCourseRepository {
     }
   }
 
-  /// Copies a legacy flat `user_courses/{uid}` enrollment into the
-  /// subcollection when that course doc does not already exist.
+  /// Best-effort legacy read helper.
   ///
-  /// Never overwrites an existing subcollection enrollment. Never deletes
-  /// the legacy parent document.
+  /// Client entitlement writes are disabled by Firestore rules, so this no
+  /// longer copies legacy parent docs into the subcollection. Remaining
+  /// legacy-only enrollments require a trusted server migration later.
+  ///
+  /// Never deletes the legacy parent document.
   Future<void> migrateLegacyIfNeeded(String uid) async {
     try {
       final legacySnap = await userDocRef(uid).get();
@@ -133,25 +135,19 @@ class UserCourseRepository {
       final existing = await subRef.get();
       if (existing.exists) return;
 
-      final legacy = UserCourse.fromFirestore(
-        uid,
-        data,
-        courseIdFallback: courseId,
-      );
-      await subRef.set(legacy.toLegacyMigrationMap());
       debugPrint(
-        'UserCourseRepository: migrated legacy enrollment '
-        'uid=$uid courseId=$courseId',
+        'UserCourseRepository: legacy enrollment present but client '
+        'migration writes are disabled (entitlement lockdown). '
+        'uid=$uid courseId=$courseId — requires trusted server migration.',
       );
     } on FirebaseException catch (error, stack) {
+      // Permission / network failures must not break enrollment reads.
       debugPrint(
         'FirebaseException in UserCourseRepository.migrateLegacyIfNeeded: '
         'code=${error.code} message=${error.message}\n$stack',
       );
-      rethrow;
     } catch (error, stack) {
       debugPrint('UserCourseRepository.migrateLegacyIfNeeded: $error\n$stack');
-      rethrow;
     }
   }
 }

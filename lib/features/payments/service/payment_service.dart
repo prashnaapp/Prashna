@@ -1,96 +1,46 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
-
-import '../../course_enrollment/service/course_enrollment_service.dart';
 import '../model/payment_plan.dart';
 import '../model/payment_transaction.dart';
+import '../payments_unavailable_exception.dart';
 import '../repository/payment_repository.dart';
 
 /// App-facing API for payment plans and transactions.
 ///
-/// Thin wrapper around [PaymentRepository] — same layering as
-/// ProgressCloudService / BookmarkCloudService / RevisionCloudService.
-///
-/// Simulated purchases write a transaction then activate enrollment via
-/// [CourseEnrollmentService] (which reloads CourseContext). No Razorpay,
-/// Play Billing, or UI.
+/// Plan catalog reads remain available for the subscription paywall UI.
+/// Client purchase / transaction creation is disabled until a trusted
+/// payment provider and backend grant entitlements server-side.
 class PaymentService {
   PaymentService({
     PaymentRepository? repository,
-    CourseEnrollmentService? enrollmentService,
-  })  : _repository = repository ?? PaymentRepository(),
-        _enrollment = enrollmentService ?? CourseEnrollmentService.instance;
+  }) : _repositoryOverride = repository;
 
   static final PaymentService instance = PaymentService();
 
-  final PaymentRepository _repository;
-  final CourseEnrollmentService _enrollment;
+  final PaymentRepository? _repositoryOverride;
+  PaymentRepository? _repositoryCache;
+
+  PaymentRepository get _repository =>
+      _repositoryOverride ?? (_repositoryCache ??= PaymentRepository());
 
   Future<List<PaymentPlan>> loadActivePlans() =>
       _repository.loadActivePlans();
 
-  Future<void> createTransaction(PaymentTransaction transaction) =>
-      _repository.createTransaction(transaction);
+  /// Client transaction creation is disabled (lockdown).
+  Future<void> createTransaction(PaymentTransaction transaction) async {
+    throw const PaymentsUnavailableException(
+      'Client payment transaction writes are disabled. '
+      'Trusted payment records must be created by a backend.',
+    );
+  }
 
-  Future<PaymentTransaction?> loadTransaction(String transactionId) =>
-      _repository.loadTransaction(transactionId);
-
-  /// Simulated successful purchase pipeline (infrastructure only).
+  /// Client purchase / entitlement grant is disabled (lockdown).
   ///
-  /// 1. Creates `payment_transactions/{transactionId}`
-  /// 2. Activates enrollment via [CourseEnrollmentService]
-  /// 3. CourseContext reloads inside activateEnrollment
+  /// Does not create transactions, does not activate enrollment, and does
+  /// not report payment success.
   Future<void> purchaseCourse({
     required String uid,
     required String courseId,
     required PaymentPlan plan,
   }) async {
-    try {
-      debugPrint('Purchase started');
-
-      final now = DateTime.now();
-      final transactionId =
-          'txn_${now.microsecondsSinceEpoch}_${uid.hashCode.abs()}';
-      final expiresAt = plan.durationDays == null
-          ? null
-          : now.add(Duration(days: plan.durationDays!));
-
-      final transaction = PaymentTransaction(
-        transactionId: transactionId,
-        uid: uid,
-        courseId: courseId,
-        planId: plan.planId,
-        amount: plan.amount,
-        currency: plan.currency,
-        paymentProvider: 'debug',
-        providerTransactionId: transactionId,
-        status: PaymentTransactionStatus.success,
-        purchasedAt: now,
-        expiresAt: expiresAt,
-        metadata: const <String, dynamic>{},
-      );
-
-      await _repository.createTransaction(transaction);
-      debugPrint('Transaction created');
-
-      await _enrollment.activateEnrollment(
-        uid: uid,
-        courseId: courseId,
-        source: 'purchase',
-        expiresAt: expiresAt,
-      );
-      debugPrint('Enrollment activated');
-
-      debugPrint('Purchase complete');
-    } on FirebaseException catch (error, stack) {
-      debugPrint(
-        'FirebaseException in PaymentService.purchaseCourse: '
-        'code=${error.code} message=${error.message}\n$stack',
-      );
-      rethrow;
-    } catch (error, stack) {
-      debugPrint('PaymentService.purchaseCourse failed: $error\n$stack');
-      rethrow;
-    }
+    throw const PaymentsUnavailableException();
   }
 }

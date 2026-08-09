@@ -35,6 +35,9 @@ service cloud.firestore {
 
     // Mirrors SubscriptionAccessService.canAccessCourse:
     // free course OR active non-expired enrollment for exact courseId.
+    //
+    // Paid entitlements must be written only by a trusted backend.
+    // Clients cannot create/update enrollments (see user_courses rules).
     function canAccessCourse(courseId) {
       return isSignedIn()
         && (isCourseFree(courseId) || hasActiveEnrollment(courseId));
@@ -115,19 +118,28 @@ service cloud.firestore {
     // New multi-course structure:
     // user_courses/{userId}/courses/{courseId}
     //
+    // IMMEDIATE ENTITLEMENT LOCKDOWN:
+    // Students may READ their own enrollments.
+    // Students may NOT create or update enrollments.
+    //
+    // Free-course access does not require an enrollment document —
+    // canAccessCourse allows courses/{courseId}.isFree == true.
+    //
+    // Paid entitlements must be granted only by a future trusted backend
+    // (Admin SDK / Cloud Functions). Client-side free-enrollment writes are
+    // also denied to avoid any entitlement-field spoofing surface.
+    //
+    // Migration consequence: client-side legacy → subcollection migration
+    // writes are no longer possible; any remaining legacy-only docs need a
+    // trusted server migration later.
+    //
     match /user_courses/{userId} {
 
       // Legacy parent document
       allow read: if request.auth != null
         && request.auth.uid == userId;
 
-      allow create: if request.auth != null
-        && request.auth.uid == userId;
-
-      allow update: if request.auth != null
-        && request.auth.uid == userId;
-
-      allow delete: if false;
+      allow create, update, delete: if false;
 
 
       // ----------------------------------------------------------
@@ -138,13 +150,7 @@ service cloud.firestore {
         allow read: if request.auth != null
           && request.auth.uid == userId;
 
-        allow create: if request.auth != null
-          && request.auth.uid == userId;
-
-        allow update: if request.auth != null
-          && request.auth.uid == userId;
-
-        allow delete: if false;
+        allow create, update, delete: if false;
       }
     }
 
@@ -174,21 +180,17 @@ service cloud.firestore {
     // PAYMENT TRANSACTIONS
     // ============================================================
     //
-    // A signed-in user can:
-    // - create their own transaction
-    // - read their own transaction
-    //
-    // Clients cannot modify or delete transactions afterwards.
+    // IMMEDIATE ENTITLEMENT LOCKDOWN:
+    // Students may read their own transactions.
+    // Students may NOT create transactions (including status: success).
+    // Trusted payment documents will be written only by a future backend.
     //
     match /payment_transactions/{transactionId} {
 
       allow read: if request.auth != null
         && resource.data.uid == request.auth.uid;
 
-      allow create: if request.auth != null
-        && request.resource.data.uid == request.auth.uid;
-
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
 
