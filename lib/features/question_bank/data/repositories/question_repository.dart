@@ -79,6 +79,28 @@ class QuestionRepository {
     return loadQuestions(filter: QuestionFilter(paperId: paperId));
   }
 
+  Future<List<Question>> getQuestionsByPart(String partId) {
+    return loadQuestions(filter: QuestionFilter(partId: partId));
+  }
+
+  Future<List<Question>> getQuestionsByLesson(String lessonId) {
+    return loadQuestions(filter: QuestionFilter(lessonId: lessonId));
+  }
+
+  Future<List<Question>> getQuestionsBySyllabusUnit(String syllabusUnitId) {
+    return loadQuestions(
+      filter: QuestionFilter(syllabusUnitId: syllabusUnitId),
+    );
+  }
+
+  Future<List<Question>> getQuestionsByMajorStudyArea(String areaId) {
+    return loadQuestions(filter: QuestionFilter(majorStudyAreaId: areaId));
+  }
+
+  Future<List<Question>> getQuestionsByContentTopic(String topicId) {
+    return loadQuestions(filter: QuestionFilter(contentTopicId: topicId));
+  }
+
   Future<List<Question>> searchQuestions(String query) async {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return const [];
@@ -87,14 +109,14 @@ class QuestionRepository {
     // Dummy-only helper — not used by Test Engine production paths.
     return QuestionBankDummyData.all
         .where((question) {
-      if (!question.isActive) return false;
-      if (question.question.toLowerCase().contains(q)) return true;
-      if (question.topicId.toLowerCase().contains(q)) return true;
-      if ((question.examName ?? '').toLowerCase().contains(q)) return true;
-      for (final tag in question.tags) {
-        if (tag.toLowerCase().contains(q)) return true;
-      }
-      return false;
+          if (!question.isActive) return false;
+          if (question.question.toLowerCase().contains(q)) return true;
+          if (question.topicId.toLowerCase().contains(q)) return true;
+          if ((question.examName ?? '').toLowerCase().contains(q)) return true;
+          for (final tag in question.tags) {
+            if (tag.toLowerCase().contains(q)) return true;
+          }
+          return false;
         })
         .toList(growable: false);
   }
@@ -139,41 +161,59 @@ class QuestionRepository {
 
     return source
         .where((question) {
-      if (filter.activeOnly && !question.isActive) return false;
-      if (filter.courseId != null && question.courseId != filter.courseId) {
-        return false;
-      }
-      if (filter.paperId != null && question.paperId != filter.paperId) {
-        return false;
-      }
-      if (filter.sectionId != null &&
-          question.sectionId != filter.sectionId) {
-        return false;
-      }
-      if (filter.topicId != null && question.topicId != filter.topicId) {
-        return false;
-      }
-      if (filter.difficulty != null &&
-          question.difficulty != filter.difficulty) {
-        return false;
-      }
-      if (filter.questionType != null &&
-          question.questionType != filter.questionType) {
-        return false;
-      }
-      if (filter.language != null && question.language != filter.language) {
-        return false;
-      }
-      if (filter.year != null && question.year != filter.year) return false;
-      if (filter.bookmarked != null) {
-        final bookmarked = _bookmarkedIds.contains(question.id);
-        if (bookmarked != filter.bookmarked) return false;
-      }
-      if (filter.attempted != null) {
-        final attempted = _attemptedIds.contains(question.id);
-        if (attempted != filter.attempted) return false;
-      }
-      return true;
+          if (filter.activeOnly && !question.isActive) return false;
+          if (filter.courseId != null && question.courseId != filter.courseId) {
+            return false;
+          }
+          if (filter.paperId != null && question.paperId != filter.paperId) {
+            return false;
+          }
+          if (filter.sectionId != null &&
+              question.sectionId != filter.sectionId) {
+            return false;
+          }
+          if (filter.topicId != null && question.topicId != filter.topicId) {
+            return false;
+          }
+          if (filter.partId != null && question.partId != filter.partId) {
+            return false;
+          }
+          if (filter.lessonId != null && question.lessonId != filter.lessonId) {
+            return false;
+          }
+          if (filter.syllabusUnitId != null &&
+              question.syllabusUnitId != filter.syllabusUnitId) {
+            return false;
+          }
+          if (filter.majorStudyAreaId != null &&
+              question.majorStudyAreaId != filter.majorStudyAreaId) {
+            return false;
+          }
+          if (filter.contentTopicId != null &&
+              question.contentTopicId != filter.contentTopicId) {
+            return false;
+          }
+          if (filter.difficulty != null &&
+              question.difficulty != filter.difficulty) {
+            return false;
+          }
+          if (filter.questionType != null &&
+              question.questionType != filter.questionType) {
+            return false;
+          }
+          if (filter.language != null && question.language != filter.language) {
+            return false;
+          }
+          if (filter.year != null && question.year != filter.year) return false;
+          if (filter.bookmarked != null) {
+            final bookmarked = _bookmarkedIds.contains(question.id);
+            if (bookmarked != filter.bookmarked) return false;
+          }
+          if (filter.attempted != null) {
+            final attempted = _attemptedIds.contains(question.id);
+            if (attempted != filter.attempted) return false;
+          }
+          return true;
         })
         .toList(growable: false);
   }

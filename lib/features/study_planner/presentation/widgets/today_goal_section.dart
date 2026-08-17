@@ -38,14 +38,18 @@ class TodayGoalSection extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  goal!.partLabel,
+                  goal!.majorStudyAreaLabel ?? goal!.partLabel,
                   style: AppTextStyles.bodyMedium(context),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  goal!.chapterLabel,
+                  goal!.contentTopicLabel ?? goal!.chapterLabel,
                   style: AppTextStyles.label(context),
                 ),
+                if (goal!.lessonLabel != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(goal!.lessonLabel!, style: AppTextStyles.label(context)),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 Text(
                   '${goal!.questionCount} Questions',
@@ -59,9 +63,9 @@ class TodayGoalSection extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxl),
                 Text(
                   'Continue →',
-                  style: AppTextStyles.label(context).copyWith(
-                    color: AppColors.primary,
-                  ),
+                  style: AppTextStyles.label(
+                    context,
+                  ).copyWith(color: AppColors.primary),
                 ),
               ],
             ),

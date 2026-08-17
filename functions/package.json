@@ -1,0 +1,20 @@
+{
+  "name": "prashna-functions",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Trusted backend for Prashna entitlements and payment transactions. No payment provider integration in Phase 5.11.",
+  "type": "module",
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test test/**/*.test.mjs",
+    "lint": "node --check index.js && node --check src/*.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0",
+    "google-auth-library": "^9.15.1"
+  }
+}

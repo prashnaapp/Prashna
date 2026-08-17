@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/design_system/design_system.dart';
 import '../../models/profile_model.dart';
+import 'profile_section.dart';
 import 'settings_tile.dart';
 
+/// Preferences section. The caller decides which preferences to surface; the
+/// Profile tab shows Theme and Notifications only.
 class SettingsSection extends StatelessWidget {
   const SettingsSection({
     super.key,
@@ -18,35 +20,25 @@ class SettingsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     if (preferences.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
+    return ProfileSection(
+      title: 'Preferences',
       children: [
-        Text('Preferences', style: AppTextStyles.titleLarge(context)),
-        const SizedBox(height: AppSpacing.lg),
-        for (var i = 0; i < preferences.length; i++) ...[
-          if (i > 0) const SizedBox(height: AppSpacing.md),
+        for (final preference in preferences)
           SettingsTile(
-            title: preferences[i].title,
-            subtitle: preferences[i].subtitle,
-            leading: Icon(
-              _iconFor(preferences[i].id),
-              color: AppColors.primary,
-            ),
-            onTap: () => onPreferenceTap(preferences[i]),
+            title: preference.title,
+            subtitle: preference.subtitle,
+            icon: _iconFor(preference.id),
+            onTap: () => onPreferenceTap(preference),
           ),
-        ],
       ],
     );
   }
 
   IconData _iconFor(String id) {
     return switch (id) {
-      'language' => Icons.language_rounded,
-      'theme' => Icons.palette_outlined,
-      'notifications' => Icons.notifications_outlined,
-      'downloads' => Icons.download_outlined,
-      _ => Icons.settings_outlined,
+      'theme' => Icons.palette_rounded,
+      'notifications' => Icons.notifications_rounded,
+      _ => Icons.settings_rounded,
     };
   }
 }

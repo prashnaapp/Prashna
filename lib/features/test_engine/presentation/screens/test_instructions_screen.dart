@@ -9,10 +9,14 @@ class TestInstructionsScreen extends StatelessWidget {
     super.key,
     required this.controller,
     required this.onStart,
+    this.isStarting = false,
+    this.startError,
   });
 
   final TestEngineController controller;
   final VoidCallback onStart;
+  final bool isStarting;
+  final String? startError;
 
   @override
   Widget build(BuildContext context) {
@@ -25,8 +29,22 @@ class TestInstructionsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          Text('Instructions', style: AppTextStyles.headline(context)),
-          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            backgroundColor: AppColors.lavender,
+            showBorder: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Instructions', style: AppTextStyles.titleMedium(context)),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${test.totalQuestions} questions · $minutes min',
+                  style: AppTextStyles.bodyMedium(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           AppCard(
             showShadow: false,
             child: Column(
@@ -51,10 +69,7 @@ class TestInstructionsScreen extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${i + 1}.',
-                  style: AppTextStyles.bodyMedium(context),
-                ),
+                Text('${i + 1}.', style: AppTextStyles.bodyMedium(context)),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
@@ -67,9 +82,29 @@ class TestInstructionsScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
           ],
           const SizedBox(height: AppSpacing.xxl),
+          if (isStarting) ...[
+            const LinearProgressIndicator(key: ValueKey('starting-indicator')),
+            const SizedBox(height: AppSpacing.md),
+            Text('Starting test…', style: AppTextStyles.bodyMedium(context)),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+          if (startError != null) ...[
+            Text(
+              startError!,
+              key: const ValueKey('start-test-error'),
+              style: AppTextStyles.bodyMedium(
+                context,
+              ).copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           AppPrimaryButton(
-            label: 'Start Test',
-            onPressed: onStart,
+            key: ValueKey(
+              startError == null ? 'start-test' : 'retry-start-test',
+            ),
+            label: startError == null ? 'Start Test' : 'Retry Start Test',
+            isLoading: isStarting,
+            onPressed: isStarting ? null : onStart,
           ),
         ],
       ),
@@ -87,14 +122,12 @@ class _MetaRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-          child: Text(label, style: AppTextStyles.bodyMedium(context)),
-        ),
+        Expanded(child: Text(label, style: AppTextStyles.bodyMedium(context))),
         Text(
           value,
-          style: AppTextStyles.label(context).copyWith(
-            color: AppColors.textPrimary,
-          ),
+          style: AppTextStyles.label(
+            context,
+          ).copyWith(color: AppColors.textPrimary),
         ),
       ],
     );

@@ -4,7 +4,7 @@ import '../data/models/test_models.dart';
 import '../services/test_service.dart';
 import 'screens/mock_test_list_screen.dart';
 import 'screens/mock_test_paper_list_screen.dart';
-import 'test_quiz_navigation.dart';
+import 'screens/test_list_screen.dart';
 
 /// Phase 3 navigation helpers for Mock Tests.
 void openMockTests({
@@ -15,10 +15,7 @@ void openMockTests({
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => MockTestListScreen(
-        examId: examId,
-        title: title,
-      ),
+      builder: (_) => MockTestListScreen(examId: examId, title: title),
     ),
   );
 }
@@ -31,10 +28,7 @@ void openMockPapers({
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => MockTestPaperListScreen(
-        examId: examId,
-        mock: mock,
-      ),
+      builder: (_) => MockTestPaperListScreen(examId: examId, mock: mock),
     ),
   );
 }
@@ -44,11 +38,17 @@ void openMockPaperTest({
   required String examId,
   required MockTestEntry mock,
   required PaperWisePaper paper,
+  TestService? testService,
 }) {
-  final test = TestService.instance.getMockPaperTest(
-    examId: examId,
-    mock: mock,
-    paper: paper,
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => TestListScreen(
+        examId: examId,
+        category: TestCategoryType.mockTests,
+        title: '${mock.title} · ${paper.title}',
+        testService: testService,
+      ),
+    ),
   );
-  openTestPracticeSession(context, test);
 }

@@ -12,17 +12,17 @@ class SyllabusService {
 
   /// MVP available exams (Group-II, Group-III).
   List<SyllabusCourse> getAvailableCourses() => List.unmodifiable(
-        SyllabusDummyData.all.where((course) => course.isAvailable),
-      );
+    SyllabusDummyData.all.where((course) => course.isAvailable),
+  );
 
   /// MVP launching-soon exams (Police SI, Constable).
   List<SyllabusCourse> getLaunchingSoonCourses() => List.unmodifiable(
-        SyllabusDummyData.all.where((course) => !course.isAvailable),
-      );
+    SyllabusDummyData.all.where((course) => !course.isAvailable),
+  );
 
   List<SyllabusCourse> getEnrolledCourses() => List.unmodifiable(
-        SyllabusDummyData.all.where((course) => course.isEnrolled),
-      );
+    SyllabusDummyData.all.where((course) => course.isEnrolled),
+  );
 
   SyllabusCourse? getCourseById(String id) {
     for (final course in SyllabusDummyData.all) {
@@ -31,10 +31,7 @@ class SyllabusService {
     return null;
   }
 
-  SyllabusPaper? getPaper({
-    required String courseId,
-    required String paperId,
-  }) {
+  SyllabusPaper? getPaper({required String courseId, required String paperId}) {
     final course = getCourseById(courseId);
     if (course == null) return null;
     for (final paper in course.papers) {
@@ -70,6 +67,113 @@ class SyllabusService {
     if (section == null) return null;
     for (final topic in section.topics) {
       if (topic.id == topicId) return topic;
+    }
+    return null;
+  }
+
+  SyllabusMajorStudyArea? getMajorStudyArea({
+    required String courseId,
+    required String paperId,
+    required String majorStudyAreaId,
+  }) {
+    final paper = getPaper(courseId: courseId, paperId: paperId);
+    if (paper == null) return null;
+    for (final area in paper.majorStudyAreas) {
+      if (area.id == majorStudyAreaId) return area;
+    }
+    return null;
+  }
+
+  SyllabusContentTopic? getContentTopic({
+    required String courseId,
+    required String paperId,
+    required String majorStudyAreaId,
+    required String contentTopicId,
+  }) {
+    final area = getMajorStudyArea(
+      courseId: courseId,
+      paperId: paperId,
+      majorStudyAreaId: majorStudyAreaId,
+    );
+    if (area == null) return null;
+    for (final topic in area.contentTopics) {
+      if (topic.id == contentTopicId) return topic;
+    }
+    return null;
+  }
+
+  SyllabusPart? getPart({
+    required String courseId,
+    required String paperId,
+    required String partId,
+  }) {
+    final paper = getPaper(courseId: courseId, paperId: paperId);
+    if (paper == null) return null;
+    for (final part in paper.parts) {
+      if (part.id == partId) return part;
+    }
+    return null;
+  }
+
+  SyllabusTopic? getCanonicalTopic({
+    required String courseId,
+    required String paperId,
+    required String partId,
+    required String topicId,
+  }) {
+    final part = getPart(courseId: courseId, paperId: paperId, partId: partId);
+    if (part == null) return null;
+    for (final topic in part.topics) {
+      if (topic.id == topicId) return topic;
+    }
+    return null;
+  }
+
+  SyllabusLesson? getLesson({
+    required String courseId,
+    required String paperId,
+    required String partId,
+    required String topicId,
+    required String lessonId,
+  }) {
+    final topic = getCanonicalTopic(
+      courseId: courseId,
+      paperId: paperId,
+      partId: partId,
+      topicId: topicId,
+    );
+    if (topic == null) return null;
+    for (final lesson in topic.lessons) {
+      if (lesson.id == lessonId) return lesson;
+    }
+    return null;
+  }
+
+  /// Paper-level syllabus units (Paper → Syllabus Unit, no Parts).
+  SyllabusUnit? getPaperSyllabusUnit({
+    required String courseId,
+    required String paperId,
+    required String unitId,
+  }) {
+    final paper = getPaper(courseId: courseId, paperId: paperId);
+    if (paper == null) return null;
+    for (final unit in paper.syllabusUnits) {
+      if (unit.id == unitId) return unit;
+    }
+    return null;
+  }
+
+  /// Part-level syllabus units (Paper → Part → Syllabus Unit).
+  SyllabusUnit? getPartSyllabusUnit({
+    required String courseId,
+    required String paperId,
+    required String partId,
+    required String unitId,
+  }) {
+    final part = getPart(courseId: courseId, paperId: paperId, partId: partId);
+    if (part == null) return null;
+    for (final unit in part.syllabusUnits) {
+      if (unit.id == unitId) return unit;
     }
     return null;
   }

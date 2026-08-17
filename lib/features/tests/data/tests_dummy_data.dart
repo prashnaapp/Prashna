@@ -18,9 +18,9 @@ abstract final class TestsDummyData {
 
   /// Group dashboard entry cards.
   ///
-  /// Chapter Tests lists are Firestore-backed via [TestService.getTests].
-  /// Other entries still use dummy paper/mock/previous navigation until
-  /// those catalogs are migrated.
+  /// Student execution uses Firestore-backed [TestService.getTests] for every
+  /// category. Dummy paper/mock/previous helpers below remain for unit tests
+  /// and browsing fixtures only — they must not enter the server start path.
   static const dashboardCategories = <TestCategoryType>[
     TestCategoryType.chapterTests,
     TestCategoryType.partTests,
@@ -57,49 +57,49 @@ abstract final class TestsDummyData {
   static List<PaperWisePaper> paperWisePapersFor(String examId) {
     return switch (examId) {
       'group-ii' => const [
-          PaperWisePaper(
-            id: 'paper-i',
-            title: 'Paper I',
-            subtitle: 'General Studies',
-          ),
-          PaperWisePaper(
-            id: 'paper-ii',
-            title: 'Paper II',
-            subtitle: 'History, Polity & Social Structure',
-          ),
-          PaperWisePaper(
-            id: 'paper-iii',
-            title: 'Paper III',
-            subtitle: 'Economy',
-          ),
-          PaperWisePaper(
-            id: 'paper-iv',
-            title: 'Paper IV',
-            subtitle: 'Telangana Movement',
-          ),
-        ],
+        PaperWisePaper(
+          id: 'paper-i',
+          title: 'Paper I',
+          subtitle: 'General Studies',
+        ),
+        PaperWisePaper(
+          id: 'paper-ii',
+          title: 'Paper II',
+          subtitle: 'History, Polity & Social Structure',
+        ),
+        PaperWisePaper(
+          id: 'paper-iii',
+          title: 'Paper III',
+          subtitle: 'Economy',
+        ),
+        PaperWisePaper(
+          id: 'paper-iv',
+          title: 'Paper IV',
+          subtitle: 'Telangana Movement',
+        ),
+      ],
       'group-iii' => const [
-          PaperWisePaper(
-            id: 'paper-i',
-            title: 'Paper I',
-            subtitle: 'General Studies',
-          ),
-          PaperWisePaper(
-            id: 'paper-ii',
-            title: 'Paper II',
-            subtitle: 'History, Polity & Social Structure',
-          ),
-          PaperWisePaper(
-            id: 'paper-iii',
-            title: 'Paper III',
-            subtitle: 'Economy',
-          ),
-        ],
+        PaperWisePaper(
+          id: 'paper-i',
+          title: 'Paper I',
+          subtitle: 'General Studies',
+        ),
+        PaperWisePaper(
+          id: 'paper-ii',
+          title: 'Paper II',
+          subtitle: 'History, Polity & Social Structure',
+        ),
+        PaperWisePaper(
+          id: 'paper-iii',
+          title: 'Paper III',
+          subtitle: 'Economy',
+        ),
+      ],
       _ => const [],
     };
   }
 
-  /// Parts under a Paper-wise paper — each launches the existing Test Engine.
+  /// Parts under a Paper-wise paper — browsing fixtures only.
   static List<TestModel> paperWisePartsFor({
     required String examId,
     required String paperId,
@@ -149,7 +149,7 @@ abstract final class TestsDummyData {
   static List<PaperWisePaper> mockPapersFor(String examId) =>
       paperWisePapersFor(examId);
 
-  /// Selecting a paper under a mock launches the existing Test Engine.
+  /// Selecting a paper under a mock — browsing fixture only.
   static TestModel mockPaperTest({
     required String examId,
     required MockTestEntry mock,
@@ -168,21 +168,21 @@ abstract final class TestsDummyData {
 
   /// Exams shown under Previous Papers (Phase 4).
   static List<PreviousPaperExam> previousPaperExams() => const [
-        PreviousPaperExam(examId: 'group-ii', title: 'Group-II'),
-        PreviousPaperExam(examId: 'group-iii', title: 'Group-III'),
-      ];
+    PreviousPaperExam(examId: 'group-ii', title: 'Group-II'),
+    PreviousPaperExam(examId: 'group-iii', title: 'Group-III'),
+  ];
 
   /// Real exam years only for Previous Papers.
   static List<PreviousPaperYear> previousPaperYearsFor(String examId) {
     return switch (examId) {
       'group-ii' => const [
-          PreviousPaperYear(year: 2016),
-          PreviousPaperYear(year: 2024),
-        ],
+        PreviousPaperYear(year: 2016),
+        PreviousPaperYear(year: 2024),
+      ],
       'group-iii' => const [
-          PreviousPaperYear(year: 2018),
-          PreviousPaperYear(year: 2024),
-        ],
+        PreviousPaperYear(year: 2018),
+        PreviousPaperYear(year: 2024),
+      ],
       _ => const [],
     };
   }
@@ -191,7 +191,7 @@ abstract final class TestsDummyData {
   static List<PaperWisePaper> previousPapersFor(String examId) =>
       paperWisePapersFor(examId);
 
-  /// Selecting a paper under a previous year launches the existing Test Engine.
+  /// Selecting a paper under a previous year — browsing fixture only.
   static TestModel previousPaperTest({
     required String examId,
     required PreviousPaperYear year,
@@ -209,35 +209,198 @@ abstract final class TestsDummyData {
   }
 
   static List<TestModel> _chapterTests(String examId) => [
-        _test(examId, 'chapter-1', TestCategoryType.chapterTests, 'Chapter Test 1', 20, 20, 30),
-        _test(examId, 'chapter-2', TestCategoryType.chapterTests, 'Chapter Test 2', 20, 20, 30),
-        _test(examId, 'chapter-3', TestCategoryType.chapterTests, 'Chapter Test 3', 20, 20, 30),
-      ];
+    _test(
+      examId,
+      'chapter-1',
+      TestCategoryType.chapterTests,
+      'Chapter Test 1',
+      20,
+      20,
+      30,
+    ),
+    _test(
+      examId,
+      'chapter-2',
+      TestCategoryType.chapterTests,
+      'Chapter Test 2',
+      20,
+      20,
+      30,
+    ),
+    _test(
+      examId,
+      'chapter-3',
+      TestCategoryType.chapterTests,
+      'Chapter Test 3',
+      20,
+      20,
+      30,
+    ),
+  ];
 
   static List<TestModel> _partTests(String examId) => [
-        _test(examId, 'part-1', TestCategoryType.partTests, 'Part I Test', 50, 50, 60),
-        _test(examId, 'part-2', TestCategoryType.partTests, 'Part II Test', 50, 50, 60),
-        _test(examId, 'part-3', TestCategoryType.partTests, 'Part III Test', 50, 50, 60),
-      ];
+    _test(
+      examId,
+      'part-1',
+      TestCategoryType.partTests,
+      'Part I Test',
+      50,
+      50,
+      60,
+    ),
+    _test(
+      examId,
+      'part-2',
+      TestCategoryType.partTests,
+      'Part II Test',
+      50,
+      50,
+      60,
+    ),
+    _test(
+      examId,
+      'part-3',
+      TestCategoryType.partTests,
+      'Part III Test',
+      50,
+      50,
+      60,
+    ),
+  ];
 
   static List<TestModel> _paperTests(String examId) => [
-        _test(examId, 'paper-2', TestCategoryType.paperTests, 'Paper II Test', 150, 150, 180),
-        _test(examId, 'paper-3', TestCategoryType.paperTests, 'Paper III Test', 150, 150, 180),
-        _test(examId, 'paper-4', TestCategoryType.paperTests, 'Paper IV Test', 150, 150, 180),
-      ];
+    _test(
+      examId,
+      'paper-2',
+      TestCategoryType.paperTests,
+      'Paper II Test',
+      150,
+      150,
+      180,
+    ),
+    _test(
+      examId,
+      'paper-3',
+      TestCategoryType.paperTests,
+      'Paper III Test',
+      150,
+      150,
+      180,
+    ),
+    _test(
+      examId,
+      'paper-4',
+      TestCategoryType.paperTests,
+      'Paper IV Test',
+      150,
+      150,
+      180,
+    ),
+  ];
 
   static List<TestModel> _mockTests(String examId) => [
-        _test(examId, 'mock-1', TestCategoryType.mockTests, 'Mock Test 1', 150, 150, 120),
-        _test(examId, 'mock-2', TestCategoryType.mockTests, 'Mock Test 2', 150, 150, 120),
-        _test(examId, 'mock-3', TestCategoryType.mockTests, 'Mock Test 3', 150, 150, 120),
-      ];
+    _test(
+      examId,
+      'mock-1',
+      TestCategoryType.mockTests,
+      'Mock Test 1',
+      150,
+      150,
+      120,
+    ),
+    _test(
+      examId,
+      'mock-2',
+      TestCategoryType.mockTests,
+      'Mock Test 2',
+      150,
+      150,
+      120,
+    ),
+    _test(
+      examId,
+      'mock-3',
+      TestCategoryType.mockTests,
+      'Mock Test 3',
+      150,
+      150,
+      120,
+    ),
+  ];
 
   static List<TestModel> _previousYear(String examId) => [
-        _test(examId, 'py-2024', TestCategoryType.previousYear, '2024 Paper', 150, 150, 180),
-        _test(examId, 'py-2023', TestCategoryType.previousYear, '2023 Paper', 150, 150, 180),
-        _test(examId, 'py-2022', TestCategoryType.previousYear, '2022 Paper', 150, 150, 180),
-        _test(examId, 'py-2021', TestCategoryType.previousYear, '2021 Paper', 150, 150, 180),
-      ];
+    _test(
+      examId,
+      'py-2024',
+      TestCategoryType.previousYear,
+      '2024 Paper',
+      150,
+      150,
+      180,
+    ),
+    _test(
+      examId,
+      'py-2023',
+      TestCategoryType.previousYear,
+      '2023 Paper',
+      150,
+      150,
+      180,
+    ),
+    _test(
+      examId,
+      'py-2022',
+      TestCategoryType.previousYear,
+      '2022 Paper',
+      150,
+      150,
+      180,
+    ),
+    _test(
+      examId,
+      'py-2021',
+      TestCategoryType.previousYear,
+      '2021 Paper',
+      150,
+      150,
+      180,
+    ),
+  ];
+
+  /// True when [test] was built by dummy catalog helpers, not Firestore.
+  static bool isSyntheticCatalogTest(TestModel test) {
+    final examId = test.examId;
+    if (examId.isEmpty || test.id.isEmpty) return false;
+    for (final category in TestCategoryType.values) {
+      if (testsFor(
+        examId: examId,
+        category: category,
+      ).any((item) => item.id == test.id)) {
+        return true;
+      }
+    }
+    for (final paper in paperWisePapersFor(examId)) {
+      if (paperWisePartsFor(
+        examId: examId,
+        paperId: paper.id,
+      ).any((item) => item.id == test.id)) {
+        return true;
+      }
+      for (final mock in mockTestsListFor(examId)) {
+        if (mockPaperTest(examId: examId, mock: mock, paper: paper).id ==
+            test.id) {
+          return true;
+        }
+      }
+      for (final year in previousPaperYearsFor(examId)) {
+        if (previousPaperTest(examId: examId, year: year, paper: paper).id ==
+            test.id) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
 
   static TestModel _test(
     String examId,

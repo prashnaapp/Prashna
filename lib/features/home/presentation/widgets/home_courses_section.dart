@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/design_system/design_system.dart';
 import '../../../course_dashboard/presentation/screens/course_dashboard_screen.dart';
 import '../../../course_enrollment/model/course.dart';
 import '../../../course_enrollment/service/course_loader_service.dart';
 import '../../../subscription/service/course_open_guard.dart';
+import '../home_visual.dart';
+import 'home_decorations.dart';
 
 class HomeCoursesSection extends StatelessWidget {
   const HomeCoursesSection({super.key});
@@ -17,9 +18,18 @@ class HomeCoursesSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          SectionHeader(title: 'My Courses'),
-          SizedBox(height: AppSpacing.lg),
-          Center(child: AppCircularProgress()),
+          HomeSectionTitle('My Courses'),
+          SizedBox(height: 16),
+          Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: HomeVisual.ctaEnd,
+              ),
+            ),
+          ),
         ],
       );
     }
@@ -36,10 +46,10 @@ class HomeCoursesSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SectionHeader(title: 'My Courses'),
-        const SizedBox(height: AppSpacing.lg),
+        const HomeSectionTitle('My Courses'),
+        const SizedBox(height: 14),
         for (var i = 0; i < courses.length; i += crossAxisCount) ...[
-          if (i > 0) const SizedBox(height: AppSpacing.md),
+          if (i > 0) const SizedBox(height: 12),
           _CourseRow(
             courses: courses.sublist(
               i,
@@ -62,7 +72,7 @@ class HomeCoursesSection extends StatelessWidget {
       onAllowed: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
+          MaterialPageRoute<void>(
             builder: (_) => CourseDashboardScreen(courseId: course.courseId),
           ),
         );
@@ -88,15 +98,11 @@ class _CourseRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (var i = 0; i < crossAxisCount; i++) ...[
-          if (i > 0) const SizedBox(width: AppSpacing.md),
+          if (i > 0) const SizedBox(width: 12),
           Expanded(
             child: i < courses.length
-                ? CourseGridCard(
-                    title: courses[i].title,
-                    subtitle: courses[i].shortTitle,
-                    accentColor: _accentFor(courses[i]),
-                    icon: _iconFor(courses[i].icon),
-                    locked: false,
+                ? _HomeCourseCard(
+                    course: courses[i],
                     onTap: () => onCourseTap(courses[i]),
                   )
                 : const SizedBox.shrink(),
@@ -105,15 +111,85 @@ class _CourseRow extends StatelessWidget {
       ],
     );
   }
+}
+
+class _HomeCourseCard extends StatelessWidget {
+  const _HomeCourseCard({required this.course, required this.onTap});
+
+  final Course course;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _accentFor(course);
+
+    return Material(
+      color: HomeVisual.surface,
+      borderRadius: BorderRadius.circular(HomeVisual.cardRadius),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(HomeVisual.cardRadius),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: HomeVisual.surface,
+            borderRadius: BorderRadius.circular(HomeVisual.cardRadius),
+            boxShadow: HomeVisual.cardShadow,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
+            child: Column(
+              children: [
+                Container(
+                  width: 62,
+                  height: 62,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(_iconFor(course.icon), color: accent, size: 30),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  course.title,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: HomeVisual.ink,
+                  ),
+                ),
+                if (course.shortTitle.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    course.shortTitle,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: HomeVisual.muted,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Color _accentFor(Course course) {
     final parsed = _parseColor(course.color);
     if (parsed != null) return parsed;
 
     return switch (course.courseId) {
-      'group-iii' => AppColors.success,
-      'group-ii' => AppColors.primary,
-      _ => AppColors.secondary,
+      'group-iii' => const Color(0xFF2BB8A8),
+      'group-ii' => HomeVisual.ctaEnd,
+      _ => HomeVisual.accentBlue,
     };
   }
 

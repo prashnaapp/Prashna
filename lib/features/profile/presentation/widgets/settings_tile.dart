@@ -1,64 +1,107 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
+import '../profile_visual.dart';
 
-/// Reusable settings row for Profile Account & Settings.
+/// Reusable white row used by every Profile section.
+///
+/// Icon inside a soft circular container, title, optional subtitle, and a
+/// chevron unless the caller supplies its own [trailing] (e.g. a plan badge).
 class SettingsTile extends StatelessWidget {
   const SettingsTile({
     super.key,
     required this.title,
+    required this.icon,
     this.subtitle,
-    this.leading,
+    this.iconColor,
     this.trailing,
     this.onTap,
-    this.destructive = false,
   });
 
   final String title;
+  final IconData icon;
   final String? subtitle;
-  final Widget? leading;
+  final Color? iconColor;
+
+  /// Replaces the chevron. Pass [SizedBox.shrink] for a row with no affordance.
   final Widget? trailing;
   final VoidCallback? onTap;
-  final bool destructive;
 
   @override
   Widget build(BuildContext context) {
-    final titleColor =
-        destructive ? AppColors.error : AppColors.textPrimary;
+    final accent = iconColor ?? ProfileVisual.accent;
 
-    return AppCard(
-      onTap: onTap,
-      showShadow: false,
-      child: Row(
-        children: [
-          if (leading != null) ...[
-            leading!,
-            const SizedBox(width: AppSpacing.lg),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(ProfileVisual.cardRadius),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(ProfileVisual.cardRadius),
+            border: ProfileVisual.rowBorder,
+            boxShadow: ProfileVisual.rowShadow,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
               children: [
-                Text(
-                  title,
-                  style: AppTextStyles.titleMedium(context).copyWith(
-                    color: titleColor,
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: accent, size: 21),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleMedium(context).copyWith(
+                          color: ProfileVisual.ink,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15.5,
+                          height: 1.2,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodyMedium(context).copyWith(
+                            color: ProfileVisual.muted,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12.5,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(subtitle!, style: AppTextStyles.bodyMedium(context)),
-                ],
+                const SizedBox(width: 8),
+                trailing ??
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: ProfileVisual.accent.withValues(alpha: 0.55),
+                      size: 24,
+                    ),
               ],
             ),
           ),
-          trailing ??
-              Icon(
-                Icons.chevron_right_rounded,
-                color: destructive ? AppColors.error : AppColors.textTertiary,
-              ),
-        ],
+        ),
       ),
     );
   }

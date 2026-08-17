@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/design_system/design_system.dart';
 
 class LogoutButton extends StatelessWidget {
-  const LogoutButton({
-    super.key,
-    required this.onLogout,
-  });
+  const LogoutButton({super.key, required this.onLogout});
 
   final VoidCallback onLogout;
 
@@ -14,17 +11,22 @@ class LogoutButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: OutlinedButton(
+      child: OutlinedButton.icon(
         onPressed: () => _confirm(context),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.error,
-          side: const BorderSide(color: AppColors.error),
-          minimumSize: const Size.fromHeight(52),
+          backgroundColor: AppColors.surface,
+          side: BorderSide(color: AppColors.error.withValues(alpha: 0.6)),
+          minimumSize: const Size.fromHeight(50),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
         ),
-        child: Text(
+        icon: const Icon(Icons.logout_rounded, size: 20),
+        label: Text(
           'Logout',
           style: AppTextStyles.titleMedium(context).copyWith(
             color: AppColors.error,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
           ),
         ),
       ),
@@ -44,9 +46,7 @@ class LogoutButton extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.error,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Logout'),
           ),
         ],

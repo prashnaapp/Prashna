@@ -125,7 +125,7 @@ void main() {
       expect(await access.canAccessCourse('group-iii'), isTrue);
       expect(
         (await access.evaluateCourseAccess('group-ii')).reason,
-        CourseAccessReason.denied,
+        CourseAccessReason.expiredEntitlement,
       );
     });
 

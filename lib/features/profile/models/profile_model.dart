@@ -40,10 +40,7 @@ class ProfilePreference {
 }
 
 class ProfileAppInfo {
-  const ProfileAppInfo({
-    required this.appName,
-    required this.versionLabel,
-  });
+  const ProfileAppInfo({required this.appName, required this.versionLabel});
 
   final String appName;
   final String versionLabel;

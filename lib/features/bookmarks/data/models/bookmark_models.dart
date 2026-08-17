@@ -13,6 +13,11 @@ class Bookmark {
     required this.questionType,
     required this.questionTitle,
     required this.createdAt,
+    this.majorStudyAreaId,
+    this.contentTopicId,
+    this.canonicalPartId,
+    this.canonicalTopicId,
+    this.lessonId,
   });
 
   final String questionId;
@@ -27,6 +32,11 @@ class Bookmark {
   final String questionType;
   final String questionTitle;
   final DateTime createdAt;
+  final String? majorStudyAreaId;
+  final String? contentTopicId;
+  final String? canonicalPartId;
+  final String? canonicalTopicId;
+  final String? lessonId;
 }
 
 /// Grouped bookmarks for the Bookmarks screen.

@@ -39,10 +39,8 @@ class PaperWisePartListScreen extends StatelessWidget {
                   '${parts[i].questionCount} Questions\n'
                   '${parts[i].marks} Marks\n'
                   '${parts[i].durationMinutes} Minutes',
-              onTap: () => openPaperWisePartTest(
-                context: context,
-                part: parts[i],
-              ),
+              onTap: () =>
+                  openPaperWisePartTest(context: context, part: parts[i]),
             ),
           ],
         ],

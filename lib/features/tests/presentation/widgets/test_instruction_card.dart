@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/design_system/design_system.dart';
 
 class TestInstructionCard extends StatelessWidget {
-  const TestInstructionCard({
-    super.key,
-    required this.instructions,
-  });
+  const TestInstructionCard({super.key, required this.instructions});
 
   final List<String> instructions;
 
@@ -29,9 +26,9 @@ class TestInstructionCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     instructions[i],
-                    style: AppTextStyles.bodyMedium(context).copyWith(
-                      color: AppColors.textPrimary,
-                    ),
+                    style: AppTextStyles.bodyMedium(
+                      context,
+                    ).copyWith(color: AppColors.textPrimary),
                   ),
                 ),
               ],

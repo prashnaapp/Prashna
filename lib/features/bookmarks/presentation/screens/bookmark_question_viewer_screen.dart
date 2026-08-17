@@ -35,8 +35,7 @@ class _BookmarkQuestionViewerScreenState
 
   @override
   Widget build(BuildContext context) {
-    final bookmarked =
-        BookmarkService.instance.isBookmarked(widget.questionId);
+    final bookmarked = BookmarkService.instance.isBookmarked(widget.questionId);
 
     return FutureBuilder<Question?>(
       future: _future,
@@ -76,62 +75,85 @@ class _BookmarkQuestionViewerScreenState
           body: !snapshot.hasData
               ? const Center(child: AppCircularProgress())
               : question == null
-                  ? Center(
-                      child: Text(
-                        'Question unavailable.',
-                        style: AppTextStyles.bodyMedium(context),
+              ? Center(
+                  child: Text(
+                    'Question unavailable.',
+                    style: AppTextStyles.bodyMedium(context),
+                  ),
+                )
+              : SafeArea(
+                  bottom: false,
+                  child: AppResponsivePadding(
+                    child: TabScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.xxl,
                       ),
-                    )
-                  : SafeArea(
-                      bottom: false,
-                      child: AppResponsivePadding(
-                        child: TabScrollView(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSpacing.xxl,
+                      children: [
+                        AppCard(
+                          showShadow: false,
+                          child: Text(
+                            question.content?.en.question.isNotEmpty == true
+                                ? question.content!.en.question
+                                : question.question,
+                            style: AppTextStyles.bodyLarge(
+                              context,
+                            ).copyWith(fontWeight: FontWeight.w600),
                           ),
-                          children: [
-                            AppCard(
-                              showShadow: false,
-                              child: Text(
-                                question.question,
-                                style: AppTextStyles.bodyLarge(context)
-                                    .copyWith(fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.lg),
-                            for (var i = 0; i < question.options.length; i++) ...[
-                              AttemptOptionTile(
-                                label: String.fromCharCode(65 + i),
-                                optionText: question.options[i],
-                                selected: String.fromCharCode(65 + i) ==
-                                    question.correctOption,
-                                onTap: () {},
+                        ),
+                        if (question.content?.te != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            question.content!.te!.question,
+                            style: AppTextStyles.bodyMedium(context),
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.lg),
+                        for (var i = 0; i < question.options.length; i++) ...[
+                          AttemptOptionTile(
+                            label: String.fromCharCode(65 + i),
+                            optionText:
+                                question.content?.te == null ||
+                                    i >= question.content!.te!.options.length
+                                ? question.options[i]
+                                : '${question.options[i]}\n'
+                                      '${question.content!.te!.options[i].text}',
+                            selected:
+                                String.fromCharCode(65 + i) ==
+                                question.correctOption,
+                            onTap: () {},
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                        ],
+                        const SizedBox(height: AppSpacing.lg),
+                        AppCard(
+                          backgroundColor: AppColors.successSurface,
+                          showShadow: false,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Correct Answer: ${question.correctOption}',
+                                style: AppTextStyles.titleMedium(context),
                               ),
                               const SizedBox(height: AppSpacing.sm),
-                            ],
-                            const SizedBox(height: AppSpacing.lg),
-                            AppCard(
-                              backgroundColor: AppColors.successSurface,
-                              showShadow: false,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Correct Answer: ${question.correctOption}',
-                                    style: AppTextStyles.titleMedium(context),
-                                  ),
-                                  const SizedBox(height: AppSpacing.sm),
-                                  Text(
-                                    question.explanation,
-                                    style: AppTextStyles.bodyMedium(context),
-                                  ),
-                                ],
+                              Text(
+                                question.explanation,
+                                style: AppTextStyles.bodyMedium(context),
                               ),
-                            ),
-                          ],
+                              if (question.content?.te != null) ...[
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(
+                                  question.content!.te!.explanation,
+                                  style: AppTextStyles.bodyMedium(context),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
+                  ),
+                ),
         );
       },
     );

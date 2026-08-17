@@ -1,55 +1,99 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/design_system/design_system.dart';
 import '../../data/models/home_models.dart';
+import '../home_visual.dart';
+import 'home_decorations.dart';
 
 class TodayGoalCard extends StatelessWidget {
-  const TodayGoalCard({
-    super.key,
-    required this.goal,
-  });
+  const TodayGoalCard({super.key, required this.goal});
 
   final TodayGoalModel goal;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    final remaining = (goal.targetQuestions - goal.completedQuestions).clamp(
+      0,
+      goal.targetQuestions,
+    );
+
+    return HomeSurfaceCard(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Text("Today's Goal", style: AppTextStyles.titleMedium(context)),
-          const SizedBox(height: AppSpacing.lg),
+          const HomeSectionTitle('Your Preparation'),
+          const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  'Questions Completed Today',
-                  style: AppTextStyles.bodyMedium(context),
-                ),
+              HomeProgressArc(
+                progress: goal.progress,
+                label: '${goal.progressPercent}%',
+                size: 116,
               ),
-              Text(
-                '${goal.completedQuestions} / ${goal.targetQuestions}',
-                style: AppTextStyles.titleMedium(context).copyWith(
-                  color: AppColors.primary,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  children: [
+                    _StatRow(
+                      label: 'Questions Today',
+                      value: '${goal.completedQuestions}',
+                    ),
+                    const SizedBox(height: 7),
+                    _StatRow(
+                      label: 'Daily Target',
+                      value: '${goal.targetQuestions}',
+                    ),
+                    const SizedBox(height: 7),
+                    _StatRow(label: 'Remaining', value: '$remaining'),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          AppLinearProgress(value: goal.progress, height: AppSpacing.md),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            '${goal.progressPercent}%',
-            style: AppTextStyles.caption(context),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            goal.motivationText,
-            style: AppTextStyles.bodyMedium(context),
-          ),
         ],
       ),
+    );
+  }
+}
+
+class _StatRow extends StatelessWidget {
+  const _StatRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: HomeVisual.muted,
+            ),
+          ),
+        ),
+        Container(
+          constraints: const BoxConstraints(minWidth: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: HomeVisual.pillFill,
+            borderRadius: BorderRadius.circular(HomeVisual.pillRadius),
+          ),
+          child: Text(
+            value,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: HomeVisual.ctaDeep,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

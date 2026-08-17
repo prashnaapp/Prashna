@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_animations.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_radius.dart';
+import '../../core/theme/app_shadows.dart';
+import '../../core/theme/app_sizes.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_text_styles.dart';
 
 enum AppButtonSize { medium, large }
 
@@ -27,12 +32,14 @@ class AppPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final height = size == AppButtonSize.large ? 52.0 : 44.0;
+    final height = size == AppButtonSize.large
+        ? AppSizes.buttonLarge
+        : AppSizes.buttonMedium;
     final child = _ButtonContent(
       label: label,
       icon: icon,
       isLoading: isLoading,
-      loadingColor: Theme.of(context).colorScheme.onPrimary,
+      loadingColor: AppColors.textOnPrimary,
     );
 
     final button = AnimatedOpacity(
@@ -41,12 +48,26 @@ class AppPrimaryButton extends StatelessWidget {
       child: FilledButton(
         onPressed: _enabled ? onPressed : null,
         style: FilledButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          disabledBackgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          padding: EdgeInsets.zero,
           minimumSize: expand ? Size.fromHeight(height) : Size(0, height),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
+        ),
+        child: Ink(
+          height: height,
+          decoration: BoxDecoration(
+            gradient: _enabled ? AppColors.primaryGradient : null,
+            color: _enabled ? null : AppColors.divider,
+            borderRadius: AppRadius.pillAll,
+            boxShadow: _enabled ? AppShadows.primaryGlow : null,
+          ),
           padding: EdgeInsets.symmetric(
             horizontal: expand ? AppSpacing.xxl : AppSpacing.xl,
           ),
+          child: Center(child: child),
         ),
-        child: child,
       ),
     );
 
@@ -74,23 +95,25 @@ class AppSecondaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final child = _ButtonContent(
       label: label,
       icon: icon,
       isLoading: isLoading,
-      loadingColor: colorScheme.onSecondaryContainer,
+      loadingColor: AppColors.primaryStrong,
     );
 
     final button = AnimatedOpacity(
       duration: AppAnimations.fast,
       opacity: _enabled ? 1 : 0.55,
-      child: FilledButton.tonal(
+      child: OutlinedButton(
         onPressed: _enabled ? onPressed : null,
-        style: FilledButton.styleFrom(
-          backgroundColor: colorScheme.secondaryContainer,
-          foregroundColor: colorScheme.onSecondaryContainer,
-          minimumSize: expand ? const Size.fromHeight(52) : null,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primaryStrong,
+          backgroundColor: AppColors.surface,
+          minimumSize: expand
+              ? const Size.fromHeight(AppSizes.buttonLarge)
+              : const Size(0, AppSizes.buttonLarge),
+          side: const BorderSide(color: AppColors.divider),
         ),
         child: child,
       ),
@@ -124,7 +147,7 @@ class AppOutlinedButton extends StatelessWidget {
       label: label,
       icon: icon,
       isLoading: isLoading,
-      loadingColor: Theme.of(context).colorScheme.primary,
+      loadingColor: AppColors.primaryStrong,
     );
 
     final button = OutlinedButton(
@@ -154,17 +177,16 @@ class AppIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final Widget iconWidget = isLoading
-        ? SizedBox(
+        ? const SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: colorScheme.primary,
+              color: AppColors.primary,
             ),
           )
-        : Icon(icon, size: 22);
+        : Icon(icon, size: AppSizes.iconLg);
 
     final button = switch (variant) {
       AppIconButtonVariant.standard => IconButton(
@@ -228,17 +250,27 @@ class _ButtonContent extends StatelessWidget {
       );
     }
 
+    final style = AppTextStyles.label(context).copyWith(
+      color: loadingColor == AppColors.textOnPrimary
+          ? AppColors.textOnPrimary
+          : AppColors.primaryStrong,
+      fontWeight: FontWeight.w600,
+      fontSize: 15,
+    );
+
     if (icon == null) {
-      return Text(label);
+      return Text(label, style: style);
     }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icon, size: 20),
+        Icon(icon, size: AppSizes.iconMd, color: style.color),
         const SizedBox(width: AppSpacing.sm),
-        Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+        Flexible(
+          child: Text(label, overflow: TextOverflow.ellipsis, style: style),
+        ),
       ],
     );
   }

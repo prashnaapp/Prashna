@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../data/models/test_engine_models.dart';
+import '../../services/test_service.dart';
 import '../controllers/test_engine_controller.dart';
 import 'test_analysis_screen.dart';
 import 'test_instructions_screen.dart';
@@ -16,11 +19,27 @@ class TestAttemptFlowScreen extends StatefulWidget {
   const TestAttemptFlowScreen({
     super.key,
     required this.test,
+    this.serverAttemptId,
+    this.skipInstructions = false,
     this.onCompleted,
+    this.engineService,
+    this.startAttempt,
   });
 
   final Test test;
+
+  /// When set, submit goes through server-authoritative scoring.
+  final String? serverAttemptId;
+
+  /// When true, the catalog START TEST already created the attempt.
+  final bool skipInstructions;
   final void Function(TestResult result)? onCompleted;
+  final TestService? engineService;
+  final Future<Map<String, dynamic>> Function({
+    required String testId,
+    required String startRequestId,
+  })?
+  startAttempt;
 
   @override
   State<TestAttemptFlowScreen> createState() => _TestAttemptFlowScreenState();
@@ -28,15 +47,36 @@ class TestAttemptFlowScreen extends StatefulWidget {
 
 class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
   late TestEngineController _controller;
+  late String? _serverAttemptId;
   _AttemptStep _step = _AttemptStep.instructions;
+  bool _startingAttempt = false;
+  String? _startError;
+  late String _startRequestId;
+
+  bool get _requiresServerAttempt => widget.serverAttemptId != null;
 
   @override
   void initState() {
     super.initState();
-    _controller = TestEngineController(test: widget.test);
-    if (widget.onCompleted != null) {
-      _controller.service.onCompleted = widget.onCompleted;
+    _serverAttemptId = widget.serverAttemptId;
+    _startRequestId = TestService.newStartRequestId();
+    _controller = _buildController(_serverAttemptId);
+    if (widget.skipInstructions && _serverAttemptId != null) {
+      _step = _AttemptStep.questions;
+      unawaited(_controller.start());
     }
+  }
+
+  TestEngineController _buildController(String? attemptId) {
+    final controller = TestEngineController(
+      test: widget.test,
+      service: widget.engineService,
+      serverAttemptId: attemptId,
+    );
+    if (widget.onCompleted != null) {
+      controller.service.onCompleted = widget.onCompleted;
+    }
+    return controller;
   }
 
   @override
@@ -46,23 +86,63 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
   }
 
   Future<void> _start() async {
+    if (_startingAttempt || _controller.started) return;
+    if (_requiresServerAttempt &&
+        (_serverAttemptId == null || _serverAttemptId!.isEmpty)) {
+      _startingAttempt = true;
+      _startError = null;
+      setState(() {});
+      try {
+        final start =
+            widget.startAttempt ??
+            (widget.engineService ?? TestService()).startServerAttempt;
+        final started = await start(
+          testId: widget.test.id,
+          startRequestId: _startRequestId,
+        );
+        final attemptId = started['attemptId'] as String?;
+        if (attemptId == null || attemptId.isEmpty) {
+          throw StateError('Server did not return an attempt id.');
+        }
+        if (!mounted) return;
+        _controller.dispose();
+        _serverAttemptId = attemptId;
+        _controller = _buildController(_serverAttemptId);
+        await _controller.start();
+        if (!mounted) return;
+        setState(() => _step = _AttemptStep.questions);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _startError = 'Unable to start the test. Please try again.';
+        });
+      } finally {
+        _startingAttempt = false;
+        if (mounted) setState(() {});
+      }
+      return;
+    }
+
     await _controller.start();
     if (!mounted) return;
     setState(() => _step = _AttemptStep.questions);
   }
 
   Future<void> _submit() async {
-    await _controller.submit();
+    if (_controller.isSubmitting || _controller.submitted) return;
+    final result = await _controller.submit();
     if (!mounted) return;
-    setState(() => _step = _AttemptStep.result);
+    if (result != null) {
+      setState(() => _step = _AttemptStep.result);
+    }
   }
 
-  void _retry() {
+  Future<void> _retry() async {
     _controller.dispose();
-    _controller = TestEngineController(test: widget.test);
-    if (widget.onCompleted != null) {
-      _controller.service.onCompleted = widget.onCompleted;
-    }
+    _serverAttemptId = null;
+    _startError = null;
+    _startRequestId = TestService.newStartRequestId();
+    _controller = _buildController(_serverAttemptId);
     setState(() => _step = _AttemptStep.instructions);
   }
 
@@ -73,8 +153,8 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: _step == _AttemptStep.instructions ||
-          _step == _AttemptStep.result,
+      canPop:
+          _step == _AttemptStep.instructions || _step == _AttemptStep.result,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_step == _AttemptStep.analysis) {
@@ -93,6 +173,8 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
         return TestInstructionsScreen(
           controller: _controller,
           onStart: _start,
+          isStarting: _startingAttempt,
+          startError: _startError,
         );
       case _AttemptStep.questions:
         return TestQuestionScreen(
@@ -114,9 +196,10 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
       case _AttemptStep.result:
         return TestResultScreen(
           controller: _controller,
-          onViewAnalysis: () =>
-              setState(() => _step = _AttemptStep.analysis),
-          onRetry: _retry,
+          onViewAnalysis: () => setState(() => _step = _AttemptStep.analysis),
+          onRetry: () {
+            unawaited(_retry());
+          },
           onGoHome: _goHome,
         );
       case _AttemptStep.analysis:
@@ -133,11 +216,23 @@ class TestAttemptRoute extends StatelessWidget {
   const TestAttemptRoute({
     super.key,
     required this.test,
+    this.serverAttemptId,
+    this.skipInstructions = false,
     this.onCompleted,
+    this.engineService,
+    this.startAttempt,
   });
 
   final Test test;
+  final String? serverAttemptId;
+  final bool skipInstructions;
   final void Function(TestResult result)? onCompleted;
+  final TestService? engineService;
+  final Future<Map<String, dynamic>> Function({
+    required String testId,
+    required String startRequestId,
+  })?
+  startAttempt;
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +242,11 @@ class TestAttemptRoute extends StatelessWidget {
         color: AppColors.background,
         child: TestAttemptFlowScreen(
           test: test,
+          serverAttemptId: serverAttemptId,
+          skipInstructions: skipInstructions,
           onCompleted: onCompleted,
+          engineService: engineService,
+          startAttempt: startAttempt,
         ),
       ),
     );

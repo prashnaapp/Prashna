@@ -72,6 +72,11 @@ class BookmarkService {
     String? paperId,
     String? partId,
     String? chapterId,
+    String? majorStudyAreaId,
+    String? contentTopicId,
+    String? canonicalPartId,
+    String? canonicalTopicId,
+    String? lessonId,
     String? questionType,
     String? questionTitle,
   }) async {
@@ -85,6 +90,11 @@ class BookmarkService {
       paperId: paperId,
       partId: partId,
       chapterId: chapterId,
+      majorStudyAreaId: majorStudyAreaId,
+      contentTopicId: contentTopicId,
+      canonicalPartId: canonicalPartId,
+      canonicalTopicId: canonicalTopicId,
+      lessonId: lessonId,
       questionType: questionType,
       questionTitle: questionTitle,
     );
@@ -96,6 +106,11 @@ class BookmarkService {
     String? paperId,
     String? partId,
     String? chapterId,
+    String? majorStudyAreaId,
+    String? contentTopicId,
+    String? canonicalPartId,
+    String? canonicalTopicId,
+    String? lessonId,
     String? questionType,
     String? questionTitle,
   }) async {
@@ -109,23 +124,70 @@ class BookmarkService {
     final resolvedPaperId = paperId ?? question?.paperId ?? '';
     final resolvedPartId = partId ?? question?.sectionId ?? '';
     final resolvedChapterId = chapterId ?? question?.topicId ?? '';
+    final canonicalAreaId = majorStudyAreaId ?? question?.majorStudyAreaId;
+    final canonicalContentId = contentTopicId ?? question?.contentTopicId;
+    final canonicalPart = canonicalPartId ?? question?.partId;
+    final canonicalTopic = canonicalTopicId ?? question?.syllabus?.topicId;
+    final canonicalLesson = lessonId ?? question?.lessonId;
 
     final course = _syllabus.getCourseById(resolvedCourseId);
     final paper = _syllabus.getPaper(
       courseId: resolvedCourseId,
       paperId: resolvedPaperId,
     );
-    final part = _syllabus.getSection(
+    final legacyPart = _syllabus.getSection(
       courseId: resolvedCourseId,
       paperId: resolvedPaperId,
       sectionId: resolvedPartId,
     );
-    final chapter = _syllabus.getTopic(
+    final legacyChapter = _syllabus.getTopic(
       courseId: resolvedCourseId,
       paperId: resolvedPaperId,
       sectionId: resolvedPartId,
       topicId: resolvedChapterId,
     );
+    final area = canonicalAreaId == null
+        ? null
+        : _syllabus.getMajorStudyArea(
+            courseId: resolvedCourseId,
+            paperId: resolvedPaperId,
+            majorStudyAreaId: canonicalAreaId,
+          );
+    final content = canonicalAreaId == null || canonicalContentId == null
+        ? null
+        : _syllabus.getContentTopic(
+            courseId: resolvedCourseId,
+            paperId: resolvedPaperId,
+            majorStudyAreaId: canonicalAreaId,
+            contentTopicId: canonicalContentId,
+          );
+    final canonicalPartModel = canonicalPart == null
+        ? null
+        : _syllabus.getPart(
+            courseId: resolvedCourseId,
+            paperId: resolvedPaperId,
+            partId: canonicalPart,
+          );
+    final canonicalTopicModel = canonicalPart == null || canonicalTopic == null
+        ? null
+        : _syllabus.getCanonicalTopic(
+            courseId: resolvedCourseId,
+            paperId: resolvedPaperId,
+            partId: canonicalPart,
+            topicId: canonicalTopic,
+          );
+    final lesson =
+        canonicalPart == null ||
+            canonicalTopic == null ||
+            canonicalLesson == null
+        ? null
+        : _syllabus.getLesson(
+            courseId: resolvedCourseId,
+            paperId: resolvedPaperId,
+            partId: canonicalPart,
+            topicId: canonicalTopic,
+            lessonId: canonicalLesson,
+          );
 
     final title = questionTitle ?? question?.question ?? 'Question';
     final truncated = title.length > 90 ? '${title.substring(0, 90)}…' : title;
@@ -142,16 +204,30 @@ class BookmarkService {
                 : resolvedCourseId),
         paperId: resolvedPaperId,
         paperName: paper?.title ?? resolvedPaperId,
-        partId: resolvedPartId,
-        partName: part?.title ?? resolvedPartId,
-        chapterId: resolvedChapterId,
-        chapterName: chapter?.title ?? resolvedChapterId,
+        partId: canonicalPart ?? resolvedPartId,
+        partName:
+            area?.displayName ??
+            canonicalPartModel?.displayName ??
+            legacyPart?.title ??
+            resolvedPartId,
+        chapterId: canonicalTopic ?? resolvedChapterId,
+        chapterName:
+            lesson?.displayName ??
+            content?.displayName ??
+            canonicalTopicModel?.resolvedDisplayName ??
+            legacyChapter?.title ??
+            resolvedChapterId,
         questionType:
             questionType ??
             question?.questionType.name ??
             QuestionType.practice.name,
         questionTitle: truncated,
         createdAt: DateTime.now(),
+        majorStudyAreaId: canonicalAreaId,
+        contentTopicId: canonicalContentId,
+        canonicalPartId: canonicalPart,
+        canonicalTopicId: canonicalTopic,
+        lessonId: canonicalLesson,
       ),
     );
 

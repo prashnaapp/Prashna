@@ -14,6 +14,7 @@ class QuestionCloudRepository {
       _getByIdForTest = null,
       _getByIdsForTest = null,
       _createForTest = null,
+      _createBatchForTest = null,
       _updateForTest = null,
       _deactivateForTest = null,
       _idGeneratorForTest = null;
@@ -27,44 +28,57 @@ class QuestionCloudRepository {
     Future<void> Function({
       required String questionId,
       required Map<String, dynamic> data,
-    })? create,
+    })?
+    create,
+    Future<void> Function({
+      required List<({String questionId, Map<String, dynamic> data})> items,
+    })?
+    createBatch,
     Future<void> Function({
       required String questionId,
       required Map<String, dynamic> data,
-    })? update,
-    Future<void> Function({
-      required String questionId,
-      required bool isActive,
-    })? deactivate,
+    })?
+    update,
+    Future<void> Function({required String questionId, required bool isActive})?
+    deactivate,
     String Function()? idGenerator,
   }) : _firestore = null,
        _loadQuestionsForTest = loadQuestions,
        _getByIdForTest = getById,
        _getByIdsForTest = getByIds,
        _createForTest = create,
+       _createBatchForTest = createBatch,
        _updateForTest = update,
        _deactivateForTest = deactivate,
        _idGeneratorForTest = idGenerator;
 
   static const String collectionName = 'questions';
+  static const int maxBatchSize = 500;
 
   final FirebaseFirestore? _firestore;
   final Future<List<Question>> Function(QuestionFilter? filter)?
-      _loadQuestionsForTest;
+  _loadQuestionsForTest;
   final Future<Question?> Function(String id)? _getByIdForTest;
   final Future<List<Question>> Function(List<String> ids)? _getByIdsForTest;
   final Future<void> Function({
     required String questionId,
     required Map<String, dynamic> data,
-  })? _createForTest;
+  })?
+  _createForTest;
+  final Future<void> Function({
+    required List<({String questionId, Map<String, dynamic> data})> items,
+  })?
+  _createBatchForTest;
   final Future<void> Function({
     required String questionId,
     required Map<String, dynamic> data,
-  })? _updateForTest;
+  })?
+  _updateForTest;
   final Future<void> Function({
     required String questionId,
     required bool isActive,
-  })? _deactivateForTest;
+  })?
+  _deactivateForTest;
   final String Function()? _idGeneratorForTest;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
@@ -85,12 +99,22 @@ class QuestionCloudRepository {
     final paperId = filter?.paperId;
     final sectionId = filter?.sectionId;
     final topicId = filter?.topicId;
+    final partId = filter?.partId;
+    final lessonId = filter?.lessonId;
+    final syllabusUnitId = filter?.syllabusUnitId;
+    final majorStudyAreaId = filter?.majorStudyAreaId;
+    final contentTopicId = filter?.contentTopicId;
 
     final hasCourseScope = courseId != null && courseId.isNotEmpty;
     final hasHierarchyScope =
         (paperId != null && paperId.isNotEmpty) ||
         (sectionId != null && sectionId.isNotEmpty) ||
-        (topicId != null && topicId.isNotEmpty);
+        (topicId != null && topicId.isNotEmpty) ||
+        (partId != null && partId.isNotEmpty) ||
+        (lessonId != null && lessonId.isNotEmpty) ||
+        (syllabusUnitId != null && syllabusUnitId.isNotEmpty) ||
+        (majorStudyAreaId != null && majorStudyAreaId.isNotEmpty) ||
+        (contentTopicId != null && contentTopicId.isNotEmpty);
 
     if (!hasCourseScope && !hasHierarchyScope) {
       throw StateError(
@@ -126,11 +150,23 @@ class QuestionCloudRepository {
       if (topicId != null && topicId.isNotEmpty) {
         query = query.where('topicId', isEqualTo: topicId);
       }
+      if (partId != null && partId.isNotEmpty) {
+        query = query.where('partId', isEqualTo: partId);
+      }
+      if (lessonId != null && lessonId.isNotEmpty) {
+        query = query.where('lessonId', isEqualTo: lessonId);
+      }
+      if (syllabusUnitId != null && syllabusUnitId.isNotEmpty) {
+        query = query.where('syllabusUnitId', isEqualTo: syllabusUnitId);
+      }
+      if (majorStudyAreaId != null && majorStudyAreaId.isNotEmpty) {
+        query = query.where('majorStudyAreaId', isEqualTo: majorStudyAreaId);
+      }
+      if (contentTopicId != null && contentTopicId.isNotEmpty) {
+        query = query.where('contentTopicId', isEqualTo: contentTopicId);
+      }
       if (filter?.difficulty != null) {
-        query = query.where(
-          'difficulty',
-          isEqualTo: filter!.difficulty!.name,
-        );
+        query = query.where('difficulty', isEqualTo: filter!.difficulty!.name);
       }
       if (filter?.language != null) {
         query = query.where('language', isEqualTo: filter!.language);
@@ -218,7 +254,8 @@ class QuestionCloudRepository {
   /// The generated ID is also stored in the document's `id` field.
   Future<String> createQuestion(Question question) async {
     final testCreate = _createForTest;
-    final questionId = _idGeneratorForTest?.call() ??
+    final questionId =
+        _idGeneratorForTest?.call() ??
         (testCreate != null
             ? 'admin-${DateTime.now().microsecondsSinceEpoch}'
             : _questions.doc().id);
@@ -227,9 +264,9 @@ class QuestionCloudRepository {
       includeCreatedAt: true,
       documentId: questionId,
     );
-    // New content always starts active. Deactivation is an explicit later
-    // mutation through setQuestionActive.
-    data['isActive'] = true;
+    // Legacy writes retain their historical active default. Canonical admin
+    // writes carry an explicit draft/published/archived status.
+    if (question.status == null) data['isActive'] = true;
     try {
       if (testCreate != null) {
         await testCreate(questionId: questionId, data: data);
@@ -245,6 +282,75 @@ class QuestionCloudRepository {
       rethrow;
     } catch (error, stack) {
       debugPrint('QuestionCloudRepository.createQuestion: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Atomically creates many questions in one WriteBatch.
+  ///
+  /// Uses a supplied question ID when non-empty; otherwise generates one with
+  /// the same strategy as [createQuestion]. Fails the whole batch if any write
+  /// cannot be prepared. Firestore batches are capped at [maxBatchSize].
+  Future<List<String>> createQuestionsBatch(List<Question> questions) async {
+    if (questions.isEmpty) return const [];
+    if (questions.length > maxBatchSize) {
+      throw FormatException(
+        'Batch import supports at most $maxBatchSize questions per request.',
+      );
+    }
+
+    final items = <({String questionId, Map<String, dynamic> data})>[];
+    var generatedIndex = 0;
+    for (final question in questions) {
+      final supplied = question.id.trim();
+      final questionId = supplied.isNotEmpty
+          ? supplied
+          : (_idGeneratorForTest?.call() ??
+                (_createBatchForTest != null || _createForTest != null
+                    ? 'admin-batch-${DateTime.now().microsecondsSinceEpoch}-'
+                          '${generatedIndex++}'
+                    : _questions.doc().id));
+      final data = QuestionCloudMapper.toFirestore(
+        question,
+        includeCreatedAt: true,
+        documentId: questionId,
+      );
+      if (question.status == null) data['isActive'] = true;
+      items.add((questionId: questionId, data: data));
+    }
+
+    final testBatch = _createBatchForTest;
+    if (testBatch != null) {
+      await testBatch(items: items);
+      return [for (final item in items) item.questionId];
+    }
+
+    // Fallback for unit tests that only stub single create.
+    final testCreate = _createForTest;
+    if (testCreate != null) {
+      for (final item in items) {
+        await testCreate(questionId: item.questionId, data: item.data);
+      }
+      return [for (final item in items) item.questionId];
+    }
+
+    try {
+      final batch = _db.batch();
+      for (final item in items) {
+        batch.set(_questions.doc(item.questionId), item.data);
+      }
+      await batch.commit();
+      return [for (final item in items) item.questionId];
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in QuestionCloudRepository.createQuestionsBatch: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint(
+        'QuestionCloudRepository.createQuestionsBatch: $error\n$stack',
+      );
       rethrow;
     }
   }
@@ -302,10 +408,25 @@ class QuestionCloudRepository {
       );
       rethrow;
     } catch (error, stack) {
-      debugPrint(
-        'QuestionCloudRepository.setQuestionActive: $error\n$stack',
-      );
+      debugPrint('QuestionCloudRepository.setQuestionActive: $error\n$stack');
       rethrow;
+    }
+  }
+
+  Future<void> setQuestionStatus(
+    String questionId,
+    QuestionPublicationStatus status,
+  ) async {
+    final id = questionId.trim();
+    if (id.isEmpty) {
+      throw const FormatException('Question ID is required.');
+    }
+    final data = QuestionCloudMapper.toStatusMap(status);
+    final testUpdate = _updateForTest;
+    if (testUpdate != null) {
+      await testUpdate(questionId: id, data: data);
+    } else {
+      await _questions.doc(id).update(data);
     }
   }
 

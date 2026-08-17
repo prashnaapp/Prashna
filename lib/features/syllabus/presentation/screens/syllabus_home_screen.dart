@@ -1,77 +1,69 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
-import '../../../../navigation/tab_scroll_view.dart';
+import '../../../../navigation/app_nav_metrics.dart';
 import '../../../subscription/service/course_open_guard.dart';
 import '../../data/models/syllabus_models.dart';
 import '../../services/syllabus_service.dart';
-import 'syllabus_papers_screen.dart';
+import '../available_card_metrics.dart';
+import '../syllabus_visual.dart';
+import '../widgets/chapters_hero.dart';
+import '../widgets/landing_sheet.dart';
+import '../widgets/syllabus_course_card.dart';
+import 'syllabus_browser_screen.dart';
 
-/// Chapters tab root — select a course (syllabus).
+/// Chapters tab root — fixed single-viewport landing (no scroll).
+///
+/// Only the currently-available courses (Group-II / Group-III) are shown.
+/// There is no "Launching Soon" section or "Coming Soon" banner.
 class SyllabusHomeScreen extends StatelessWidget {
   const SyllabusHomeScreen({super.key});
 
+  static const double _bottomNavGap = 10;
+
   @override
   Widget build(BuildContext context) {
-    final courses = SyllabusService.instance.getAllCourses();
-    final available = courses.where((c) => c.isAvailable).toList();
-    final launchingSoon = courses.where((c) => !c.isAvailable).toList();
-
-    final width = MediaQuery.sizeOf(context).width;
-    final crossAxisCount = width >= 900 ? 3 : 2;
+    final available = SyllabusService.instance
+        .getAllCourses()
+        .where((c) => c.isAvailable)
+        .toList();
+    final bottomInset =
+        AppNavMetrics.bottomNavigationHeight(context) + _bottomNavGap;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        bottom: false,
-        child: AppResponsivePadding(
-          child: TabScrollView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+      backgroundColor: SyllabusVisual.page,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final h = constraints.maxHeight;
+          final contentHeight = (h - bottomInset).clamp(0.0, h);
+          // Hero takes a deliberate share of the screen (reference proportion)
+          // so the body below never inherits an oversized leftover budget.
+          final heroHeight = (contentHeight * 0.33).clamp(224.0, 290.0);
+
+          return Stack(
+            fit: StackFit.expand,
             children: [
-              Text('Chapters', style: AppTextStyles.headline(context)),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Select a course to browse the syllabus.',
-                style: AppTextStyles.bodyMedium(context),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: heroHeight,
+                child: ChaptersHero(height: heroHeight),
               ),
-              if (available.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xxl),
-                const SectionHeader(title: 'Available'),
-                const SizedBox(height: AppSpacing.lg),
-                _CourseGrid(
-                  crossAxisCount: crossAxisCount,
-                  children: [
-                    for (final course in available)
-                      CourseGridCard(
-                        title: course.name,
-                        marksValue: '${course.totalMarks}',
-                        papersValue: '${course.totalPapers}',
-                        accentColor: _accentFor(course.id),
-                        icon: _iconFor(course.icon),
-                        onTap: () => _openCourse(context, course),
-                      ),
-                  ],
+              Positioned(
+                top: heroHeight - LandingSheet.heroOverlap,
+                left: 0,
+                right: 0,
+                bottom: bottomInset,
+                child: _LandingBody(
+                  available: available,
+                  contentHeight: contentHeight,
+                  onOpenCourse: (course) => _openCourse(context, course),
                 ),
-              ],
-              if (launchingSoon.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xxxl),
-                const SectionHeader(title: 'Launching Soon'),
-                const SizedBox(height: AppSpacing.lg),
-                _CourseGrid(
-                  crossAxisCount: crossAxisCount,
-                  children: [
-                    for (final course in launchingSoon)
-                      CourseGridCard(
-                        title: course.name,
-                        locked: true,
-                        icon: _iconFor(course.icon),
-                      ),
-                  ],
-                ),
-              ],
+              ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -83,8 +75,123 @@ class SyllabusHomeScreen extends StatelessWidget {
       onAllowed: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => SyllabusPapersScreen(courseId: course.id),
+          MaterialPageRoute<void>(
+            builder: (_) => SyllabusBrowserScreen(courseId: course.id),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LandingBody extends StatelessWidget {
+  const _LandingBody({
+    required this.available,
+    required this.contentHeight,
+    required this.onOpenCourse,
+  });
+
+  final List<SyllabusCourse> available;
+
+  /// Viewport height above the bottom navigation — the basis the shared card
+  /// metrics are anchored to.
+  final double contentHeight;
+  final ValueChanged<SyllabusCourse> onOpenCourse;
+
+  // Deliberate, fixed spacing — every value below is accounted for in the
+  // budget math so no unclaimed gap can appear before the bottom nav.
+  static const double _sectionTitleH = 22;
+  static const double _availableToCards = 14;
+  static const double _bottomBreathBase = 16;
+
+  // Darker, more prominent tones for the Available (Group-II/III) cards.
+  static const Color _darkPurple = Color(0xFF4A3AB0);
+  static const Color _darkGreen = Color(0xFF167A63);
+  static const Color _availableTitle = Color(0xFF130F2B);
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bodyH = constraints.maxHeight;
+        final contentWidth =
+            constraints.maxWidth - (2 * SyllabusVisual.pagePadding);
+
+        final chromeBeforeCards =
+            LandingSheet.topPad +
+            (available.isNotEmpty ? _sectionTitleH + _availableToCards : 0);
+
+        final cardArea = (bodyH - chromeBeforeCards - _bottomBreathBase).clamp(
+          0.0,
+          bodyH,
+        );
+
+        final card = AvailableCardMetrics.forViewport(
+          contentWidth: contentWidth,
+          contentHeight: contentHeight,
+          maxHeight: cardArea,
+        );
+        final leftover = (cardArea - card.height).clamp(0.0, cardArea);
+        final bottomBreath = _bottomBreathBase + leftover;
+
+        return LandingSheet(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (available.isNotEmpty) ...[
+                SizedBox(
+                  height: _sectionTitleH,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Available',
+                      style: AppTextStyles.titleMedium(context).copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: SyllabusVisual.ink,
+                        fontSize: 17,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: _availableToCards),
+                SizedBox(
+                  height: card.height,
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < available.length; i++) ...[
+                          if (i > 0)
+                            const SizedBox(width: AvailableCardMetrics.gap),
+                          SizedBox(
+                            width: card.width,
+                            child: SyllabusCourseCard(
+                              title: available[i].name,
+                              subtitle:
+                                  '${available[i].totalMarks} Marks • ${available[i].totalPapers} Papers',
+                              height: card.height,
+                              circleSize: card.circleSize,
+                              iconSize: card.iconSize,
+                              titleFontSize: card.titleFontSize,
+                              subtitleFontSize: card.subtitleFontSize,
+                              centerContent: true,
+                              titleColor: _availableTitle,
+                              boundaryTint: _darkPurple,
+                              elevatedShadow: true,
+                              accent: _accentFor(available[i].id),
+                              icon: _iconFor(available[i].icon),
+                              onTap: () => onOpenCourse(available[i]),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              SizedBox(height: bottomBreath),
+            ],
           ),
         );
       },
@@ -93,8 +200,9 @@ class SyllabusHomeScreen extends StatelessWidget {
 
   Color _accentFor(String courseId) {
     return switch (courseId) {
-      'group-iii' => AppColors.success,
-      _ => AppColors.primary,
+      'group-iii' => _darkGreen,
+      'group-ii' => _darkPurple,
+      _ => AppColors.accent,
     };
   }
 
@@ -106,41 +214,5 @@ class SyllabusHomeScreen extends StatelessWidget {
       'local_police' => Icons.local_police_rounded,
       _ => Icons.auto_stories_rounded,
     };
-  }
-}
-
-class _CourseGrid extends StatelessWidget {
-  const _CourseGrid({
-    required this.crossAxisCount,
-    required this.children,
-  });
-
-  final int crossAxisCount;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < children.length; i += crossAxisCount) ...[
-          if (i > 0) const SizedBox(height: AppSpacing.lg),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var c = 0; c < crossAxisCount; c++) ...[
-                if (c > 0) const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: i + c < children.length
-                      ? children[i + c]
-                      : const SizedBox.shrink(),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ],
-    );
   }
 }

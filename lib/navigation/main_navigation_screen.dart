@@ -14,10 +14,7 @@ import 'custom_bottom_navigation.dart';
 
 /// Root shell after authentication. Owns the app Scaffold and tab stack.
 class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({
-    super.key,
-    this.initialTab = AppTab.home,
-  });
+  const MainNavigationScreen({super.key, this.initialTab = AppTab.home});
 
   final AppTab initialTab;
 
@@ -56,31 +53,34 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      extendBody: true,
-      body: IndexedStack(
-        index: _currentIndex,
-        sizing: StackFit.expand,
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          for (var i = 0; i < _pages.length; i++)
-            _TabTransition(
-              active: i == _currentIndex,
-              child: _pages[i],
+          IndexedStack(
+            index: _currentIndex,
+            sizing: StackFit.expand,
+            children: [
+              for (var i = 0; i < _pages.length; i++)
+                _TabTransition(active: i == _currentIndex, child: _pages[i]),
+            ],
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: CustomBottomNavigation(
+              currentIndex: _currentIndex,
+              onDestinationSelected: _onDestinationSelected,
             ),
+          ),
         ],
-      ),
-      bottomNavigationBar: CustomBottomNavigation(
-        currentIndex: _currentIndex,
-        onDestinationSelected: _onDestinationSelected,
       ),
     );
   }
 }
 
 class _TabTransition extends StatefulWidget {
-  const _TabTransition({
-    required this.active,
-    required this.child,
-  });
+  const _TabTransition({required this.active, required this.child});
 
   final bool active;
   final Widget child;
@@ -107,15 +107,13 @@ class _TabTransitionState extends State<_TabTransition>
       parent: _controller,
       curve: AppAnimations.curveStandard,
     );
-    _offset = Tween<Offset>(
-      begin: const Offset(0, 0.02),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: AppAnimations.curveStandard,
-      ),
-    );
+    _offset = Tween<Offset>(begin: const Offset(0, 0.02), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: AppAnimations.curveStandard,
+          ),
+        );
   }
 
   @override
@@ -136,10 +134,7 @@ class _TabTransitionState extends State<_TabTransition>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _opacity,
-      child: SlideTransition(
-        position: _offset,
-        child: widget.child,
-      ),
+      child: SlideTransition(position: _offset, child: widget.child),
     );
   }
 }

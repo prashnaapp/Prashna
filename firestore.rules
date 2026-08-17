@@ -67,28 +67,39 @@ service cloud.firestore {
     // ============================================================
     // Legacy parent: user_progress/{userId}
     // Per-course:     user_progress/{userId}/courses/{courseId}
+    //
+    // Phase 5.21: authoritative analytics (questionsAttempted/Correct and
+    // related overall counters) are written only by Cloud Functions from
+    // verified test attempts. Clients may read their own progress.
     match /user_progress/{userId} {
-      allow read, create, update: if request.auth != null
+      allow read: if request.auth != null
         && request.auth.uid == userId;
 
-      allow delete: if false;
+      allow create, update, delete: if false;
 
       match /courses/{courseId} {
         allow read: if request.auth != null
           && request.auth.uid == userId;
 
-        allow create: if request.auth != null
-          && request.auth.uid == userId
-          && request.resource.data.uid == userId
-          && request.resource.data.courseId == courseId;
+        allow create, update, delete: if false;
+      }
 
-        allow update: if request.auth != null
-          && request.auth.uid == userId
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.uid == resource.data.uid
-          && request.resource.data.courseId == resource.data.courseId;
+      // Phase 5.27: additive canonical unit performance from verified attempts.
+      // Students may read only their own docs; clients cannot write.
+      match /unit_performance/{scopeKey} {
+        allow read: if request.auth != null
+          && request.auth.uid == userId;
 
-        allow delete: if false;
+        allow create, update, delete: if false;
+      }
+
+      // Phase 5.29-1: student-controlled canonical syllabus completion.
+      // Students may read only their own docs; mutations are server-only.
+      match /syllabus_completion/{scopeKey} {
+        allow read: if request.auth != null
+          && request.auth.uid == userId;
+
+        allow create, update, delete: if false;
       }
     }
 
@@ -107,11 +118,13 @@ service cloud.firestore {
     // ============================================================
     // USER REVISION
     // ============================================================
+    // Phase 5.21: wrong/frequent lists from verified tests are server-written.
+    // Clients may read their own revision document only.
     match /user_revision/{userId} {
-      allow read, create, update: if request.auth != null
+      allow read: if request.auth != null
         && request.auth.uid == userId;
 
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
 
@@ -249,24 +262,33 @@ service cloud.firestore {
     // ============================================================
     // TEST ATTEMPTS
     // ============================================================
+    //
+    // Phase 5.20: authoritative attempts are written only by Admin SDK /
+    // Cloud Functions (startTestAttempt / submitTestAttempt).
+    // Students may read their own attempts (including legacy client-written
+    // docs). Clients must not create or update score/result fields.
+    //
     match /test_attempts/{attemptId} {
       allow read: if isSignedIn()
         && resource.data.uid == request.auth.uid;
 
-      allow create: if isSignedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.courseId is string
-        && request.resource.data.testId is string
-        && canAccessCourse(request.resource.data.courseId);
+      allow create, update, delete: if false;
+    }
 
-      // Own attempts only; uid / courseId / testId immutable after create.
-      allow update: if isSignedIn()
-        && resource.data.uid == request.auth.uid
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.courseId == resource.data.courseId
-        && request.resource.data.testId == resource.data.testId;
+    // Server-only idempotency / side-effect markers for verified attempts.
+    match /test_attempt_events/{attemptId} {
+      allow read, create, update, delete: if false;
+    }
 
-      allow delete: if false;
+    // Server-only answer-key / grading snapshots created at START TEST.
+    // Students must never read correctOption from this collection.
+    match /test_attempt_grading_snapshots/{attemptId} {
+      allow read, create, update, delete: if false;
+    }
+
+    // Server-only start idempotency keys (uid__startRequestId).
+    match /test_attempt_start_requests/{requestId} {
+      allow read, create, update, delete: if false;
     }
 
 

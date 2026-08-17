@@ -6,27 +6,27 @@ import 'app_colors.dart';
 abstract final class AppShadows {
   static List<BoxShadow> get soft => [
         BoxShadow(
+          color: AppColors.primaryStrong.withValues(alpha: 0.08),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+        BoxShadow(
           color: AppColors.textPrimary.withValues(alpha: 0.04),
           blurRadius: 8,
           offset: const Offset(0, 2),
-        ),
-        BoxShadow(
-          color: AppColors.textPrimary.withValues(alpha: 0.06),
-          blurRadius: 24,
-          offset: const Offset(0, 8),
         ),
       ];
 
   static List<BoxShadow> get medium => [
         BoxShadow(
-          color: AppColors.textPrimary.withValues(alpha: 0.06),
-          blurRadius: 12,
-          offset: const Offset(0, 4),
+          color: AppColors.primaryStrong.withValues(alpha: 0.12),
+          blurRadius: 24,
+          offset: const Offset(0, 10),
         ),
         BoxShadow(
-          color: AppColors.textPrimary.withValues(alpha: 0.08),
-          blurRadius: 32,
-          offset: const Offset(0, 12),
+          color: AppColors.textPrimary.withValues(alpha: 0.05),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
         ),
       ];
 
@@ -40,6 +40,14 @@ abstract final class AppShadows {
           color: AppColors.textPrimary.withValues(alpha: 0.05),
           blurRadius: 28,
           offset: const Offset(0, 10),
+        ),
+      ];
+
+  static List<BoxShadow> get primaryGlow => [
+        BoxShadow(
+          color: AppColors.primaryStrong.withValues(alpha: 0.28),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
         ),
       ];
 

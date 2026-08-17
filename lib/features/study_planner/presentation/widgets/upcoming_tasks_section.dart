@@ -30,15 +30,25 @@ class UpcomingTasksSection extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  tasks[i].chapterLabel,
+                  tasks[i].parentLabel ?? tasks[i].chapterLabel,
                   style: AppTextStyles.bodyMedium(context),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  tasks[i].unitLabel ?? tasks[i].chapterLabel,
+                  style: AppTextStyles.label(context),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
+                  '${tasks[i].questionCount} Questions',
+                  style: AppTextStyles.bodyMedium(context),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
                   'Estimated  ${tasks[i].estimatedMinutes} Minutes',
-                  style: AppTextStyles.label(context).copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTextStyles.label(
+                    context,
+                  ).copyWith(color: AppColors.textSecondary),
                 ),
               ],
             ),

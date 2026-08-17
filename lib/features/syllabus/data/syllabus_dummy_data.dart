@@ -1,4 +1,6 @@
 import 'models/syllabus_models.dart';
+import 'canonical_syllabus_data.dart';
+import 'canonical_group_iii_syllabus_data.dart';
 
 /// Single source of syllabus catalog data. Add new courses here only.
 abstract final class SyllabusDummyData {
@@ -13,7 +15,7 @@ abstract final class SyllabusDummyData {
       icon: 'school',
       papers: [
         SyllabusPaper(
-          id: 'paper-i',
+          id: 'group-ii-paper-i',
           title: 'Paper I',
           sections: [
             _section('current-affairs', 'Current Affairs'),
@@ -28,42 +30,38 @@ abstract final class SyllabusDummyData {
             _section('reasoning', 'Reasoning'),
             _section('english', 'English'),
           ],
+          majorStudyAreas: CanonicalGroupIISyllabusData.paperIMajorStudyAreas,
+          syllabusUnits: CanonicalGroupIISyllabusData.paperIUnits,
         ),
         SyllabusPaper(
-          id: 'paper-ii',
+          id: 'group-ii-paper-ii',
           title: 'Paper II',
           sections: [
             _section('socio-cultural-history', 'Socio-Cultural History'),
             _section('constitution-politics', 'Constitution & Politics'),
             _section('social-structure', 'Social Structure'),
           ],
+          parts: CanonicalGroupIISyllabusData.paperIIParts,
         ),
         SyllabusPaper(
-          id: 'paper-iii',
+          id: 'group-ii-paper-iii',
           title: 'Paper III',
           sections: [
             _section('indian-economy', 'Indian Economy'),
             _section('telangana-economy', 'Telangana Economy'),
             _section('development', 'Development'),
           ],
+          parts: CanonicalGroupIISyllabusData.paperIIIParts,
         ),
         SyllabusPaper(
-          id: 'paper-iv',
+          id: 'group-ii-paper-iv',
           title: 'Paper IV',
           sections: [
-            _section(
-              'movement-1948-1970',
-              'Telangana Movement (1948–1970)',
-            ),
-            _section(
-              'movement-1971-1990',
-              'Telangana Movement (1971–1990)',
-            ),
-            _section(
-              'movement-1991-2014',
-              'Telangana Movement (1991–2014)',
-            ),
+            _section('movement-1948-1970', 'Telangana Movement (1948–1970)'),
+            _section('movement-1971-1990', 'Telangana Movement (1971–1990)'),
+            _section('movement-1991-2014', 'Telangana Movement (1991–2014)'),
           ],
+          parts: CanonicalGroupIISyllabusData.paperIVParts,
         ),
       ],
     ),
@@ -75,39 +73,7 @@ abstract final class SyllabusDummyData {
       isEnrolled: true,
       isAvailable: true,
       icon: 'menu_book',
-      papers: [
-        SyllabusPaper(
-          id: 'paper-i',
-          title: 'Paper I',
-          sections: [
-            _section('current-affairs', 'Current Affairs'),
-            _section('general-science', 'General Science'),
-            _section('geography', 'Geography'),
-            _section('history', 'History'),
-            _section('telangana-society', 'Telangana Society'),
-            _section('reasoning', 'Reasoning'),
-            _section('english', 'English'),
-          ],
-        ),
-        SyllabusPaper(
-          id: 'paper-ii',
-          title: 'Paper II',
-          sections: [
-            _section('socio-cultural-history', 'Socio-Cultural History'),
-            _section('constitution-politics', 'Constitution & Politics'),
-            _section('social-structure', 'Social Structure'),
-          ],
-        ),
-        SyllabusPaper(
-          id: 'paper-iii',
-          title: 'Paper III',
-          sections: [
-            _section('indian-economy', 'Indian Economy'),
-            _section('telangana-economy', 'Telangana Economy'),
-            _section('development', 'Development'),
-          ],
-        ),
-      ],
+      papers: CanonicalGroupIIISyllabusData.papers,
     ),
     SyllabusCourse(
       id: 'police-si',
@@ -136,9 +102,7 @@ abstract final class SyllabusDummyData {
     return SyllabusSection(
       id: id,
       title: title,
-      topics: [
-        SyllabusTopic(id: '$id-topic', title: title),
-      ],
+      topics: [SyllabusTopic(id: '$id-topic', title: title)],
     );
   }
 }

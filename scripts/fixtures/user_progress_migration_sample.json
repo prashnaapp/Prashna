@@ -1,0 +1,86 @@
+{
+  "parents": [
+    {
+      "uid": "security-student-a",
+      "targetExists": false,
+      "data": {
+        "uid": "security-student-a",
+        "courseId": "group-ii",
+        "overall": {
+          "completion": 42,
+          "accuracy": 0.7,
+          "chaptersCompleted": 3,
+          "totalChapters": 10,
+          "questionsAttempted": 40,
+          "questionsCorrect": 28
+        },
+        "papers": {
+          "paper-i": {
+            "id": "paper-i",
+            "label": "Paper I",
+            "progressPercent": 50
+          }
+        },
+        "chapters": {
+          "ch-1": {
+            "id": "ch-1",
+            "label": "Chapter 1",
+            "paperId": "paper-i",
+            "progressPercent": 80
+          }
+        },
+        "lastUpdated": { "_seconds": 1750000000 },
+        "appVersion": "1.0.0"
+      }
+    },
+    {
+      "uid": "security-student-b",
+      "targetExists": true,
+      "data": {
+        "uid": "security-student-b",
+        "courseId": "group-iii",
+        "overall": {
+          "completion": 10,
+          "accuracy": 0.5,
+          "chaptersCompleted": 1,
+          "totalChapters": 8,
+          "questionsAttempted": 10,
+          "questionsCorrect": 5
+        },
+        "papers": {},
+        "chapters": {},
+        "appVersion": "1.0.0"
+      }
+    },
+    {
+      "uid": "security-student-c",
+      "targetExists": false,
+      "data": {
+        "uid": "security-student-c",
+        "courseId": null,
+        "overall": {
+          "completion": 0,
+          "accuracy": 0,
+          "chaptersCompleted": 0,
+          "totalChapters": 0,
+          "questionsAttempted": 0,
+          "questionsCorrect": 0
+        },
+        "papers": {},
+        "chapters": {},
+        "appVersion": "1.0.0"
+      }
+    },
+    {
+      "uid": "security-student-d",
+      "targetExists": false,
+      "data": {
+        "uid": "security-student-d",
+        "courseId": "group-ii",
+        "overall": 12,
+        "papers": {},
+        "chapters": {}
+      }
+    }
+  ]
+}

@@ -4,17 +4,18 @@ import '../../../../core/design_system/design_system.dart';
 import '../../data/models/test_engine_models.dart';
 
 class AttemptSummaryGrid extends StatelessWidget {
-  const AttemptSummaryGrid({
-    super.key,
-    required this.counts,
-  });
+  const AttemptSummaryGrid({super.key, required this.counts});
 
   final Map<QuestionStatus, int> counts;
 
   @override
   Widget build(BuildContext context) {
     final tiles = [
-      _Tile('Answered', counts[QuestionStatus.answered] ?? 0, AppColors.success),
+      _Tile(
+        'Answered',
+        counts[QuestionStatus.answered] ?? 0,
+        AppColors.success,
+      ),
       _Tile(
         'Not Answered',
         counts[QuestionStatus.notAnswered] ?? 0,
@@ -49,9 +50,9 @@ class AttemptSummaryGrid extends StatelessWidget {
               children: [
                 Text(
                   '${tile.value}',
-                  style: AppTextStyles.headline(context).copyWith(
-                    color: tile.color,
-                  ),
+                  style: AppTextStyles.headline(
+                    context,
+                  ).copyWith(color: tile.color),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(tile.label, style: AppTextStyles.bodyMedium(context)),

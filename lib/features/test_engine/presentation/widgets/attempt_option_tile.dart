@@ -20,9 +20,10 @@ class AttemptOptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       onTap: onTap,
-      showShadow: false,
+      showShadow: selected,
+      showBorder: !selected,
       backgroundColor: selected
-          ? AppColors.primary.withValues(alpha: 0.08)
+          ? AppColors.lavender
           : AppColors.surface,
       child: Row(
         children: [
@@ -31,7 +32,8 @@ class AttemptOptionTile extends StatelessWidget {
             height: AppSpacing.huge,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected ? AppColors.primary : AppColors.surfaceVariant,
+              gradient: selected ? AppColors.primaryGradient : null,
+              color: selected ? null : AppColors.surfaceVariant,
               borderRadius: AppRadius.mdAll,
             ),
             child: Text(
@@ -45,10 +47,7 @@ class AttemptOptionTile extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.lg),
           Expanded(
-            child: Text(
-              optionText,
-              style: AppTextStyles.bodyLarge(context),
-            ),
+            child: Text(optionText, style: AppTextStyles.bodyLarge(context)),
           ),
         ],
       ),

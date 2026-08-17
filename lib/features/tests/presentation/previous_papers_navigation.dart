@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../data/models/test_models.dart';
 import '../services/test_service.dart';
 import 'screens/previous_year_list_screen.dart';
+import 'screens/test_list_screen.dart';
 import 'screens/test_series_paper_list_screen.dart';
-import 'test_quiz_navigation.dart';
 
 /// Previous Papers navigation — scoped to a single [examId] / course.
 ///
@@ -57,13 +57,19 @@ void openPreviousPaperTest({
   required String examId,
   required PreviousPaperYear year,
   required PaperWisePaper paper,
+  TestService? testService,
 }) {
-  final test = TestService.instance.getPreviousPaperTest(
-    examId: examId,
-    year: year,
-    paper: paper,
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => TestListScreen(
+        examId: examId,
+        category: TestCategoryType.previousYear,
+        title: '${year.title} · ${paper.title}',
+        testService: testService,
+      ),
+    ),
   );
-  openTestPracticeSession(context, test);
 }
 
 PreviousPaperExam _examFor(String examId, {required String fallbackTitle}) {

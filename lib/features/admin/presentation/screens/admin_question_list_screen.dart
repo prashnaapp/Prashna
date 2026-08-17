@@ -6,10 +6,7 @@ import '../../admin_routes.dart';
 import '../../services/admin_question_service.dart';
 
 class AdminQuestionListScreen extends StatefulWidget {
-  const AdminQuestionListScreen({
-    super.key,
-    this.service,
-  });
+  const AdminQuestionListScreen({super.key, this.service});
 
   final AdminQuestionService? service;
 
@@ -23,6 +20,12 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
   List<Course> _courses = const [];
   List<Question> _questions = const [];
   String? _courseId;
+  QuestionPublicationStatus? _statusFilter;
+  String _search = '';
+  String _paperFilter = '';
+  String _partFilter = '';
+  String _topicFilter = '';
+  String _lessonFilter = '';
   String? _error;
   bool _loadingCourses = true;
   bool _loadingQuestions = false;
@@ -82,58 +85,64 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
   }
 
   Future<void> _openEdit(Question question) async {
-    await Navigator.of(context).pushNamed(
-      AdminRoutes.questionEdit,
-      arguments: question,
-    );
+    await Navigator.of(
+      context,
+    ).pushNamed(AdminRoutes.questionEdit, arguments: question);
     if (mounted) await _loadQuestions();
   }
 
-  Future<void> _setActive(Question question, bool active) async {
-    if (!active) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Deactivate question?'),
-          content: const Text(
-            'This may affect published tests that reference this question. '
-            'The question will remain stored and can be reactivated later.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Deactivate'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true) return;
-    }
+  Future<void> _setStatus(
+    Question question,
+    QuestionPublicationStatus status,
+  ) async {
     try {
-      if (active) {
-        await _service.reactivateQuestion(question.id);
-      } else {
-        await _service.deactivateQuestion(question.id);
-      }
+      await _service.setStatus(question.id, status);
       if (mounted) await _loadQuestions();
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update question: $error')),
+        SnackBar(content: Text('Could not update status: $error')),
       );
     }
+  }
+
+  List<Question> get _visibleQuestions {
+    final query = _search.trim().toLowerCase();
+    return _questions
+        .where((question) {
+          final status =
+              question.status ??
+              (question.isActive
+                  ? QuestionPublicationStatus.published
+                  : QuestionPublicationStatus.archived);
+          if (_statusFilter != null && status != _statusFilter) return false;
+          if (!_contains(question.paperId, _paperFilter) ||
+              !_contains(question.partId, _partFilter) ||
+              !_contains(question.syllabus?.topicId, _topicFilter) ||
+              !_contains(question.lessonId, _lessonFilter)) {
+            return false;
+          }
+          if (query.isEmpty) return true;
+          return question.question.toLowerCase().contains(query) ||
+              question.id.toLowerCase().contains(query) ||
+              question.paperId.toLowerCase().contains(query) ||
+              (question.partId ?? '').toLowerCase().contains(query) ||
+              (question.contentTopicId ?? '').toLowerCase().contains(query) ||
+              (question.lessonId ?? '').toLowerCase().contains(query);
+        })
+        .toList(growable: false);
+  }
+
+  bool _contains(String? value, String filter) {
+    final normalized = filter.trim().toLowerCase();
+    return normalized.isEmpty ||
+        (value ?? '').toLowerCase().contains(normalized);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Questions'),
-      ),
+      appBar: AppBar(title: const Text('Questions')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
@@ -167,10 +176,7 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
             runSpacing: 12,
             children: [
               ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minWidth: 200,
-                  maxWidth: 600,
-                ),
+                constraints: const BoxConstraints(minWidth: 200, maxWidth: 600),
                 child: DropdownButtonFormField<String>(
                   initialValue: _courseId,
                   decoration: const InputDecoration(
@@ -195,6 +201,46 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
                 icon: const Icon(Icons.add),
                 label: const Text('+ Create Question'),
               ),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).pushNamed(AdminRoutes.questionImport),
+                icon: const Icon(Icons.upload_file_outlined),
+                label: const Text('Import Questions'),
+              ),
+              SizedBox(
+                width: 220,
+                child: TextField(
+                  decoration: const InputDecoration(
+                    labelText: 'Search',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) => setState(() => _search = value),
+                ),
+              ),
+              SizedBox(
+                width: 180,
+                child: DropdownButtonFormField<QuestionPublicationStatus?>(
+                  initialValue: _statusFilter,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Status',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('All statuses'),
+                    ),
+                    for (final status in QuestionPublicationStatus.values)
+                      DropdownMenuItem(value: status, child: Text(status.name)),
+                  ],
+                  onChanged: (value) => setState(() => _statusFilter = value),
+                ),
+              ),
+              _filterField('Paper', (value) => _paperFilter = value),
+              _filterField('Part', (value) => _partFilter = value),
+              _filterField('Topic', (value) => _topicFilter = value),
+              _filterField('Lesson', (value) => _lessonFilter = value),
             ],
           ),
         ),
@@ -209,23 +255,36 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
         Expanded(
           child: _loadingQuestions
               ? const Center(child: CircularProgressIndicator())
-              : _questions.isEmpty
-                  ? const Center(child: Text('No questions for this course.'))
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(24),
-                      itemCount: _questions.length,
-                      separatorBuilder: (_, index) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final question = _questions[index];
-                        return _QuestionCard(
-                          question: question,
-                          onEdit: () => _openEdit(question),
-                          onSetActive: (value) => _setActive(question, value),
-                        );
-                      },
-                    ),
+              : _visibleQuestions.isEmpty
+              ? const Center(child: Text('No questions for this course.'))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(24),
+                  itemCount: _visibleQuestions.length,
+                  separatorBuilder: (_, index) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final question = _visibleQuestions[index];
+                    return _QuestionCard(
+                      question: question,
+                      onEdit: () => _openEdit(question),
+                      onSetStatus: (status) => _setStatus(question, status),
+                    );
+                  },
+                ),
         ),
       ],
+    );
+  }
+
+  Widget _filterField(String label, ValueChanged<String> onChanged) {
+    return SizedBox(
+      width: 140,
+      child: TextField(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        onChanged: (value) => setState(() => onChanged(value)),
+      ),
     );
   }
 }
@@ -234,18 +293,23 @@ class _QuestionCard extends StatelessWidget {
   const _QuestionCard({
     required this.question,
     required this.onEdit,
-    required this.onSetActive,
+    required this.onSetStatus,
   });
 
   final Question question;
   final VoidCallback onEdit;
-  final ValueChanged<bool> onSetActive;
+  final ValueChanged<QuestionPublicationStatus> onSetStatus;
 
   @override
   Widget build(BuildContext context) {
     final updated = question.updatedAt.millisecondsSinceEpoch == 0
         ? '—'
         : '${question.updatedAt.year}-${question.updatedAt.month.toString().padLeft(2, '0')}-${question.updatedAt.day.toString().padLeft(2, '0')}';
+    final status =
+        question.status ??
+        (question.isActive
+            ? QuestionPublicationStatus.published
+            : QuestionPublicationStatus.archived);
     return Card(
       child: ListTile(
         title: Text(
@@ -256,7 +320,7 @@ class _QuestionCard extends StatelessWidget {
         subtitle: Text(
           '${question.id} • ${question.topicId.isEmpty ? 'No topic' : question.topicId}\n'
           '${question.difficulty.name} • ${question.questionType.name} • '
-          '${question.language} • ${question.isActive ? 'Active' : 'Inactive'}'
+          '${status.name}'
           ' • Updated $updated',
         ),
         isThreeLine: true,
@@ -275,8 +339,14 @@ class _QuestionCard extends StatelessWidget {
               icon: const Icon(Icons.edit_outlined),
             ),
             IconButton(
-              tooltip: question.isActive ? 'Deactivate' : 'Reactivate',
-              onPressed: () => onSetActive(!question.isActive),
+              tooltip: status == QuestionPublicationStatus.published
+                  ? 'Archive'
+                  : 'Publish',
+              onPressed: () => onSetStatus(
+                status == QuestionPublicationStatus.published
+                    ? QuestionPublicationStatus.archived
+                    : QuestionPublicationStatus.published,
+              ),
               icon: Icon(
                 question.isActive
                     ? Icons.visibility_off_outlined

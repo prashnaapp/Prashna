@@ -1,12 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Enrollment status for [UserCourse].
-enum UserCourseStatus { active, inactive }
+/// Stored enrollment status for [UserCourse].
+///
+/// Access decisions use effective [CourseEntitlementStatus]:
+/// - [active] + unexpired → active entitlement
+/// - [active] + past [UserCourse.expiresAt] → expired entitlement
+/// - [inactive] / [revoked] → revoked entitlement
+enum UserCourseStatus { active, inactive, revoked }
 
 /// How the user obtained access to the course.
 enum UserCourseSource { free, purchase, admin }
 
-/// Firestore enrollment document (`user_courses/{uid}/courses/{courseId}`).
+/// Firestore enrollment / entitlement document
+/// (`user_courses/{uid}/courses/{courseId}`).
+///
+/// This is the authoritative paid/granted course entitlement record.
+/// Payment transactions are separate and do not grant access by themselves.
 ///
 /// Legacy flat documents lived at `user_courses/{uid}` and are migrated into
 /// the subcollection without deleting the parent.
@@ -95,6 +104,8 @@ class UserCourse {
     switch (raw) {
       case 'inactive':
         return UserCourseStatus.inactive;
+      case 'revoked':
+        return UserCourseStatus.revoked;
       case 'active':
       default:
         return UserCourseStatus.active;

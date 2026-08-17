@@ -12,7 +12,9 @@ class TestEngineController extends ChangeNotifier {
   TestEngineController({
     required this.test,
     TestService? service,
+    String? serverAttemptId,
   }) : service = service ?? TestService() {
+    this.service.serverAttemptId = serverAttemptId;
     attempts = this.service.startTest(test);
     _hydrateBookmarks();
     _remaining = test.duration;
@@ -26,6 +28,8 @@ class TestEngineController extends ChangeNotifier {
   bool started = false;
   bool submitted = false;
   bool _submitting = false;
+  TestSubmissionPhase submissionPhase = TestSubmissionPhase.idle;
+  String? submissionError;
   TestResult? result;
   TestAnalysis? analysis;
 
@@ -46,6 +50,8 @@ class TestEngineController extends ChangeNotifier {
 
   Map<QuestionStatus, int> get statusCounts => service.statusCounts(attempts);
 
+  bool get isSubmitting => submissionPhase == TestSubmissionPhase.submitting;
+
   void _hydrateBookmarks() {
     if (!bookmarksEnabled) return;
     final bookmarks = BookmarkService.instance;
@@ -65,14 +71,14 @@ class TestEngineController extends ChangeNotifier {
   }
 
   void selectOption(String label) {
-    if (submitted) return;
+    if (submitted || isSubmitting) return;
     service.saveAnswer(attempt: currentAttempt, optionLabel: label);
     _persist();
     notifyListeners();
   }
 
   void clearResponse() {
-    if (submitted) return;
+    if (submitted || isSubmitting) return;
     service.clearResponse(currentAttempt);
     _persist();
     notifyListeners();
@@ -89,6 +95,11 @@ class TestEngineController extends ChangeNotifier {
           paperId: currentQuestion.paperId ?? test.paperId,
           partId: currentQuestion.sectionId ?? test.sectionId,
           chapterId: currentQuestion.topicId ?? test.topicId,
+          majorStudyAreaId: currentQuestion.majorStudyAreaId,
+          contentTopicId: currentQuestion.contentTopicId,
+          canonicalPartId: currentQuestion.partId ?? test.partId,
+          canonicalTopicId: currentQuestion.syllabus?.topicId,
+          lessonId: currentQuestion.lessonId,
           questionType: test.mode.name,
           questionTitle: currentQuestion.text,
         ),
@@ -103,7 +114,7 @@ class TestEngineController extends ChangeNotifier {
   }
 
   void toggleMarkForReview() {
-    if (submitted) return;
+    if (submitted || isSubmitting) return;
     service.markReview(currentAttempt);
     _persist();
     notifyListeners();
@@ -133,17 +144,20 @@ class TestEngineController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<TestResult> submit() async {
+  Future<TestResult?> submit() async {
     if (submitted && result != null) return result!;
     if (_submitting) {
-      while (_submitting && result == null) {
+      while (_submitting) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
-      return result!;
+      return result;
     }
     _submitting = true;
+    submissionPhase = TestSubmissionPhase.submitting;
+    submissionError = null;
     _leaveCurrentQuestion();
     _timer?.cancel();
+    notifyListeners();
 
     final elapsed = test.duration - _remaining;
     final timeTaken = elapsed.isNegative ? Duration.zero : elapsed;
@@ -156,8 +170,18 @@ class TestEngineController extends ChangeNotifier {
       );
       analysis = service.generateAnalysis(test: test, attempts: attempts);
       submitted = true;
+      submissionPhase = TestSubmissionPhase.submitted;
       notifyListeners();
       return result!;
+    } catch (_) {
+      submissionPhase = TestSubmissionPhase.submissionFailed;
+      submissionError =
+          'Unable to submit your test. Your answers are saved. Please try again.';
+      if (_remaining > Duration.zero) {
+        _startTimer();
+      }
+      notifyListeners();
+      return null;
     } finally {
       _submitting = false;
     }
@@ -216,8 +240,6 @@ class TestEngineController extends ChangeNotifier {
   }
 
   void _persist() {
-    unawaited(
-      service.saveProgress(testId: test.id, attempts: attempts),
-    );
+    unawaited(service.saveProgress(testId: test.id, attempts: attempts));
   }
 }

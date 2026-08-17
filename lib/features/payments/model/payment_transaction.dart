@@ -9,6 +9,10 @@ enum PaymentTransactionStatus {
 }
 
 /// Firestore payment transaction document (`payment_transactions/{transactionId}`).
+///
+/// A transaction records a purchase/payment event. It is NOT the application
+/// access check — paid access requires a [UserCourse] / [CourseEntitlement]
+/// written by a trusted backend after verification.
 class PaymentTransaction {
   const PaymentTransaction({
     required this.transactionId,

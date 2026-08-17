@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
+import '../../data/models/test_engine_models.dart';
 import '../controllers/test_engine_controller.dart';
 import '../widgets/attempt_summary_grid.dart';
 import '../widgets/question_palette.dart';
+import '../widgets/submission_status_panel.dart';
 
 class TestReviewScreen extends StatelessWidget {
   const TestReviewScreen({
@@ -30,7 +32,7 @@ class TestReviewScreen extends StatelessWidget {
             title: const Text('Review'),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
-              onPressed: onBackToQuestions,
+              onPressed: controller.isSubmitting ? null : onBackToQuestions,
             ),
           ),
           body: ListView(
@@ -48,30 +50,39 @@ class TestReviewScreen extends StatelessWidget {
                 onSelect: onJumpToQuestion,
               ),
               const SizedBox(height: AppSpacing.xxl),
+              SubmissionStatusPanel(controller: controller, onRetry: onSubmit),
+              const SizedBox(height: AppSpacing.md),
               AppPrimaryButton(
+                key: const ValueKey('submit-attempt'),
                 label: 'Submit Test',
-                onPressed: () async {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Submit Test?'),
-                      content: const Text(
-                        'Submit your answers for evaluation.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Submit'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (ok == true && context.mounted) await onSubmit();
-                },
+                isLoading: controller.isSubmitting,
+                onPressed:
+                    controller.isSubmitting ||
+                        controller.submissionPhase ==
+                            TestSubmissionPhase.submissionFailed
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Submit Test?'),
+                            content: const Text(
+                              'Submit your answers for evaluation.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Submit'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true && context.mounted) await onSubmit();
+                      },
               ),
               const SizedBox(height: AppSpacing.md),
               AppSecondaryButton(

@@ -5,6 +5,8 @@ import '../controllers/test_engine_controller.dart';
 import '../widgets/attempt_option_tile.dart';
 import '../widgets/attempt_timer_badge.dart';
 import '../widgets/question_palette.dart';
+import '../widgets/submission_status_panel.dart';
+import '../../data/models/test_engine_models.dart';
 
 class TestQuestionScreen extends StatelessWidget {
   const TestQuestionScreen({
@@ -77,27 +79,47 @@ class TestQuestionScreen extends StatelessWidget {
                                 ? Icons.flag
                                 : Icons.flag_outlined,
                             color: attempt.markedForReview
-                                ? AppColors.secondary
+                                ? AppColors.primaryStrong
                                 : AppColors.textSecondary,
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: AppSpacing.sm),
+                    AppLinearProgress(
+                      value: controller.questionNumber /
+                          controller.test.totalQuestions,
+                      height: 6,
+                    ),
                     const SizedBox(height: AppSpacing.md),
                     AppCard(
                       showShadow: false,
-                      child: Text(
-                        question.text,
-                        style: AppTextStyles.bodyLarge(context).copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            question.text,
+                            style: AppTextStyles.bodyLarge(
+                              context,
+                            ).copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          if (question.teluguText != null) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            Text(
+                              question.teluguText!,
+                              style: AppTextStyles.bodyMedium(context),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     for (final option in question.options) ...[
                       AttemptOptionTile(
                         label: option.label,
-                        optionText: option.text,
+                        optionText: option.teluguText == null
+                            ? option.text
+                            : '${option.text}\n${option.teluguText}',
                         selected: attempt.selectedOption == option.label,
                         onTap: () => controller.selectOption(option.label),
                       ),
@@ -127,6 +149,11 @@ class TestQuestionScreen extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
+                      SubmissionStatusPanel(
+                        controller: controller,
+                        onRetry: onSubmit,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
                       Row(
                         children: [
                           Expanded(
@@ -161,10 +188,18 @@ class TestQuestionScreen extends StatelessWidget {
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () async {
-                                final ok = await _confirmSubmit(context);
-                                if (ok && context.mounted) await onSubmit();
-                              },
+                              key: const ValueKey('submit-attempt'),
+                              onPressed:
+                                  controller.isSubmitting ||
+                                      controller.submissionPhase ==
+                                          TestSubmissionPhase.submissionFailed
+                                  ? null
+                                  : () async {
+                                      final ok = await _confirmSubmit(context);
+                                      if (ok && context.mounted) {
+                                        await onSubmit();
+                                      }
+                                    },
                               child: const Text('Submit'),
                             ),
                           ),

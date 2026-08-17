@@ -7,10 +7,7 @@ import 'test_attempt_history_detail_screen.dart';
 
 /// Lists the signed-in user's completed Firestore test attempts.
 class TestAttemptHistoryScreen extends StatefulWidget {
-  const TestAttemptHistoryScreen({
-    super.key,
-    this.repository,
-  });
+  const TestAttemptHistoryScreen({super.key, this.repository});
 
   final TestAttemptCloudRepository? repository;
 
@@ -77,8 +74,10 @@ class _TestAttemptHistoryScreenState extends State<TestAttemptHistoryScreen> {
           final items = snapshot.data ?? const <TestAttemptHistoryItem>[];
           if (items.isEmpty) {
             return const _MessageBody(
+              key: ValueKey('history-empty'),
               title: 'No attempts yet',
-              message: 'Completed tests will appear here after you submit them.',
+              message:
+                  'Completed tests will appear here after you submit them.',
             );
           }
 
@@ -90,6 +89,7 @@ class _TestAttemptHistoryScreenState extends State<TestAttemptHistoryScreen> {
               final item = items[index];
               final completedAt = item.submittedAt ?? item.startedAt;
               return AppCard(
+                key: ValueKey('history-item-${item.attemptId}'),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -99,45 +99,83 @@ class _TestAttemptHistoryScreenState extends State<TestAttemptHistoryScreen> {
                     ),
                   );
                 },
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.displayTestTitle,
-                            style: AppTextStyles.titleMedium(context),
+                padding: EdgeInsets.zero,
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        width: 6,
+                        decoration: BoxDecoration(
+                          color: item.passed
+                              ? AppColors.success
+                              : AppColors.primaryStrong,
+                          borderRadius: const BorderRadius.horizontal(
+                            left: Radius.circular(AppRadius.lg),
                           ),
                         ),
-                        Text(
-                          item.passed ? 'Passed' : 'Not passed',
-                          style: AppTextStyles.label(context).copyWith(
-                            color: item.passed
-                                ? AppColors.success
-                                : AppColors.warning,
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: AppSpacing.cardPadding,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  AppAccentIcon(
+                                    icon: Icons.quiz_rounded,
+                                    color: item.passed
+                                        ? AppColors.success
+                                        : AppColors.primaryStrong,
+                                    size: 40,
+                                  ),
+                                  const SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: Text(
+                                      item.displayTestTitle,
+                                      style: AppTextStyles.titleMedium(
+                                        context,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${item.percentage}%',
+                                    style: AppTextStyles.titleMedium(context)
+                                        .copyWith(
+                                      color: item.passed
+                                          ? AppColors.success
+                                          : AppColors.primaryStrong,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                item.displayCourseTitle,
+                                style: AppTextStyles.bodyMedium(context),
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(
+                                '${item.totalQuestions} Qs · Score ${_formatScore(item.score)}',
+                                style: AppTextStyles.caption(context),
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(
+                                item.status.isEmpty ? 'Submitted' : item.status,
+                                style: AppTextStyles.label(context),
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(
+                                _formatDate(completedAt),
+                                style: AppTextStyles.caption(context),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      item.displayCourseTitle,
-                      style: AppTextStyles.bodyMedium(context),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Score ${_formatScore(item.score)} · '
-                      '${item.percentage}% · '
-                      'Accuracy ${item.accuracy}%',
-                      style: AppTextStyles.bodyMedium(context),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      _formatDate(completedAt),
-                      style: AppTextStyles.bodyMedium(context),
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -150,6 +188,7 @@ class _TestAttemptHistoryScreenState extends State<TestAttemptHistoryScreen> {
 
 class _MessageBody extends StatelessWidget {
   const _MessageBody({
+    super.key,
     required this.title,
     required this.message,
     this.actionLabel,
@@ -169,11 +208,24 @@ class _MessageBody extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.titleMedium(context),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              decoration: const BoxDecoration(
+                color: AppColors.lavender,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.history_edu_rounded,
+                color: AppColors.primaryStrong,
+                size: 36,
+              ),
             ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+                title,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.titleMedium(context),
+              ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               message,

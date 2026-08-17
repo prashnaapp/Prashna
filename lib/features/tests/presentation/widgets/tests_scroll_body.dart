@@ -30,9 +30,6 @@ class TestsScrollBody extends StatelessWidget {
       );
     }
 
-    return TabScrollView(
-      padding: padding,
-      children: children,
-    );
+    return TabScrollView(padding: padding, children: children);
   }
 }

@@ -36,21 +36,7 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
     if (widget.test == null) {
       await _service.createTest(test);
     } else {
-      await _service.updateTest(
-        TestModel(
-          id: widget.test!.id,
-          examId: test.examId,
-          category: test.category,
-          title: test.title,
-          questionCount: test.questionCount,
-          marks: test.marks,
-          durationMinutes: test.durationMinutes,
-          negativeMarking: test.negativeMarking,
-          difficulty: test.difficulty,
-          questionIds: widget.test!.questionIds,
-          isPublished: test.isPublished,
-        ),
-      );
+      await _service.updateTest(test);
     }
     if (mounted) Navigator.of(context).pop();
   }
@@ -90,6 +76,7 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
                   courses: courses,
                   initialTest: widget.test,
                   initialCourseId: widget.initialCourseId,
+                  service: _service,
                   onSubmit: _save,
                 ),
               ),

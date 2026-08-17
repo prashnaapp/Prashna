@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../question_bank/data/models/question_models.dart';
 import '../tests/data/models/test_models.dart';
 import 'presentation/screens/admin_question_form_screen.dart';
+import 'presentation/screens/admin_question_import_screen.dart';
 import 'presentation/screens/admin_question_list_screen.dart';
 import 'presentation/screens/admin_test_form_screen.dart';
 import 'presentation/screens/admin_test_list_screen.dart';
@@ -42,6 +43,8 @@ class AdminApp extends StatelessWidget {
               AdminQuestionFormScreen(question: question),
               settings: settings,
             );
+          case AdminRoutes.questionImport:
+            return _gate(const AdminQuestionImportScreen(), settings: settings);
           case AdminRoutes.tests:
             return _gate(const AdminTestListScreen(), settings: settings);
           case AdminRoutes.testCreate:

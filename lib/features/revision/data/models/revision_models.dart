@@ -32,6 +32,11 @@ class RevisionQuestionItem {
     required this.chapterId,
     required this.chapterName,
     this.wrongCount,
+    this.majorStudyAreaId,
+    this.contentTopicId,
+    this.canonicalPartId,
+    this.canonicalTopicId,
+    this.lessonId,
   });
 
   final String questionId;
@@ -43,6 +48,11 @@ class RevisionQuestionItem {
   final String chapterId;
   final String chapterName;
   final int? wrongCount;
+  final String? majorStudyAreaId;
+  final String? contentTopicId;
+  final String? canonicalPartId;
+  final String? canonicalTopicId;
+  final String? lessonId;
 }
 
 class RevisionQuestionGroup {
@@ -60,10 +70,7 @@ class RevisionQuestionGroup {
 }
 
 class RevisionWeakTopicGroup {
-  const RevisionWeakTopicGroup({
-    required this.paperName,
-    required this.topics,
-  });
+  const RevisionWeakTopicGroup({required this.paperName, required this.topics});
 
   final String paperName;
   final List<WeakTopicRevision> topics;

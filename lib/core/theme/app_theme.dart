@@ -89,6 +89,7 @@ abstract final class AppTheme {
         centerTitle: false,
         backgroundColor: AppColors.background,
         foregroundColor: AppColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
         titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 20,
           fontWeight: FontWeight.w700,
@@ -121,16 +122,16 @@ abstract final class AppTheme {
             horizontal: AppSpacing.xxl,
             vertical: AppSpacing.md,
           ),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
           textStyle: GoogleFonts.plusJakartaSans(
             fontSize: 16,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor: AppColors.primaryStrong,
           disabledForegroundColor: AppColors.textTertiary,
           minimumSize: const Size.fromHeight(52),
           padding: const EdgeInsets.symmetric(
@@ -138,7 +139,7 @@ abstract final class AppTheme {
             vertical: AppSpacing.md,
           ),
           side: const BorderSide(color: AppColors.divider, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
           textStyle: GoogleFonts.plusJakartaSans(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -156,10 +157,10 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.secondary,
+          backgroundColor: AppColors.primaryStrong,
           foregroundColor: AppColors.textOnPrimary,
           minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.pillAll),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(

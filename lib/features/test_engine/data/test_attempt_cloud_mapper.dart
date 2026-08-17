@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'models/test_attempt_history.dart';
+import 'models/test_attempt_history_detail.dart';
 import 'models/test_engine_models.dart';
 
 /// Maps engine models ↔ Firestore `test_attempts/{attemptId}` documents.
@@ -20,8 +21,9 @@ abstract final class TestAttemptCloudMapper {
     required DateTime startedAt,
     String? courseTitle,
   }) {
-    final resolvedTestTitle =
-        test.title.trim().isNotEmpty ? test.title.trim() : test.id;
+    final resolvedTestTitle = test.title.trim().isNotEmpty
+        ? test.title.trim()
+        : test.id;
     final resolvedCourseTitle = () {
       final trimmed = courseTitle?.trim();
       if (trimmed != null && trimmed.isNotEmpty) return trimmed;
@@ -39,7 +41,7 @@ abstract final class TestAttemptCloudMapper {
       'status': 'submitted',
       'startedAt': Timestamp.fromDate(startedAt),
       'submittedAt': FieldValue.serverTimestamp(),
-      'answers': answersFromAttempts(attempts),
+      'answers': answersFromAttempts(attempts, questions: test.questions),
       'score': result.score,
       'correct': result.correct,
       'wrong': result.wrong,
@@ -54,8 +56,10 @@ abstract final class TestAttemptCloudMapper {
   }
 
   static List<Map<String, dynamic>> answersFromAttempts(
-    List<QuestionAttempt> attempts,
-  ) {
+    List<QuestionAttempt> attempts, {
+    List<TestQuestion> questions = const [],
+  }) {
+    final byId = {for (final question in questions) question.id: question};
     return [
       for (final attempt in attempts)
         {
@@ -66,8 +70,26 @@ abstract final class TestAttemptCloudMapper {
           'timeSpentSeconds': attempt.timeSpent,
           'answered': attempt.answered,
           'bookmarked': attempt.bookmarked,
+          if (_canonicalAttribution(byId[attempt.questionId]) != null)
+            'canonicalAttribution': _canonicalAttribution(
+              byId[attempt.questionId],
+            ),
         },
     ];
+  }
+
+  static Map<String, String?>? _canonicalAttribution(TestQuestion? question) {
+    final syllabus = question?.syllabus;
+    if (syllabus == null) return null;
+    final values = <String, String?>{
+      'majorStudyAreaId': syllabus.majorStudyAreaId,
+      'contentTopicId': syllabus.contentTopicId,
+      'partId': syllabus.partId,
+      'topicId': syllabus.topicId,
+      'lessonId': syllabus.lessonId,
+    };
+    if (values.values.every((value) => value == null)) return null;
+    return values;
   }
 
   /// Firestore document → [TestAttemptHistoryItem].
@@ -113,6 +135,96 @@ abstract final class TestAttemptCloudMapper {
       submittedAt: readTimestamp(data['submittedAt']),
       passed: data['passed'] == true,
       uid: data['uid'] as String?,
+      authority: _optionalTrimmed(data['authority'] as String?),
+      snapshotSchemaVersion: asInt(data['snapshotSchemaVersion']),
+    );
+  }
+
+  /// Full detail including immutable [questionSnapshots] when present.
+  static TestAttemptHistoryDetail? detailFromFirestore(
+    String docId,
+    Map<String, dynamic> data,
+  ) {
+    final summary = historyFromFirestore(docId, data);
+    if (summary == null) return null;
+
+    final snapshots = <HistoricalQuestionSnapshot>[];
+    final rawSnapshots = data['questionSnapshots'];
+    if (rawSnapshots is List) {
+      for (final item in rawSnapshots) {
+        if (item is! Map) continue;
+        final mapped = _snapshotFromMap(Map<String, dynamic>.from(item));
+        if (mapped != null) snapshots.add(mapped);
+      }
+    }
+
+    final answers = <HistoricalAnswerRecord>[];
+    final rawAnswers = data['answers'];
+    if (rawAnswers is List) {
+      for (final item in rawAnswers) {
+        if (item is! Map) continue;
+        final mapped = _answerFromMap(Map<String, dynamic>.from(item));
+        if (mapped != null) answers.add(mapped);
+      }
+    }
+
+    return TestAttemptHistoryDetail(
+      summary: summary,
+      questionSnapshots: snapshots,
+      answers: answers,
+    );
+  }
+
+  static HistoricalQuestionSnapshot? _snapshotFromMap(
+    Map<String, dynamic> data,
+  ) {
+    final questionId = (data['questionId'] as String?)?.trim() ?? '';
+    final text = (data['text'] as String?)?.trim() ?? '';
+    final correctOption = (data['correctOption'] as String?)?.trim() ?? '';
+    if (questionId.isEmpty || text.isEmpty || correctOption.isEmpty) {
+      return null;
+    }
+
+    final options = <HistoricalQuestionOption>[];
+    final rawOptions = data['options'];
+    if (rawOptions is List) {
+      for (final option in rawOptions) {
+        if (option is Map) {
+          final label = (option['label'] as String?)?.trim() ?? '';
+          final optionText = (option['text'] as String?)?.trim() ?? '';
+          if (label.isEmpty || optionText.isEmpty) continue;
+          options.add(HistoricalQuestionOption(label: label, text: optionText));
+        } else if (option is String && option.trim().isNotEmpty) {
+          options.add(
+            HistoricalQuestionOption(
+              label: String.fromCharCode(65 + options.length),
+              text: option.trim(),
+            ),
+          );
+        }
+      }
+    }
+
+    return HistoricalQuestionSnapshot(
+      questionId: questionId,
+      text: text,
+      options: options,
+      correctOption: correctOption.toUpperCase(),
+      explanation: _optionalTrimmed(data['explanation'] as String?),
+      position: asInt(data['position']),
+    );
+  }
+
+  static HistoricalAnswerRecord? _answerFromMap(Map<String, dynamic> data) {
+    final questionId = (data['questionId'] as String?)?.trim() ?? '';
+    if (questionId.isEmpty) return null;
+    final selected = _optionalTrimmed(data['selectedOption'] as String?);
+    final answered = data['answered'] == true ||
+        (selected != null && selected.isNotEmpty);
+    return HistoricalAnswerRecord(
+      questionId: questionId,
+      selectedOption: selected,
+      answered: answered,
     );
   }
 

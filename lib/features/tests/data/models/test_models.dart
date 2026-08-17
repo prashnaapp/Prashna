@@ -1,3 +1,5 @@
+import '../../../syllabus/data/models/canonical_scope.dart';
+
 enum TestCategoryType {
   chapterTests,
   partTests,
@@ -5,6 +7,9 @@ enum TestCategoryType {
   mockTests,
   previousYear,
 }
+
+/// Catalog lifecycle. Student lists only surface [published].
+enum TestPublicationStatus { draft, published, archived }
 
 class TestCategoryModel {
   const TestCategoryModel({
@@ -29,14 +34,26 @@ class TestModel {
     required this.durationMinutes,
     required this.negativeMarking,
     required this.difficulty,
+    this.description = '',
     this.questionIds = const [],
-    this.isPublished = false,
+    this.status = TestPublicationStatus.draft,
+    this.paperId,
+    this.partId,
+    this.syllabusUnitId,
+    this.majorStudyAreaId,
+    this.contentTopicId,
+    this.canonicalTopicId,
+    this.lessonId,
+    this.scopeShape,
   });
 
   final String id;
+
+  /// Course id (`group-ii`, `group-iii`). Stored as Firestore `courseId`.
   final String examId;
   final TestCategoryType category;
   final String title;
+  final String description;
   final int questionCount;
   final int marks;
   final int durationMinutes;
@@ -47,8 +64,51 @@ class TestModel {
   /// Empty → existing dynamic Question Bank selection.
   final List<String> questionIds;
 
-  /// Catalog visibility. Student paths only surface published tests.
-  final bool isPublished;
+  /// Explicit catalog lifecycle. Prefer this over [isPublished].
+  final TestPublicationStatus status;
+
+  /// Optional syllabus location (Group-III chapter/unit tests).
+  ///
+  /// Group-II catalog tests typically leave these null. Do not reuse as
+  /// Group-II topic/lesson ids.
+  final String? paperId;
+  final String? partId;
+  final String? syllabusUnitId;
+
+  /// Optional canonical attributes for unambiguous [canonicalScope] resolution.
+  final String? majorStudyAreaId;
+  final String? contentTopicId;
+  final String? canonicalTopicId;
+  final String? lessonId;
+  final CanonicalScopeShape? scopeShape;
+
+  /// Catalog visibility for Firestore student queries (`isPublished == true`).
+  bool get isPublished => status == TestPublicationStatus.published;
+
+  /// Whether students may start a new attempt from the catalog.
+  bool get isAvailableForNewAttempts =>
+      status == TestPublicationStatus.published;
+
+  /// Derived when location fields are unambiguous; otherwise null.
+  ///
+  /// Legacy Group-II tests without location remain null.
+  CanonicalScope? get canonicalScope => CanonicalScope.tryResolve(
+    courseId: examId,
+    paperId: paperId,
+    partId: partId,
+    syllabusUnitId: syllabusUnitId,
+    majorStudyAreaId:
+        majorStudyAreaId ??
+        (paperId == 'group-ii-paper-i' ? syllabusUnitId : null),
+    contentTopicId: contentTopicId,
+    topicId:
+        canonicalTopicId ??
+        (examId == 'group-ii' && paperId != 'group-ii-paper-i'
+            ? syllabusUnitId
+            : null),
+    lessonId: lessonId,
+    shapeHint: scopeShape,
+  );
 }
 
 class InstructionModel {
@@ -102,10 +162,7 @@ class PaperWisePaper {
 
 /// Mock Test list entry (Phase 3).
 class MockTestEntry {
-  const MockTestEntry({
-    required this.id,
-    required this.title,
-  });
+  const MockTestEntry({required this.id, required this.title});
 
   final String id;
   final String title;
@@ -113,10 +170,7 @@ class MockTestEntry {
 
 /// Exam choice under Previous Papers (Phase 4).
 class PreviousPaperExam {
-  const PreviousPaperExam({
-    required this.examId,
-    required this.title,
-  });
+  const PreviousPaperExam({required this.examId, required this.title});
 
   final String examId;
   final String title;
@@ -124,9 +178,7 @@ class PreviousPaperExam {
 
 /// Year entry under a Previous Papers exam (Phase 4).
 class PreviousPaperYear {
-  const PreviousPaperYear({
-    required this.year,
-  });
+  const PreviousPaperYear({required this.year});
 
   final int year;
 

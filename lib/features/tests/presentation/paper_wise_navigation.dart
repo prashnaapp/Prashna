@@ -1,40 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../data/models/test_models.dart';
-import 'mock_test_navigation.dart';
-import 'previous_papers_navigation.dart';
-import 'screens/paper_wise_paper_list_screen.dart';
+import '../services/test_service.dart';
 import 'screens/paper_wise_part_list_screen.dart';
 import 'screens/test_list_screen.dart';
-import 'test_quiz_navigation.dart';
 
 /// Category entry routing for Test Series group dashboards.
+///
+/// Every executable list is Firestore-backed [TestListScreen]. Dummy
+/// paper/mock/previous helpers must not start server attempts.
 void openTestCategory({
   required BuildContext context,
   required String examId,
   required TestCategoryModel category,
+  TestService? testService,
 }) {
-  if (category.type == TestCategoryType.partTests) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            PaperWisePaperListScreen(examId: examId, title: category.title),
-      ),
-    );
-    return;
-  }
-
-  if (category.type == TestCategoryType.mockTests) {
-    openMockTests(context: context, examId: examId, title: category.title);
-    return;
-  }
-
-  if (category.type == TestCategoryType.previousYear) {
-    openPreviousPapers(context: context, examId: examId, title: category.title);
-    return;
-  }
-
   Navigator.push(
     context,
     MaterialPageRoute(
@@ -42,6 +22,7 @@ void openTestCategory({
         examId: examId,
         category: category.type,
         title: category.title,
+        testService: testService,
       ),
     ),
   );
@@ -63,7 +44,17 @@ void openPaperWiseParts({
 void openPaperWisePartTest({
   required BuildContext context,
   required TestModel part,
+  TestService? testService,
 }) {
-  // Existing Test Engine entry (includes engine instructions step).
-  openTestPracticeSession(context, part);
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => TestListScreen(
+        examId: part.examId,
+        category: TestCategoryType.partTests,
+        title: part.title,
+        testService: testService,
+      ),
+    ),
+  );
 }

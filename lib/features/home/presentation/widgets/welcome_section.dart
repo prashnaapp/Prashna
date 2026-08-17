@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/design_system/design_system.dart';
 import '../../services/home_greeting_helper.dart';
 import '../../services/home_service.dart';
 
@@ -17,13 +16,23 @@ class WelcomeSection extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          '$greeting, $name',
-          style: AppTextStyles.headline(context),
+          '$greeting, $name 👋',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            height: 1.2,
+          ),
         ),
-        const SizedBox(height: AppSpacing.xs),
+        const SizedBox(height: 6),
         Text(
-          'Ready to continue your preparation?',
-          style: AppTextStyles.bodyMedium(context),
+          "Let's achieve your dream job!",
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.86),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            height: 1.3,
+          ),
         ),
       ],
     );

@@ -7,26 +7,26 @@ import '../../core/theme/app_spacing.dart';
 abstract final class AppNavMetrics {
   static const double barHeight = 72;
   static const double horizontalMargin = AppSpacing.lg;
-  static const double bottomMargin = AppSpacing.md;
+  static const double contentGap = 28;
   static const double itemMinSize = AppSpacing.massive;
   static const double pillHorizontalPadding = AppSpacing.md;
   static const double pillVerticalPadding = AppSpacing.sm;
   static const double iconSize = AppSpacing.xxl;
 
-  static const BorderRadius barRadius = BorderRadius.all(
-    Radius.circular(AppRadius.xl),
-  );
+  static const BorderRadius barRadius = BorderRadius.all(Radius.circular(28));
 
   static const BorderRadius topRadius = BorderRadius.vertical(
     top: Radius.circular(AppRadius.xl),
   );
 
   /// Space reserved under tab content so lists clear the floating bar.
-  ///
-  /// Matches [CustomBottomNavigation] height (bar + margin + safe area)
-  /// plus a small breathing gap. Do not inflate further.
   static double contentBottomInset(BuildContext context) {
+    return bottomNavigationHeight(context) + contentGap;
+  }
+
+  /// Height occupied by the fixed bar and its safe-area offset.
+  static double bottomNavigationHeight(BuildContext context) {
     final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-    return barHeight + bottomMargin + safeBottom + AppSpacing.md;
+    return barHeight + safeBottom;
   }
 }

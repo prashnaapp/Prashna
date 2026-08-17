@@ -3,10 +3,16 @@ enum CourseAccessReason {
   /// Course catalog marks the course as free.
   freeCourse,
 
-  /// User has an active, non-expired enrollment for the course.
+  /// User has an active, non-expired entitlement for the course.
   activeEnrollment,
 
-  /// No free flag and no valid enrollment.
+  /// Entitlement exists but [expiresAt] is in the past.
+  expiredEntitlement,
+
+  /// Entitlement was inactivated or revoked.
+  revokedEntitlement,
+
+  /// No free flag and no valid entitlement for this courseId.
   denied,
 
   /// Course context has not been loaded yet.

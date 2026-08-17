@@ -9,6 +9,7 @@ import '../../revision/services/revision_service.dart';
 import '../data/mappers/question_bank_mapper.dart';
 import '../data/models/test_engine_models.dart';
 import '../data/repositories/test_repository.dart';
+import '../data/test_attempt_api.dart';
 import '../data/test_engine_defaults.dart';
 import '../repository/test_attempt_cloud_repository.dart';
 
@@ -16,22 +17,33 @@ import '../repository/test_attempt_cloud_repository.dart';
 ///
 /// One engine for practice, topic/section/paper tests, mocks, and PYPs.
 /// Question content is always requested from the Question Bank.
+///
+/// Catalog tests use server-authoritative start/submit callables.
+/// Local practice sessions may still score on-device for UX, but must not
+/// write authoritative `test_attempts` score documents from the client.
 class TestService {
   TestService({
     TestRepository? repository,
     QuestionService? questionService,
     TestAttemptCloudRepository? attemptCloudRepository,
+    TestAttemptApi? attemptApi,
   }) : _repository = repository ?? TestRepository.instance,
        _questionService = questionService ?? QuestionService.instance,
-       _attemptCloud =
-           attemptCloudRepository ?? TestAttemptCloudRepository();
+       _attemptCloud = attemptCloudRepository ?? TestAttemptCloudRepository(),
+       _attemptApiOverride = attemptApi;
 
   final TestRepository _repository;
   final QuestionService _questionService;
   final TestAttemptCloudRepository _attemptCloud;
+  TestAttemptApi? _attemptApiOverride;
+
+  TestAttemptApi get _attemptApi => _attemptApiOverride ??= TestAttemptApi();
 
   /// Optional hook after submit (e.g. progress credit). Cleared after run.
   void Function(TestResult result)? onCompleted;
+
+  /// Server attempt id from [startServerAttempt]. Required for catalog submit.
+  String? serverAttemptId;
 
   /// Dedupes cloud saves if [submitTest] is invoked more than once on this
   /// instance (controller already guards UI double-submit).
@@ -54,6 +66,11 @@ class TestService {
     String? paperId,
     String? sectionId,
     String? topicId,
+    String? partId,
+    String? lessonId,
+    String? majorStudyAreaId,
+    String? contentTopicId,
+    String? syllabusUnitId,
     List<String>? instructions,
     bool shuffleOptions = false,
   }) async {
@@ -63,6 +80,11 @@ class TestService {
       paperId: paperId,
       sectionId: sectionId,
       topicId: topicId,
+      partId: partId,
+      lessonId: lessonId,
+      majorStudyAreaId: majorStudyAreaId,
+      contentTopicId: contentTopicId,
+      syllabusUnitId: syllabusUnitId,
       questionType: QuestionBankMapper.questionTypeForMode(mode),
       shuffleOptionOrder: shuffleOptions,
     );
@@ -76,6 +98,10 @@ class TestService {
       paperId: paperId,
       sectionId: sectionId,
       topicId: topicId,
+      partId: partId,
+      lessonId: lessonId,
+      majorStudyAreaId: majorStudyAreaId,
+      contentTopicId: contentTopicId,
       duration: duration,
       totalQuestions: questions.length,
       totalMarks: totalMarks,
@@ -113,16 +139,37 @@ class TestService {
       0,
       (sum, q) => sum + q.estimatedTime.inSeconds,
     );
-    final resolvedDuration = duration ??
-        Duration(seconds: seconds.clamp(60, 45 * 60));
+    final resolvedDuration =
+        duration ?? Duration(seconds: seconds.clamp(60, 45 * 60));
+    String? shared(Iterable<String?> values) {
+      final list = values.toList(growable: false);
+      if (list.isEmpty) return null;
+      final first = list.first?.trim();
+      if (first == null || first.isEmpty) return null;
+      for (final value in list.skip(1)) {
+        if ((value ?? '').trim() != first) return null;
+      }
+      return first;
+    }
+
+    final sharedSyllabus = (
+      partId: shared(questions.map((q) => q.partId)),
+      lessonId: shared(questions.map((q) => q.lessonId)),
+      majorStudyAreaId: shared(questions.map((q) => q.majorStudyAreaId)),
+      contentTopicId: shared(questions.map((q) => q.contentTopicId)),
+    );
 
     final test = Test(
       id: id,
       title: title,
       courseId: courseId,
-      paperId: questions.isEmpty ? null : questions.first.paperId,
-      sectionId: questions.isEmpty ? null : questions.first.sectionId,
-      topicId: questions.isEmpty ? null : questions.first.topicId,
+      paperId: shared(questions.map((q) => q.paperId)),
+      sectionId: shared(questions.map((q) => q.sectionId)),
+      topicId: shared(questions.map((q) => q.topicId)),
+      partId: sharedSyllabus.partId,
+      lessonId: sharedSyllabus.lessonId,
+      majorStudyAreaId: sharedSyllabus.majorStudyAreaId,
+      contentTopicId: sharedSyllabus.contentTopicId,
       duration: resolvedDuration,
       totalQuestions: mapped.length,
       totalMarks: totalMarks.round(),
@@ -134,6 +181,158 @@ class TestService {
 
     await _repository.loadOrCache(test);
     return test;
+  }
+
+  Future<Test> createTestFromStudentSafeQuestions({
+    required String id,
+    required String title,
+    required String courseId,
+    required List<Map<String, dynamic>> studentQuestions,
+    TestMode mode = TestMode.practice,
+    Duration? duration,
+    int? totalMarks,
+    double negativeMarks = 0.25,
+    List<String>? instructions,
+  }) async {
+    if (studentQuestions.isEmpty) {
+      throw StateError(
+        'Test configuration is invalid: studentQuestions must not be empty.',
+      );
+    }
+
+    final mapped = <TestQuestion>[
+      for (final raw in studentQuestions)
+        _testQuestionFromStudentSafe(raw, courseId),
+    ];
+
+    String? shared(Iterable<String?> values) {
+      final list = values.toList(growable: false);
+      if (list.isEmpty) return null;
+      final first = list.first?.trim();
+      if (first == null || first.isEmpty) return null;
+      for (final value in list.skip(1)) {
+        if ((value ?? '').trim() != first) return null;
+      }
+      return first;
+    }
+
+    final test = Test(
+      id: id,
+      title: title,
+      courseId: courseId,
+      paperId: shared(mapped.map((q) => q.paperId)),
+      partId: shared(mapped.map((q) => q.partId)),
+      duration: duration ?? Duration(minutes: mapped.length.clamp(1, 180)),
+      totalQuestions: mapped.length,
+      totalMarks: totalMarks ?? mapped.length,
+      negativeMarks: negativeMarks,
+      instructions: instructions ?? TestEngineDefaults.instructions,
+      mode: mode,
+      questions: mapped,
+    );
+    await _repository.loadOrCache(test);
+    return test;
+  }
+
+  TestQuestion _testQuestionFromStudentSafe(
+    Map<String, dynamic> raw,
+    String courseId,
+  ) {
+    final questionId = (raw['questionId'] as String?)?.trim() ?? '';
+    if (questionId.isEmpty) {
+      throw StateError('Student-safe question missing questionId.');
+    }
+    final text = (raw['text'] as String?)?.trim() ?? '';
+    if (text.isEmpty) {
+      throw StateError('Student-safe question missing text.');
+    }
+    final optionsRaw = raw['options'];
+    if (optionsRaw is! List || optionsRaw.isEmpty) {
+      throw StateError('Student-safe question missing options.');
+    }
+    final options = <TestOption>[
+      for (final option in optionsRaw)
+        if (option is Map)
+          TestOption(
+            label: (option['label']?.toString() ?? '').trim().toUpperCase(),
+            text: (option['text']?.toString() ?? '').trim(),
+          ),
+    ].where((option) => option.label.isNotEmpty && option.text.isNotEmpty).toList();
+    if (options.length < 2) {
+      throw StateError('Student-safe question has invalid options.');
+    }
+
+    final paperId = (raw['paperId'] as String?)?.trim();
+    final partId = (raw['partId'] as String?)?.trim();
+    final syllabusUnitId = (raw['syllabusUnitId'] as String?)?.trim();
+    final resolvedCourseId =
+        (raw['courseId'] as String?)?.trim().isNotEmpty == true
+        ? (raw['courseId'] as String).trim()
+        : courseId;
+
+    return TestQuestion(
+      id: questionId,
+      text: text,
+      options: options,
+      // Answer key is server-only until submit; placeholder is unused for scoring.
+      correctOption: '',
+      explanation: '',
+      paperId: paperId,
+      syllabus: QuestionSyllabusAttribution(
+        courseId: resolvedCourseId,
+        paperId: paperId ?? '',
+        partId: partId,
+        syllabusUnitId: syllabusUnitId,
+      ),
+    );
+  }
+
+  /// Applies post-submit revealed snapshots so in-session analysis uses frozen keys.
+  void applyRevealedQuestionSnapshots(
+    Test test,
+    List<Map<String, dynamic>> snapshots,
+  ) {
+    if (snapshots.isEmpty) return;
+    final byId = {
+      for (final raw in snapshots)
+        if ((raw['questionId'] as String?)?.trim().isNotEmpty == true)
+          (raw['questionId'] as String).trim(): raw,
+    };
+    for (var i = 0; i < test.questions.length; i++) {
+      final current = test.questions[i];
+      final raw = byId[current.id];
+      if (raw == null) continue;
+      final correct = (raw['correctOption'] as String?)?.trim().toUpperCase();
+      final explanation = (raw['explanation'] as String?)?.trim() ?? '';
+      if (correct == null || correct.isEmpty) continue;
+      final optionsRaw = raw['options'];
+      var options = current.options;
+      if (optionsRaw is List && optionsRaw.isNotEmpty) {
+        final parsed = <TestOption>[
+          for (final option in optionsRaw)
+            if (option is Map)
+              TestOption(
+                label: (option['label']?.toString() ?? '').trim().toUpperCase(),
+                text: (option['text']?.toString() ?? '').trim(),
+              ),
+        ].where((o) => o.label.isNotEmpty && o.text.isNotEmpty).toList();
+        if (parsed.length >= 2) options = parsed;
+      }
+      test.questions[i] = TestQuestion(
+        id: current.id,
+        text: (raw['text'] as String?)?.trim().isNotEmpty == true
+            ? (raw['text'] as String).trim()
+            : current.text,
+        options: options,
+        correctOption: correct,
+        explanation: explanation,
+        paperId: current.paperId,
+        sectionId: current.sectionId,
+        topicId: current.topicId,
+        content: current.content,
+        syllabus: current.syllabus,
+      );
+    }
   }
 
   Future<Test> createTestFromQuestionIds({
@@ -194,15 +393,31 @@ class TestService {
     }
 
     // Catalog fixed path: honor configured totalMarks / duration.
+    // Test-level hierarchy is shared-only; mixed tests keep nulls.
     if (totalMarks != null && duration != null) {
       final mapped = QuestionBankMapper.toTestQuestions(questions);
+      String? shared(Iterable<String?> values) {
+        final list = values.toList(growable: false);
+        if (list.isEmpty) return null;
+        final first = list.first?.trim();
+        if (first == null || first.isEmpty) return null;
+        for (final value in list.skip(1)) {
+          if ((value ?? '').trim() != first) return null;
+        }
+        return first;
+      }
+
       final test = Test(
         id: id,
         title: title,
         courseId: courseId,
-        paperId: questions.isEmpty ? null : questions.first.paperId,
-        sectionId: questions.isEmpty ? null : questions.first.sectionId,
-        topicId: questions.isEmpty ? null : questions.first.topicId,
+        paperId: shared(questions.map((q) => q.paperId)),
+        sectionId: shared(questions.map((q) => q.sectionId)),
+        topicId: shared(questions.map((q) => q.topicId)),
+        partId: shared(questions.map((q) => q.partId)),
+        lessonId: shared(questions.map((q) => q.lessonId)),
+        majorStudyAreaId: shared(questions.map((q) => q.majorStudyAreaId)),
+        contentTopicId: shared(questions.map((q) => q.contentTopicId)),
         duration: duration,
         totalQuestions: mapped.length,
         totalMarks: totalMarks,
@@ -294,9 +509,7 @@ class TestService {
     required List<QuestionAttempt> attempts,
     required Duration timeTaken,
   }) {
-    final byId = {
-      for (final question in test.questions) question.id: question,
-    };
+    final byId = {for (final question in test.questions) question.id: question};
 
     var correct = 0;
     var wrong = 0;
@@ -316,13 +529,15 @@ class TestService {
     }
 
     final skipped = test.totalQuestions - attempted;
-    final marksPerQuestion =
-        test.totalQuestions == 0 ? 0.0 : test.totalMarks / test.totalQuestions;
+    final marksPerQuestion = test.totalQuestions == 0
+        ? 0.0
+        : test.totalMarks / test.totalQuestions;
     final score = (correct * marksPerQuestion) - (wrong * test.negativeMarks);
     final clampedScore = score < 0 ? 0.0 : score;
     final accuracy = attempted == 0 ? 0.0 : (correct / attempted) * 100;
-    final percentage =
-        test.totalMarks == 0 ? 0.0 : (clampedScore / test.totalMarks) * 100;
+    final percentage = test.totalMarks == 0
+        ? 0.0
+        : (clampedScore / test.totalMarks) * 100;
     final passed = percentage >= 40;
 
     return TestResult(
@@ -351,11 +566,12 @@ class TestService {
       for (final question in test.questions)
         QuestionReviewItem(
           question: question,
-          attempt: attemptByQ[question.id] ??
+          attempt:
+              attemptByQ[question.id] ??
               QuestionAttempt(questionId: question.id),
-          isCorrect: attemptByQ[question.id]?.answered == true &&
-              attemptByQ[question.id]?.selectedOption ==
-                  question.correctOption,
+          isCorrect:
+              attemptByQ[question.id]?.answered == true &&
+              attemptByQ[question.id]?.selectedOption == question.correctOption,
         ),
     ];
 
@@ -378,17 +594,18 @@ class TestService {
         }
       }
 
-      final items = totals.entries
-          .map(
-            (e) => AreaPerformance(
-              id: e.key,
-              label: labelOf(e.key),
-              correct: corrects[e.key] ?? 0,
-              total: e.value,
-            ),
-          )
-          .toList()
-        ..sort((a, b) => a.label.compareTo(b.label));
+      final items =
+          totals.entries
+              .map(
+                (e) => AreaPerformance(
+                  id: e.key,
+                  label: labelOf(e.key),
+                  correct: corrects[e.key] ?? 0,
+                  total: e.value,
+                ),
+              )
+              .toList()
+            ..sort((a, b) => a.label.compareTo(b.label));
       return items;
     }
 
@@ -408,8 +625,10 @@ class TestService {
     final ranked = [...byTopic]
       ..sort((a, b) => a.accuracy.compareTo(b.accuracy));
     final weakAreas = ranked.take(3).where((a) => a.total > 0).toList();
-    final strongAreas =
-        ranked.reversed.take(3).where((a) => a.total > 0).toList();
+    final strongAreas = ranked.reversed
+        .take(3)
+        .where((a) => a.total > 0)
+        .toList();
 
     return TestAnalysis(
       byPaper: byPaper,
@@ -426,38 +645,134 @@ class TestService {
     required List<QuestionAttempt> attempts,
     required Duration timeTaken,
   }) async {
-    final result = calculateScore(
-      test: test,
-      attempts: attempts,
-      timeTaken: timeTaken,
-    );
+    final TestResult result;
+    final attemptId = serverAttemptId?.trim();
+
+    if (attemptId != null && attemptId.isNotEmpty) {
+      result = await _submitServerAttempt(
+        attemptId: attemptId,
+        attempts: attempts,
+        timeTaken: timeTaken,
+      );
+      final revealed = _pendingRevealedSnapshots;
+      if (revealed != null && revealed.isNotEmpty) {
+        applyRevealedQuestionSnapshots(test, revealed);
+        _pendingRevealedSnapshots = null;
+      }
+    } else {
+      // Local practice / non-catalog path: score on device for UX only.
+      // Do NOT write authoritative test_attempts from the client.
+      result = calculateScore(
+        test: test,
+        attempts: attempts,
+        timeTaken: timeTaken,
+      );
+    }
+
     await _repository.submitAttempt(
       testId: test.id,
       attempts: attempts,
       result: result,
     );
-    await ProgressService.instance.recordTestAttempt(
-      test: test,
-      result: result,
-      attempts: attempts,
-    );
-    // Mirror revision lists (wrong / weak / frequent) without blocking submit.
-    RevisionService.instance.scheduleCloudSync(courseId: test.courseId);
 
-    // Best-effort Firestore persistence — never blocks or alters the result.
-    await _persistAttemptToCloud(
-      test: test,
-      result: result,
-      attempts: attempts,
-      timeTaken: timeTaken,
-    );
+    final isServerCatalog = attemptId != null && attemptId.isNotEmpty;
+    if (isServerCatalog) {
+      // Phase 5.21: authoritative progress/revision applied by backend from
+      // the verified attempt. Do not mirror forgeable analytics from the client.
+    } else {
+      // Practice / non-catalog: local session UX only. Cloud writes are denied
+      // by rules; sync failures are swallowed by ProgressService/RevisionService.
+      await ProgressService.instance.recordTestAttempt(
+        test: test,
+        result: result,
+        attempts: attempts,
+      );
+      RevisionService.instance.scheduleCloudSync(courseId: test.courseId);
+    }
 
     onCompleted?.call(result);
     onCompleted = null;
     return result;
   }
 
-  /// Best-effort cloud persist used by [submitTest]. Exposed for unit tests.
+  /// Stable unique key for one Start Test action (retries reuse the same key).
+  static String newStartRequestId() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final entropy = Object().hashCode.abs();
+    return 'start_${now}_$entropy';
+  }
+
+  /// Starts a server-authored attempt for a published catalog test.
+  Future<Map<String, dynamic>> startServerAttempt({
+    required String testId,
+    required String startRequestId,
+  }) {
+    return _attemptApi.startTestAttempt(
+      testId: testId,
+      startRequestId: startRequestId,
+    );
+  }
+
+  Future<TestResult> _submitServerAttempt({
+    required String attemptId,
+    required List<QuestionAttempt> attempts,
+    required Duration timeTaken,
+  }) async {
+    final selectedAnswers = <Map<String, String>>[
+      for (final attempt in attempts)
+        if (attempt.answered &&
+            attempt.selectedOption != null &&
+            attempt.selectedOption!.trim().isNotEmpty)
+          {
+            'questionId': attempt.questionId,
+            'selectedOption': attempt.selectedOption!.trim(),
+          },
+    ];
+
+    final dedupeKey = '$attemptId:${selectedAnswers.length}';
+    if (_cloudSavedAttemptKey == dedupeKey && _lastServerResult != null) {
+      return _lastServerResult!;
+    }
+
+    final data = await _attemptApi.submitTestAttempt(
+      attemptId: attemptId,
+      selectedAnswers: selectedAnswers,
+    );
+
+    final snapshotsRaw = data['questionSnapshots'];
+    if (snapshotsRaw is List) {
+      _pendingRevealedSnapshots = [
+        for (final item in snapshotsRaw)
+          if (item is Map) Map<String, dynamic>.from(item),
+      ];
+    }
+
+    final result = TestResult(
+      totalQuestions:
+          (data['totalQuestions'] as num?)?.toInt() ?? attempts.length,
+      attempted: (data['attempted'] as num?)?.toInt() ?? 0,
+      correct: (data['correct'] as num?)?.toInt() ?? 0,
+      wrong: (data['wrong'] as num?)?.toInt() ?? 0,
+      skipped: (data['skipped'] as num?)?.toInt() ?? 0,
+      score: (data['score'] as num?)?.toDouble() ?? 0,
+      accuracy: (data['accuracy'] as num?)?.toDouble() ?? 0,
+      percentage: (data['percentage'] as num?)?.toDouble() ?? 0,
+      timeTaken: timeTaken,
+      passed: data['passed'] == true,
+      authority: (data['authority'] as String?) ?? 'server_verified',
+      attemptId: attemptId,
+    );
+
+    _cloudSavedAttemptKey = dedupeKey;
+    _lastServerResult = result;
+    return result;
+  }
+
+  TestResult? _lastServerResult;
+  List<Map<String, dynamic>>? _pendingRevealedSnapshots;
+
+  /// Legacy helper retained for unit tests of mapper payloads only.
+  /// Production catalog submits must not call this for authoritative scores.
   @visibleForTesting
   Future<void> persistCompletedAttemptToCloud({
     required Test test,
@@ -479,6 +794,8 @@ class TestService {
     required List<QuestionAttempt> attempts,
     required Duration timeTaken,
   }) async {
+    // Intentionally retained for legacy unit tests. Do not use for new
+    // authoritative catalog submissions — Firestore rules deny client writes.
     final dedupeKey = '${test.id}:${result.score}:${timeTaken.inSeconds}';
     if (_cloudSavedAttemptKey == dedupeKey) {
       debugPrint(

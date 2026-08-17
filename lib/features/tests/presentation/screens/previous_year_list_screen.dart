@@ -9,10 +9,7 @@ import '../widgets/tests_scroll_body.dart';
 
 /// Previous Papers → year list for a selected exam.
 class PreviousYearListScreen extends StatelessWidget {
-  const PreviousYearListScreen({
-    super.key,
-    required this.exam,
-  });
+  const PreviousYearListScreen({super.key, required this.exam});
 
   final PreviousPaperExam exam;
 

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../../authentication/services/auth_service.dart';
 import '../../syllabus/services/syllabus_service.dart';
 import '../data/models/test_attempt_history.dart';
+import '../data/models/test_attempt_history_detail.dart';
 import '../data/models/test_engine_models.dart';
 import '../data/test_attempt_cloud_mapper.dart';
 
@@ -17,7 +18,8 @@ class TestAttemptCloudRepository {
     String? Function()? currentUid,
   }) : _currentUid = currentUid ?? _defaultUid,
        _saveForTest = null,
-       _loadForTest = null;
+       _loadForTest = null,
+       _loadDetailForTest = null;
 
   /// Unit-test constructor — does not touch Firestore.
   @visibleForTesting
@@ -27,11 +29,13 @@ class TestAttemptCloudRepository {
       required Map<String, dynamic> data,
     })? saver,
     Future<List<TestAttemptHistoryItem>> Function({String? courseId})? loader,
+    Future<TestAttemptHistoryDetail?> Function(String attemptId)? detailLoader,
     String? Function()? currentUid,
   }) : _firestore = null,
        _currentUid = currentUid ?? _defaultUid,
        _saveForTest = saver,
-       _loadForTest = loader;
+       _loadForTest = loader,
+       _loadDetailForTest = detailLoader;
 
   /// Backward-compatible alias used by Milestone 30.2.4 tests.
   @visibleForTesting
@@ -58,6 +62,8 @@ class TestAttemptCloudRepository {
   })? _saveForTest;
   final Future<List<TestAttemptHistoryItem>> Function({String? courseId})?
       _loadForTest;
+  final Future<TestAttemptHistoryDetail?> Function(String attemptId)?
+      _loadDetailForTest;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
@@ -182,6 +188,52 @@ class TestAttemptCloudRepository {
     } catch (error, stack) {
       debugPrint(
         'TestAttemptCloudRepository.getMyCompletedAttempts: $error\n$stack',
+      );
+      rethrow;
+    }
+  }
+
+  /// Loads one owned attempt including immutable question snapshots.
+  ///
+  /// Never reloads current Question documents. Returns null when missing or
+  /// not owned by the signed-in user.
+  Future<TestAttemptHistoryDetail?> getMyAttemptDetail(String attemptId) async {
+    final cleanId = attemptId.trim();
+    if (cleanId.isEmpty) return null;
+
+    final testLoader = _loadDetailForTest;
+    if (testLoader != null) {
+      return testLoader(cleanId);
+    }
+
+    final uid = _currentUid();
+    if (uid == null || uid.isEmpty) {
+      debugPrint(
+        'TestAttemptCloudRepository.getMyAttemptDetail: no authenticated user',
+      );
+      return null;
+    }
+
+    try {
+      final doc = await _attempts.doc(cleanId).get();
+      if (!doc.exists) return null;
+      final data = doc.data();
+      if (data == null) return null;
+      final detail = TestAttemptCloudMapper.detailFromFirestore(doc.id, data);
+      if (detail == null) return null;
+      if (detail.summary.uid != null && detail.summary.uid != uid) {
+        return null;
+      }
+      return detail;
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in TestAttemptCloudRepository.getMyAttemptDetail: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint(
+        'TestAttemptCloudRepository.getMyAttemptDetail: $error\n$stack',
       );
       rethrow;
     }

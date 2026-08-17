@@ -26,15 +26,18 @@ class TestService {
 
   /// Exam catalog from [SyllabusService] — same MVP list as Progress / Home.
   List<TestExamSummary> getExamSummaries() {
-    return SyllabusService.instance.getAllCourses().map((course) {
-      return TestExamSummary(
-        examId: course.id,
-        title: course.name,
-        maxMarks: course.totalMarks.toDouble(),
-        paperCount: course.totalPapers,
-        isEnabled: course.isAvailable,
-      );
-    }).toList(growable: false);
+    return SyllabusService.instance
+        .getAllCourses()
+        .map((course) {
+          return TestExamSummary(
+            examId: course.id,
+            title: course.name,
+            maxMarks: course.totalMarks.toDouble(),
+            paperCount: course.totalPapers,
+            isEnabled: course.isAvailable,
+          );
+        })
+        .toList(growable: false);
   }
 
   List<TestCategoryModel> getCategories(String examId) =>
@@ -58,11 +61,7 @@ class TestService {
     required String examId,
     required MockTestEntry mock,
     required PaperWisePaper paper,
-  }) => TestsDummyData.mockPaperTest(
-    examId: examId,
-    mock: mock,
-    paper: paper,
-  );
+  }) => TestsDummyData.mockPaperTest(examId: examId, mock: mock, paper: paper);
 
   List<PreviousPaperExam> getPreviousPaperExams() =>
       TestsDummyData.previousPaperExams();
@@ -95,6 +94,28 @@ class TestService {
     return [
       for (final test in published)
         if (test.category == category) test,
+    ];
+  }
+
+  /// Published tests linked to a Group-III syllabus unit.
+  ///
+  /// Uses the existing course-scoped published query, then filters client-side
+  /// by [syllabusUnitId] (and optional paper/part for defense in depth).
+  Future<List<TestModel>> getTestsForSyllabusUnit({
+    required String courseId,
+    required String syllabusUnitId,
+    String? paperId,
+    String? partId,
+  }) async {
+    final unit = syllabusUnitId.trim();
+    if (unit.isEmpty) return const [];
+    final published = await _cloudRepository.loadPublishedTests(courseId);
+    return [
+      for (final test in published)
+        if (test.syllabusUnitId == unit &&
+            (paperId == null || paperId.isEmpty || test.paperId == paperId) &&
+            (partId == null || partId.isEmpty || test.partId == partId))
+          test,
     ];
   }
 

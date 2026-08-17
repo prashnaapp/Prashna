@@ -28,7 +28,7 @@ void main() {
   TestModel buildTest({
     String id = 'test-group-ii-001',
     String title = 'Group-II Practice Test 1',
-    bool isPublished = false,
+    TestPublicationStatus status = TestPublicationStatus.draft,
   }) {
     return TestModel(
       id: id,
@@ -40,29 +40,34 @@ void main() {
       durationMinutes: 30,
       negativeMarking: '0',
       difficulty: 'Medium',
-      isPublished: isPublished,
+      status: status,
     );
   }
 
   Widget formApp(TestModel initial, Future<void> Function(TestModel) onSubmit) {
     return MaterialApp(
       home: Scaffold(
-        body: SizedBox(
-          height: 900,
-          child: AdminTestForm(
-            courses: const [course],
-            initialTest: initial,
-            onSubmit: onSubmit,
-          ),
+        body: AdminTestForm(
+          courses: const [course],
+          initialTest: initial.id.isEmpty && initial.title.isEmpty
+              ? null
+              : initial,
+          initialCourseId: 'group-ii',
+          onSubmit: onSubmit,
         ),
       ),
     );
   }
 
   Future<void> tapSubmit(WidgetTester tester) async {
-    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    final submit = find.byKey(const ValueKey('submit-test'));
+    await tester.dragUntilVisible(
+      submit,
+      find.byType(SingleChildScrollView),
+      const Offset(0, -300),
+    );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('submit-test')));
+    await tester.tap(submit);
     await tester.pumpAndSettle();
   }
 
@@ -75,6 +80,7 @@ void main() {
     await tapSubmit(tester);
 
     expect(submitted, isFalse);
+    expect(find.text('Title is required.'), findsOneWidget);
   });
 
   testWidgets('2: valid form submits canonical TestModel', (tester) async {
@@ -86,8 +92,10 @@ void main() {
       ),
     );
 
-    expect(find.byType(SwitchListTile), findsNothing);
+    // Create flow has no Status field; submit label is "Create draft".
     await tapSubmit(tester);
+    expect(find.text('Create draft'), findsOneWidget);
+    expect(find.text('Save changes'), findsNothing);
 
     expect(submitted, isNotNull);
     expect(submitted!.examId, 'group-ii');
@@ -104,9 +112,14 @@ void main() {
       formApp(initial, (model) async => submitted = model),
     );
 
-    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    final status = find.text('Status');
+    await tester.dragUntilVisible(
+      status,
+      find.byType(SingleChildScrollView),
+      const Offset(0, -300),
+    );
     await tester.pumpAndSettle();
-    expect(find.byType(SwitchListTile), findsOneWidget);
+    expect(status, findsOneWidget);
     await tapSubmit(tester);
 
     expect(submitted, isNotNull);
@@ -195,13 +208,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Published'), findsOneWidget);
-    expect(service.published['test-group-ii-001'], isTrue);
+    expect(
+      service.statuses['test-group-ii-001'],
+      TestPublicationStatus.published,
+    );
   });
 
   testWidgets('7: unpublish action updates status', (tester) async {
     final service = _FakeAdminTestService(
       courses: const [course],
-      tests: [buildTest(isPublished: true)],
+      tests: [buildTest(status: TestPublicationStatus.published)],
     );
 
     await tester.pumpWidget(
@@ -215,7 +231,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Draft'), findsOneWidget);
-    expect(service.published['test-group-ii-001'], isFalse);
+    expect(
+      service.statuses['test-group-ii-001'],
+      TestPublicationStatus.draft,
+    );
   });
 }
 
@@ -228,7 +247,7 @@ class _FakeAdminTestService extends AdminTestService {
 
   final List<Course> courses;
   final List<TestModel> _tests;
-  final Map<String, bool> published = {};
+  final Map<String, TestPublicationStatus> statuses = {};
 
   @override
   Future<List<Course>> loadCourses() async => courses;
@@ -249,18 +268,23 @@ class _FakeAdminTestService extends AdminTestService {
             negativeMarking: test.negativeMarking,
             difficulty: test.difficulty,
             questionIds: test.questionIds,
-            isPublished: published[test.id] ?? test.isPublished,
+            status: statuses[test.id] ?? test.status,
           ),
     ];
   }
 
   @override
   Future<void> publishTest(String testId) async {
-    published[testId] = true;
+    statuses[testId] = TestPublicationStatus.published;
   }
 
   @override
   Future<void> unpublishTest(String testId) async {
-    published[testId] = false;
+    statuses[testId] = TestPublicationStatus.draft;
+  }
+
+  @override
+  Future<void> setStatus(String testId, TestPublicationStatus status) async {
+    statuses[testId] = status;
   }
 }

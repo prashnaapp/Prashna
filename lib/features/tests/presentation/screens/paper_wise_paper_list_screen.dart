@@ -22,11 +22,8 @@ class PaperWisePaperListScreen extends StatelessWidget {
     return TestSeriesPaperListScreen(
       title: title,
       papers: papers,
-      onPaperTap: (paper) => openPaperWiseParts(
-        context: context,
-        examId: examId,
-        paper: paper,
-      ),
+      onPaperTap: (paper) =>
+          openPaperWiseParts(context: context, examId: examId, paper: paper),
     );
   }
 }

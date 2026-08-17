@@ -16,7 +16,7 @@ void main() {
     String negativeMarking = '0',
     String difficulty = 'Medium',
     List<String> questionIds = const [],
-    bool isPublished = false,
+    TestPublicationStatus status = TestPublicationStatus.draft,
   }) {
     return TestModel(
       id: id,
@@ -29,7 +29,7 @@ void main() {
       negativeMarking: negativeMarking,
       difficulty: difficulty,
       questionIds: questionIds,
-      isPublished: isPublished,
+      status: status,
     );
   }
 
@@ -104,6 +104,53 @@ void main() {
     );
   });
 
+  test('Group-II canonical location validates without legacy topic fields', () {
+    final service = AdminTestService(
+      testRepository: TestCloudRepository.withLoader((_) async => const []),
+    );
+    final errors = service.validate(
+      const TestModel(
+        id: 'gii-location',
+        examId: 'group-ii',
+        category: TestCategoryType.chapterTests,
+        title: 'Paper I area test',
+        questionCount: 1,
+        marks: 1,
+        durationMinutes: 1,
+        negativeMarking: '0',
+        difficulty: 'Medium',
+        paperId: 'group-ii-paper-i',
+        syllabusUnitId: 'group-ii-paper-i-area-01',
+      ),
+      documentId: 'gii-location',
+    );
+    expect(errors, isEmpty);
+  });
+
+  test('invalid Group-II paper and unit combination is rejected', () {
+    final service = AdminTestService(
+      testRepository: TestCloudRepository.withLoader((_) async => const []),
+    );
+    final errors = service.validate(
+      const TestModel(
+        id: 'gii-invalid-location',
+        examId: 'group-ii',
+        category: TestCategoryType.chapterTests,
+        title: 'Invalid location',
+        questionCount: 1,
+        marks: 1,
+        durationMinutes: 1,
+        negativeMarking: '0',
+        difficulty: 'Medium',
+        paperId: 'group-ii-paper-i',
+        partId: 'group-ii-paper-ii-part-01',
+        syllabusUnitId: 'group-ii-paper-ii-part-01-topic-04',
+      ),
+      documentId: 'gii-invalid-location',
+    );
+    expect(errors, contains(contains('does not belong')));
+  });
+
   test('5: questionCount <= 0 rejected', () {
     expect(
       TestCloudMapper.validateForWrite(sampleTest(questionCount: 0)),
@@ -141,7 +188,7 @@ void main() {
 
   test('10: create mapping is correct', () {
     final data = TestCloudMapper.toFirestore(
-      sampleTest(isPublished: true),
+      sampleTest(status: TestPublicationStatus.published),
       documentId: 'test-created',
     );
     expect(data['id'], 'test-created');
@@ -187,11 +234,11 @@ void main() {
 
   test('15: isPublished is persisted', () {
     final draft = TestCloudMapper.toFirestore(
-      sampleTest(isPublished: false),
+      sampleTest(status: TestPublicationStatus.draft),
       documentId: 't1',
     );
     final published = TestCloudMapper.toFirestore(
-      sampleTest(isPublished: true),
+      sampleTest(status: TestPublicationStatus.published),
       documentId: 't2',
     );
     expect(draft['isPublished'], isFalse);
@@ -411,7 +458,7 @@ void main() {
     final service = AdminTestService(testRepository: repo);
 
     final id = await service.createTest(
-      sampleTest(title: 'New Test', isPublished: true),
+      sampleTest(title: 'New Test', status: TestPublicationStatus.published),
     );
     expect(id, 'test-generated');
     expect(createdId, 'test-generated');
@@ -423,7 +470,7 @@ void main() {
       sampleTest(id: 'test-generated', title: 'Updated Test'),
     );
     expect(updatedData!['title'], 'Updated Test');
-    expect(updatedData!.containsKey('questionIds'), isFalse);
+    expect(updatedData!['questionIds'], isEmpty);
   });
 
   test('AdminTestService rejects invalid writes before repository', () async {

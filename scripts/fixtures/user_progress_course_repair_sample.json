@@ -1,0 +1,85 @@
+{
+  "targetExists": true,
+  "source": {
+    "uid": "security-student-a",
+    "courseId": "group-ii",
+    "overall": {
+      "completion": 29,
+      "accuracy": 57.8,
+      "chaptersCompleted": 4,
+      "totalChapters": 60,
+      "questionsAttempted": 51,
+      "questionsCorrect": 32
+    },
+    "papers": {
+      "paper-i": {
+        "id": "paper-i",
+        "label": "Paper I",
+        "maxMarks": 150,
+        "coveredMarks": 55.8,
+        "progressPercent": 37,
+        "remainingMarks": 94.2
+      },
+      "paper-ii": {
+        "id": "paper-ii",
+        "label": "Paper II",
+        "maxMarks": 150,
+        "coveredMarks": 33.4,
+        "progressPercent": 22,
+        "remainingMarks": 116.6
+      }
+    },
+    "chapters": {
+      "chapter-1": {
+        "id": "chapter-1",
+        "label": "Chapter 1",
+        "paperId": "paper-iv",
+        "partId": "part-iii",
+        "maxMarks": 5,
+        "coveredMarks": 2,
+        "progressPercent": 40,
+        "remainingMarks": 3,
+        "status": "Needs Focus"
+      }
+    },
+    "lastUpdated": { "_seconds": 1754678513 },
+    "appVersion": "1.0.0"
+  },
+  "target": {
+    "uid": "security-student-a",
+    "courseId": "group-ii",
+    "overall": {
+      "completion": 0,
+      "accuracy": 100,
+      "chaptersCompleted": 0,
+      "totalChapters": 60,
+      "questionsAttempted": 1,
+      "questionsCorrect": 1
+    },
+    "papers": {
+      "paper-i": {
+        "id": "paper-i",
+        "label": "Paper I",
+        "maxMarks": 150,
+        "coveredMarks": 0,
+        "progressPercent": 0,
+        "remainingMarks": 150
+      }
+    },
+    "chapters": {
+      "chapter-1": {
+        "id": "chapter-1",
+        "label": "Chapter 1",
+        "paperId": "paper-iv",
+        "partId": "part-iii",
+        "maxMarks": 5,
+        "coveredMarks": 0,
+        "progressPercent": 0,
+        "remainingMarks": 5,
+        "status": "Not Started"
+      }
+    },
+    "appVersion": "1.0.0",
+    "schemaVersion": 1
+  }
+}

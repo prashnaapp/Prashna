@@ -6,28 +6,40 @@ abstract final class QuestionBankMapper {
   static const _labels = ['A', 'B', 'C', 'D', 'E'];
 
   static TestQuestion toTestQuestion(Question question) {
+    final englishOptions = question.options.isNotEmpty
+        ? question.options
+        : question.content?.en.options.map((option) => option.text).toList() ??
+              const <String>[];
+    final teluguOptions = question.content?.te?.options;
     return TestQuestion(
       id: question.id,
-      text: question.question,
+      text: question.question.isNotEmpty
+          ? question.question
+          : question.content?.en.question ?? '',
       options: [
-        for (var i = 0; i < question.options.length; i++)
+        for (var i = 0; i < englishOptions.length; i++)
           TestOption(
             label: _labels[i.clamp(0, _labels.length - 1)],
-            text: question.options[i],
+            text: englishOptions[i],
+            teluguText: teluguOptions != null && i < teluguOptions.length
+                ? teluguOptions[i].text
+                : null,
           ),
       ],
       correctOption: question.correctOption,
-      explanation: question.explanation,
+      explanation: question.explanation.isNotEmpty
+          ? question.explanation
+          : question.content?.en.explanation ?? '',
       paperId: question.paperId,
       sectionId: question.sectionId,
       topicId: question.topicId,
+      content: question.content,
+      syllabus: question.syllabus,
     );
   }
 
   static List<TestQuestion> toTestQuestions(List<Question> questions) {
-    return [
-      for (final question in questions) toTestQuestion(question),
-    ];
+    return [for (final question in questions) toTestQuestion(question)];
   }
 
   static QuestionType? questionTypeForMode(TestMode mode) {

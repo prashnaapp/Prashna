@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/profile_model.dart';
 import '../../authentication/services/auth_service.dart';
 
@@ -7,7 +9,19 @@ class ProfileService {
 
   static final ProfileService instance = ProfileService._();
 
+  /// When true, [getProfile] returns the guest model without touching Auth.
+  @visibleForTesting
+  static bool skipAuthLookup = false;
+
   ProfileModel getProfile() {
+    if (skipAuthLookup) {
+      return const ProfileModel(
+        name: 'Guest',
+        email: '',
+        avatarInitials: 'G',
+        isPremium: false,
+      );
+    }
     final user = AuthService.instance.currentUser;
     if (user == null) {
       return const ProfileModel(
@@ -30,36 +44,26 @@ class ProfileService {
   }
 
   SubscriptionInfo getSubscription() => const SubscriptionInfo(
-        planName: 'Free Plan',
-        expiryDateLabel: 'Upgrade for premium features',
-        isActive: false,
-      );
+    planName: 'Free Plan',
+    expiryDateLabel: 'Upgrade for premium features',
+    isActive: false,
+  );
 
   List<ProfilePreference> getPreferences() => const [
-        ProfilePreference(
-          id: 'language',
-          title: 'Language',
-          subtitle: 'English',
-        ),
-        ProfilePreference(
-          id: 'theme',
-          title: 'Theme',
-          subtitle: 'System default',
-        ),
-        ProfilePreference(
-          id: 'notifications',
-          title: 'Notifications',
-          subtitle: 'Reminders & updates',
-        ),
-        ProfilePreference(
-          id: 'downloads',
-          title: 'Downloads',
-          subtitle: 'Offline content',
-        ),
-      ];
+    ProfilePreference(id: 'language', title: 'Language', subtitle: 'English'),
+    ProfilePreference(id: 'theme', title: 'Theme', subtitle: 'System default'),
+    ProfilePreference(
+      id: 'notifications',
+      title: 'Notifications',
+      subtitle: 'Reminders & updates',
+    ),
+    ProfilePreference(
+      id: 'downloads',
+      title: 'Downloads',
+      subtitle: 'Offline content',
+    ),
+  ];
 
-  ProfileAppInfo getAppInfo() => const ProfileAppInfo(
-        appName: 'Prashna',
-        versionLabel: 'Version 1.0.0',
-      );
+  ProfileAppInfo getAppInfo() =>
+      const ProfileAppInfo(appName: 'Prashna', versionLabel: 'Version 1.0.0');
 }

@@ -7,6 +7,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
 import '../buttons/app_buttons.dart';
+import 'app_pill.dart';
 
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
@@ -35,7 +36,7 @@ class SectionHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTextStyles.titleLarge(context)),
+                Text(title, style: AppTextStyles.titleMedium(context)),
                 if (subtitle != null) ...[
                   const SizedBox(height: AppSpacing.xs),
                   Text(subtitle!, style: AppTextStyles.bodyMedium(context)),
@@ -296,21 +297,11 @@ class AppChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilterChip(
-      label: Text(label),
+    return AppSelectionPill(
+      label: label,
       selected: selected,
-      onSelected: onSelected,
-      avatar: icon != null ? Icon(icon, size: 18) : null,
-      showCheckmark: false,
-      selectedColor: AppColors.primary.withValues(alpha: 0.12),
-      checkmarkColor: AppColors.primary,
-      labelStyle: AppTextStyles.label(context).copyWith(
-        color: selected ? AppColors.primary : AppColors.textPrimary,
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
+      icon: icon,
+      onTap: onSelected == null ? null : () => onSelected!(!selected),
     );
   }
 }
@@ -340,11 +331,11 @@ class EmptyState extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(AppSpacing.xxl),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceVariant,
+            decoration: const BoxDecoration(
+              color: AppColors.lavender,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 40, color: AppColors.textSecondary),
+            child: Icon(icon, size: 40, color: AppColors.primaryStrong),
           ),
           const SizedBox(height: AppSpacing.xxl),
           Text(

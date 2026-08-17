@@ -13,11 +13,13 @@ class TestListScreen extends StatefulWidget {
     required this.examId,
     required this.category,
     required this.title,
+    this.testService,
   });
 
   final String examId;
   final TestCategoryType category;
   final String title;
+  final TestService? testService;
 
   @override
   State<TestListScreen> createState() => _TestListScreenState();
@@ -32,11 +34,10 @@ class _TestListScreenState extends State<TestListScreen> {
     _testsFuture = _loadTests();
   }
 
+  TestService get _service => widget.testService ?? TestService.instance;
+
   Future<List<TestModel>> _loadTests() {
-    return TestService.instance.getTests(
-      examId: widget.examId,
-      category: widget.category,
-    );
+    return _service.getTests(examId: widget.examId, category: widget.category);
   }
 
   void _retry() {
@@ -85,8 +86,7 @@ class _TestListScreenState extends State<TestListScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            TestInstructionsScreen(test: tests[i]),
+                        builder: (_) => TestInstructionsScreen(test: tests[i]),
                       ),
                     );
                   },

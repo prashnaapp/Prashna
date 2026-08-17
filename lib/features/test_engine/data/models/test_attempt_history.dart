@@ -22,6 +22,8 @@ class TestAttemptHistoryItem {
     this.uid,
     this.testTitle,
     this.courseTitle,
+    this.authority,
+    this.snapshotSchemaVersion,
   });
 
   final String attemptId;
@@ -49,6 +51,22 @@ class TestAttemptHistoryItem {
 
   /// Snapshot at submit time. Absent on attempts created before M30.2.6.
   final String? courseTitle;
+
+  /// `server_verified` or absent/`legacy_client` for older client-written docs.
+  final String? authority;
+
+  /// Null/absent = legacy attempt without frozen question/test content.
+  final int? snapshotSchemaVersion;
+
+  bool get hasImmutableSnapshot =>
+      snapshotSchemaVersion != null && snapshotSchemaVersion! >= 1;
+
+  bool get isServerVerified => authority == 'server_verified';
+
+  bool get isLegacyClient =>
+      authority == null ||
+      authority == 'legacy_client' ||
+      authority!.isEmpty;
 
   /// Prefer stored [testTitle]; fall back to [testId] for older documents.
   String get displayTestTitle {

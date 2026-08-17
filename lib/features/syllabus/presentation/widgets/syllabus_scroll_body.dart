@@ -21,9 +21,7 @@ class SyllabusScrollBody extends StatelessWidget {
         ...slivers,
         if (bottomInset)
           SliverToBoxAdapter(
-            child: SizedBox(
-              height: AppNavMetrics.contentBottomInset(context),
-            ),
+            child: SizedBox(height: AppNavMetrics.contentBottomInset(context)),
           ),
       ],
     );

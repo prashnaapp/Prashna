@@ -15,6 +15,9 @@ migrate_working_dir/
 # Admin ops tooling (scripts/) — never commit secrets or node deps
 scripts/node_modules/
 
+# Cloud Functions — never commit node deps or secrets
+functions/node_modules/
+
 # Firestore rules emulator tests — never commit node deps or emulator logs
 test/security/firestore_rules/node_modules/
 test/security/firestore_rules/firestore-debug.log
@@ -63,4 +66,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android release signing — never commit secrets or keystores
+/android/key.properties
+*.jks
+*.keystore
+
 .firebase/

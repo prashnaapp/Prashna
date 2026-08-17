@@ -30,6 +30,9 @@ class TodayGoalPlan {
     required this.chapterLabel,
     required this.questionCount,
     required this.estimatedMinutes,
+    this.majorStudyAreaLabel,
+    this.contentTopicLabel,
+    this.lessonLabel,
   });
 
   final String paperLabel;
@@ -37,6 +40,9 @@ class TodayGoalPlan {
   final String chapterLabel;
   final int questionCount;
   final int estimatedMinutes;
+  final String? majorStudyAreaLabel;
+  final String? contentTopicLabel;
+  final String? lessonLabel;
 }
 
 class StudyProgressPlan {
@@ -57,30 +63,21 @@ class StudyProgressPlan {
   final int remainingChapters;
 }
 
-enum WeeklyPlanStatus {
-  completed,
-  current,
-  upcoming,
-  revision,
-  mockTest,
-}
+enum WeeklyPlanStatus { completed, current, upcoming, revision, mockTest }
 
 class WeeklyPlanDay {
-  const WeeklyPlanDay({
-    required this.dayLabel,
-    required this.status,
-  });
+  const WeeklyPlanDay({required this.dayLabel, required this.status});
 
   final String dayLabel;
   final WeeklyPlanStatus status;
 
   String get statusLabel => switch (status) {
-        WeeklyPlanStatus.completed => 'Completed',
-        WeeklyPlanStatus.current => 'Current',
-        WeeklyPlanStatus.upcoming => 'Upcoming',
-        WeeklyPlanStatus.revision => 'Revision',
-        WeeklyPlanStatus.mockTest => 'Mock Test',
-      };
+    WeeklyPlanStatus.completed => 'Completed',
+    WeeklyPlanStatus.current => 'Current',
+    WeeklyPlanStatus.upcoming => 'Upcoming',
+    WeeklyPlanStatus.revision => 'Revision',
+    WeeklyPlanStatus.mockTest => 'Mock Test',
+  };
 }
 
 class MonthlyProgressPlan {
@@ -96,10 +93,7 @@ class MonthlyProgressPlan {
 }
 
 class StudyStreakPlan {
-  const StudyStreakPlan({
-    required this.currentDays,
-    required this.longestDays,
-  });
+  const StudyStreakPlan({required this.currentDays, required this.longestDays});
 
   final int currentDays;
   final int longestDays;
@@ -110,9 +104,15 @@ class UpcomingTaskPlan {
     required this.paperLabel,
     required this.chapterLabel,
     required this.estimatedMinutes,
+    this.questionCount = 0,
+    this.parentLabel,
+    this.unitLabel,
   });
 
   final String paperLabel;
   final String chapterLabel;
   final int estimatedMinutes;
+  final int questionCount;
+  final String? parentLabel;
+  final String? unitLabel;
 }

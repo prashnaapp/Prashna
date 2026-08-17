@@ -176,11 +176,12 @@ class RevisionService {
     final session = _sessions.capture();
     final questions = await _questions.getByTopic(topic.topicId);
     if (!_sessions.isCurrent(session)) return null;
-    final filtered = questions
-        .where((q) => q.courseId == topic.courseId || topic.courseId.isEmpty)
-        .toList();
-    final pool = filtered.isEmpty ? questions : filtered;
-    if (pool.isEmpty) return null;
+    final filtered = [
+      for (final q in questions)
+        if (topic.courseId.isEmpty || q.courseId == topic.courseId) q,
+    ];
+    // Never fall back to other-course questions when a course is requested.
+    if (filtered.isEmpty) return null;
 
     await _repository.recordSessionStarted(RevisionCollectionType.weakTopics);
     if (!_sessions.isCurrent(session)) return null;
@@ -190,7 +191,7 @@ class RevisionService {
       id: 'revision-weak-${topic.topicId}-${DateTime.now().millisecondsSinceEpoch}',
       title: 'Revision · ${topic.topicName}',
       courseId: topic.courseId,
-      questions: pool.take(maxQuestions).toList(),
+      questions: filtered.take(maxQuestions).toList(),
       mode: TestMode.practice,
       instructions: const [
         'This is a weak-topic revision session.',
@@ -212,7 +213,13 @@ class RevisionService {
     final ids = collection.questionIds.take(maxQuestions).toList();
     final questions = await _questions.getByIds(ids);
     if (!_sessions.isCurrent(session)) return null;
-    if (questions.isEmpty) return null;
+
+    final owned = <Question>[
+      for (final question in questions)
+        if (question.courseId == courseId) question,
+    ];
+    // Unattributed / other-course questions are excluded — never guessed.
+    if (owned.isEmpty) return null;
 
     await _repository.recordSessionStarted(collection.type);
     if (!_sessions.isCurrent(session)) return null;
@@ -222,7 +229,7 @@ class RevisionService {
       id: 'revision-${collection.type.name}-${DateTime.now().millisecondsSinceEpoch}',
       title: 'Revision · ${collection.title}',
       courseId: courseId,
-      questions: questions,
+      questions: owned,
       mode: TestMode.practice,
       duration: durationMinutes == null
           ? null
@@ -366,7 +373,10 @@ class RevisionService {
     final filtered = <String>[];
     for (final id in ids) {
       final question = await _questions.getById(id);
-      if (question != null && question.courseId == courseId) {
+      // Missing / unattributed questions are excluded — do not guess course.
+      if (question == null) continue;
+      if (question.courseId.trim().isEmpty) continue;
+      if (question.courseId == courseId) {
         filtered.add(id);
       }
     }
@@ -375,12 +385,8 @@ class RevisionService {
 
   Future<int> _countForCourse(List<String> ids, String? courseId) async {
     if (courseId == null) return ids.length;
-    var count = 0;
-    for (final id in ids) {
-      final q = await _questions.getById(id);
-      if (q != null && q.courseId == courseId) count++;
-    }
-    return count;
+    final filtered = await _filterIdsForCourse(ids, courseId: courseId);
+    return filtered.length;
   }
 
   Future<List<RevisionQuestionGroup>> _groupQuestions(
@@ -430,12 +436,56 @@ class RevisionService {
       courseId: question.courseId,
       paperId: question.paperId,
     );
-    final chapter = _syllabus.getTopic(
+    final legacyChapter = _syllabus.getTopic(
       courseId: question.courseId,
       paperId: question.paperId,
       sectionId: question.sectionId,
       topicId: question.topicId,
     );
+    final area = question.majorStudyAreaId == null
+        ? null
+        : _syllabus.getMajorStudyArea(
+            courseId: question.courseId,
+            paperId: question.paperId,
+            majorStudyAreaId: question.majorStudyAreaId!,
+          );
+    final content =
+        question.majorStudyAreaId == null || question.contentTopicId == null
+        ? null
+        : _syllabus.getContentTopic(
+            courseId: question.courseId,
+            paperId: question.paperId,
+            majorStudyAreaId: question.majorStudyAreaId!,
+            contentTopicId: question.contentTopicId!,
+          );
+    final canonicalPart = question.partId == null
+        ? null
+        : _syllabus.getPart(
+            courseId: question.courseId,
+            paperId: question.paperId,
+            partId: question.partId!,
+          );
+    final canonicalTopic =
+        question.partId == null || question.syllabus?.topicId == null
+        ? null
+        : _syllabus.getCanonicalTopic(
+            courseId: question.courseId,
+            paperId: question.paperId,
+            partId: question.partId!,
+            topicId: question.syllabus!.topicId!,
+          );
+    final lesson =
+        question.partId == null ||
+            question.syllabus?.topicId == null ||
+            question.lessonId == null
+        ? null
+        : _syllabus.getLesson(
+            courseId: question.courseId,
+            paperId: question.paperId,
+            partId: question.partId!,
+            topicId: question.syllabus!.topicId!,
+            lessonId: question.lessonId!,
+          );
 
     final title = question.question;
     final truncated = title.length > 90 ? '${title.substring(0, 90)}…' : title;
@@ -447,9 +497,24 @@ class RevisionService {
       courseName: course?.name ?? question.courseId,
       paperId: question.paperId,
       paperName: paper?.title ?? question.paperId,
-      chapterId: question.topicId,
-      chapterName: chapter?.title ?? question.topicId,
+      chapterId:
+          question.syllabus?.topicId ??
+          question.contentTopicId ??
+          question.topicId,
+      chapterName:
+          lesson?.displayName ??
+          content?.displayName ??
+          canonicalTopic?.resolvedDisplayName ??
+          canonicalPart?.displayName ??
+          area?.displayName ??
+          legacyChapter?.title ??
+          question.topicId,
       wrongCount: wrongCount,
+      majorStudyAreaId: question.majorStudyAreaId,
+      contentTopicId: question.contentTopicId,
+      canonicalPartId: question.partId,
+      canonicalTopicId: question.syllabus?.topicId,
+      lessonId: question.lessonId,
     );
   }
 }

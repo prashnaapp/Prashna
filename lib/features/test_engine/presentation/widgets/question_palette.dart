@@ -56,10 +56,9 @@ class QuestionPalette extends StatelessWidget {
         final selected = index == currentIndex;
         return Material(
           color: questionStatusColor(status),
-          shape: RoundedRectangleBorder(
-            borderRadius: AppRadius.mdAll,
+          shape: CircleBorder(
             side: BorderSide(
-              color: selected ? AppColors.primary : AppColors.divider,
+              color: selected ? AppColors.primaryStrong : AppColors.divider,
               width: selected ? 2 : 1,
             ),
           ),
@@ -107,7 +106,7 @@ class QuestionStatusLegend extends StatelessWidget {
                 height: 14,
                 decoration: BoxDecoration(
                   color: questionStatusColor(item.$1),
-                  borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(7),
                   border: Border.all(color: AppColors.divider),
                 ),
               ),

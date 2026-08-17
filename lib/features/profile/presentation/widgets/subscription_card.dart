@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../models/profile_model.dart';
+import '../profile_visual.dart';
+import 'profile_section.dart';
 import 'settings_tile.dart';
 
+/// Subscription section — current plan status plus the manage entry point.
 class SubscriptionCard extends StatelessWidget {
   const SubscriptionCard({
     super.key,
@@ -16,66 +19,49 @@ class SubscriptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
+    return ProfileSection(
+      title: 'Subscription',
       children: [
-        Text('Subscription', style: AppTextStyles.titleLarge(context)),
-        const SizedBox(height: AppSpacing.lg),
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      subscription.planName,
-                      style: AppTextStyles.titleMedium(context),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.xs,
-                    ),
-                    decoration: BoxDecoration(
-                      color: subscription.isActive
-                          ? AppColors.successSurface
-                          : AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      subscription.isActive ? 'Active' : 'Inactive',
-                      style: AppTextStyles.label(context).copyWith(
-                        color: subscription.isActive
-                            ? AppColors.success
-                            : AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                subscription.expiryDateLabel,
-                style: AppTextStyles.bodyMedium(context),
-              ),
-            ],
-          ),
+        SettingsTile(
+          title: subscription.planName,
+          subtitle: subscription.expiryDateLabel,
+          icon: Icons.workspace_premium_rounded,
+          trailing: _PlanBadge(isActive: subscription.isActive),
         ),
-        const SizedBox(height: AppSpacing.md),
         SettingsTile(
           title: 'Manage Subscription',
           subtitle: 'Billing, renewals & invoices',
-          leading: const Icon(
-            Icons.workspace_premium_outlined,
-            color: AppColors.primary,
-          ),
+          icon: Icons.card_membership_rounded,
           onTap: onManage,
         ),
       ],
+    );
+  }
+}
+
+class _PlanBadge extends StatelessWidget {
+  const _PlanBadge({required this.isActive});
+
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isActive ? AppColors.success : ProfileVisual.accent;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isActive ? 0.12 : 0.09),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        isActive ? 'Active' : 'Inactive',
+        style: AppTextStyles.caption(context).copyWith(
+          color: isActive ? AppColors.success : ProfileVisual.accent,
+          fontWeight: FontWeight.w700,
+          fontSize: 11.5,
+        ),
+      ),
     );
   }
 }

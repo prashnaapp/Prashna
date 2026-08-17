@@ -17,11 +17,15 @@ abstract final class QuestionCloudMapper {
     final courseId = data['courseId'] as String?;
     if (courseId == null || courseId.isEmpty) return null;
 
-    final questionText = data['question'] as String?;
+    final content = _readContent(data['content']);
+    final questionText = (data['question'] as String?) ?? content?.en.question;
     if (questionText == null || questionText.isEmpty) return null;
 
     final options = _readStringList(data['options']);
-    if (options.isEmpty) return null;
+    final resolvedOptions = options.isNotEmpty
+        ? options
+        : content?.en.options.map((option) => option.text).toList() ?? const [];
+    if (resolvedOptions.isEmpty) return null;
 
     final correctOption = data['correctOption'] as String?;
     if (correctOption == null || correctOption.isEmpty) return null;
@@ -37,16 +41,21 @@ abstract final class QuestionCloudMapper {
 
     final estimatedSeconds = asInt(data['estimatedTimeSeconds']) ?? 60;
 
+    final paperId = (data['paperId'] as String?) ?? '';
+    final sectionId = (data['sectionId'] as String?) ?? '';
+    final topicId = (data['topicId'] as String?) ?? '';
+
     return Question(
       id: id,
       courseId: courseId,
-      paperId: (data['paperId'] as String?) ?? '',
-      sectionId: (data['sectionId'] as String?) ?? '',
-      topicId: (data['topicId'] as String?) ?? '',
+      paperId: paperId,
+      sectionId: sectionId,
+      topicId: topicId,
       question: questionText,
-      options: options,
+      options: resolvedOptions,
       correctOption: correctOption,
-      explanation: (data['explanation'] as String?) ?? '',
+      explanation:
+          (data['explanation'] as String?) ?? content?.en.explanation ?? '',
       difficulty: difficulty,
       questionType: questionType,
       language: (data['language'] as String?) ?? 'en',
@@ -61,6 +70,15 @@ abstract final class QuestionCloudMapper {
       createdAt: createdAt,
       updatedAt: updatedAt,
       isActive: data['isActive'] == true,
+      content: content,
+      syllabus: _readSyllabus(
+        data,
+        courseId: courseId,
+        paperId: paperId,
+        legacySectionId: sectionId,
+        legacyTopicId: topicId,
+      ),
+      status: parsePublicationStatus(data['status'] as String?),
     );
   }
 
@@ -88,18 +106,26 @@ abstract final class QuestionCloudMapper {
     if (question.courseId.trim().isEmpty) {
       errors.add('Course is required.');
     }
-    if (question.question.trim().isEmpty) {
+    final questionText = question.question.trim().isNotEmpty
+        ? question.question.trim()
+        : question.content?.en.question.trim() ?? '';
+    final options = question.options.isNotEmpty
+        ? question.options
+        : question.content?.en.options.map((option) => option.text).toList() ??
+              const <String>[];
+
+    if (questionText.isEmpty) {
       errors.add('Question text is required.');
     }
-    if (question.options.length < 2 || question.options.length > 5) {
+    if (options.length < 2 || options.length > 5) {
       errors.add('Provide between 2 and 5 answer options.');
     }
-    if (question.options.any((option) => option.trim().isEmpty)) {
+    if (options.any((option) => option.trim().isEmpty)) {
       errors.add('Answer options cannot be empty.');
     }
     final correctOption = question.correctOption.trim().toUpperCase();
     if (!_optionLabels.contains(correctOption) ||
-        _optionLabels.indexOf(correctOption) >= question.options.length) {
+        _optionLabels.indexOf(correctOption) >= options.length) {
       errors.add('Correct option must match one of the provided options.');
     }
     if (question.language.trim().isEmpty) {
@@ -113,6 +139,11 @@ abstract final class QuestionCloudMapper {
     }
     if (question.estimatedTime.inSeconds <= 0) {
       errors.add('Estimated time must be greater than zero.');
+    }
+    final content = question.content;
+    if (content?.te != null &&
+        content!.en.options.length != content.te!.options.length) {
+      errors.add('English and Telugu option counts must match.');
     }
     return errors;
   }
@@ -134,18 +165,26 @@ abstract final class QuestionCloudMapper {
     final id = documentId?.trim().isNotEmpty == true
         ? documentId!.trim()
         : question.id.trim();
+    final content = question.content;
+    final questionText = question.question.trim().isNotEmpty
+        ? question.question.trim()
+        : content?.en.question.trim() ?? '';
+    final options = question.options.isNotEmpty
+        ? question.options
+        : content?.en.options.map((option) => option.text).toList() ??
+              const <String>[];
     final data = <String, dynamic>{
       'id': id,
       'courseId': question.courseId.trim(),
       'paperId': question.paperId.trim(),
       'sectionId': question.sectionId.trim(),
       'topicId': question.topicId.trim(),
-      'question': question.question.trim(),
-      'options': [
-        for (final option in question.options) option.trim(),
-      ],
+      'question': questionText,
+      'options': [for (final option in options) option.trim()],
       'correctOption': question.correctOption.trim().toUpperCase(),
-      'explanation': question.explanation.trim(),
+      'explanation': question.explanation.trim().isNotEmpty
+          ? question.explanation.trim()
+          : content?.en.explanation.trim() ?? '',
       'difficulty': question.difficulty.name,
       'questionType': _questionTypeFirestoreValue(question.questionType),
       'language': question.language.trim(),
@@ -163,6 +202,14 @@ abstract final class QuestionCloudMapper {
       'isActive': question.isActive,
       'updatedAt': FieldValue.serverTimestamp(),
     };
+    if (question.status != null) {
+      data['status'] = question.status!.name;
+      data['isActive'] = question.status == QuestionPublicationStatus.published;
+    }
+    if (content != null) {
+      data['content'] = _contentToFirestore(content);
+    }
+    _addCanonicalAttribution(data, question.syllabus);
     if (includeCreatedAt) {
       data['createdAt'] = FieldValue.serverTimestamp();
     }
@@ -170,10 +217,111 @@ abstract final class QuestionCloudMapper {
   }
 
   static Map<String, dynamic> toDeactivateMap({required bool isActive}) {
+    return {'isActive': isActive, 'updatedAt': FieldValue.serverTimestamp()};
+  }
+
+  static Map<String, dynamic> toStatusMap(QuestionPublicationStatus status) {
     return {
-      'isActive': isActive,
+      'status': status.name,
+      'isActive': status == QuestionPublicationStatus.published,
       'updatedAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  static QuestionContent? _readContent(dynamic raw) {
+    if (raw is! Map) return null;
+    final en = _readLocalizedContent(raw['en']);
+    if (en == null) return null;
+    return QuestionContent(en: en, te: _readLocalizedContent(raw['te']));
+  }
+
+  static QuestionLocalizedContent? _readLocalizedContent(dynamic raw) {
+    if (raw is! Map) return null;
+    final question = raw['question'] as String?;
+    if (question == null) return null;
+    return QuestionLocalizedContent(
+      question: question,
+      options: [
+        for (final option in _readStringList(raw['options']))
+          QuestionOption(text: option),
+      ],
+      explanation: raw['explanation'] as String? ?? '',
+    );
+  }
+
+  static QuestionSyllabusAttribution _readSyllabus(
+    Map<String, dynamic> data, {
+    required String courseId,
+    required String paperId,
+    required String legacySectionId,
+    required String legacyTopicId,
+  }) {
+    final nested = data['syllabus'] is Map
+        ? Map<String, dynamic>.from(data['syllabus'] as Map)
+        : const <String, dynamic>{};
+    String? read(String key) {
+      final value = nested[key] ?? data[key];
+      return value is String && value.trim().isNotEmpty ? value : null;
+    }
+
+    final majorStudyAreaId = read('majorStudyAreaId');
+    final contentTopicId = read('contentTopicId');
+    final partId = read('partId');
+    final lessonId = read('lessonId');
+    final syllabusUnitId = read('syllabusUnitId');
+    final hasCanonicalAttribution =
+        majorStudyAreaId != null ||
+        contentTopicId != null ||
+        partId != null ||
+        lessonId != null ||
+        syllabusUnitId != null;
+
+    return QuestionSyllabusAttribution(
+      courseId: courseId,
+      paperId: paperId,
+      majorStudyAreaId: majorStudyAreaId,
+      contentTopicId: contentTopicId,
+      partId: partId,
+      topicId: hasCanonicalAttribution ? read('topicId') : null,
+      lessonId: lessonId,
+      syllabusUnitId: syllabusUnitId,
+      legacySectionId: hasCanonicalAttribution ? null : legacySectionId,
+      legacyTopicId: hasCanonicalAttribution ? null : legacyTopicId,
+    );
+  }
+
+  static Map<String, dynamic> _contentToFirestore(QuestionContent content) {
+    Map<String, dynamic> localized(QuestionLocalizedContent value) {
+      return {
+        'question': value.question.trim(),
+        'options': [for (final option in value.options) option.text.trim()],
+        'explanation': value.explanation.trim(),
+      };
+    }
+
+    return {
+      'en': localized(content.en),
+      if (content.te != null) 'te': localized(content.te!),
+    };
+  }
+
+  static void _addCanonicalAttribution(
+    Map<String, dynamic> data,
+    QuestionSyllabusAttribution? syllabus,
+  ) {
+    if (syllabus == null) return;
+    void add(String key, String? value) {
+      if (value != null && value.trim().isNotEmpty) {
+        data[key] = value.trim();
+      }
+    }
+
+    add('majorStudyAreaId', syllabus.majorStudyAreaId);
+    add('contentTopicId', syllabus.contentTopicId);
+    add('partId', syllabus.partId);
+    add('topicId', syllabus.topicId);
+    add('lessonId', syllabus.lessonId);
+    add('syllabusUnitId', syllabus.syllabusUnitId);
   }
 
   static bool _isFiniteNonNegative(double value) {
@@ -219,6 +367,19 @@ abstract final class QuestionCloudMapper {
     }
   }
 
+  static QuestionPublicationStatus? parsePublicationStatus(String? raw) {
+    switch (raw?.trim().toLowerCase()) {
+      case 'draft':
+        return QuestionPublicationStatus.draft;
+      case 'published':
+        return QuestionPublicationStatus.published;
+      case 'archived':
+        return QuestionPublicationStatus.archived;
+      default:
+        return null;
+    }
+  }
+
   static int? asInt(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;
@@ -245,8 +406,6 @@ abstract final class QuestionCloudMapper {
 
   static List<String> _readStringList(dynamic value) {
     if (value is! List) return const [];
-    return [
-      for (final item in value) item.toString(),
-    ];
+    return [for (final item in value) item.toString()];
   }
 }

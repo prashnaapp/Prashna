@@ -178,6 +178,9 @@ class TestCloudRepository {
   }
 
   /// Creates a test with a generated Firestore ID.
+  ///
+  /// New tests always start as drafts. Explicit question IDs are persisted when
+  /// provided; empty means dynamic Question Bank selection at attempt time.
   Future<String> createTest(TestModel test) async {
     final testCreate = _createForTest;
     final testId =
@@ -191,13 +194,22 @@ class TestCloudRepository {
         examId: test.examId,
         category: test.category,
         title: test.title,
+        description: test.description,
         questionCount: test.questionCount,
         marks: test.marks,
         durationMinutes: test.durationMinutes,
         negativeMarking: test.negativeMarking,
         difficulty: test.difficulty,
-        questionIds: const [],
-        isPublished: false,
+        questionIds: test.questionIds,
+        status: TestPublicationStatus.draft,
+        paperId: test.paperId,
+        partId: test.partId,
+        syllabusUnitId: test.syllabusUnitId,
+        majorStudyAreaId: test.majorStudyAreaId,
+        contentTopicId: test.contentTopicId,
+        canonicalTopicId: test.canonicalTopicId,
+        lessonId: test.lessonId,
+        scopeShape: test.scopeShape,
       ),
       documentId: testId,
     );
@@ -220,14 +232,13 @@ class TestCloudRepository {
     }
   }
 
-  /// Updates editable metadata while preserving stored [questionIds].
+  /// Updates editable metadata, including explicit [questionIds] assignment.
   Future<void> updateTest(TestModel test) async {
     final testId = test.id.trim();
     if (testId.isEmpty) {
       throw const FormatException('Test ID is required for update.');
     }
     final data = TestCloudMapper.toFirestore(test, documentId: testId);
-    data.remove('questionIds');
     try {
       if (_updateForTest != null) {
         await _updateForTest(testId: testId, data: data);
@@ -270,6 +281,39 @@ class TestCloudRepository {
       rethrow;
     } catch (error, stack) {
       debugPrint('TestCloudRepository.setTestPublished: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Sets draft / published / archived lifecycle.
+  Future<void> setTestStatus(
+    String testId,
+    TestPublicationStatus status,
+  ) async {
+    final id = testId.trim();
+    if (id.isEmpty) {
+      throw const FormatException('Test ID is required.');
+    }
+    final data = TestCloudMapper.toStatusMap(status);
+    try {
+      if (_updateForTest != null) {
+        await _updateForTest(testId: id, data: data);
+      } else if (_setPublishedForTest != null) {
+        await _setPublishedForTest(
+          testId: id,
+          isPublished: status == TestPublicationStatus.published,
+        );
+      } else {
+        await _tests.doc(id).update(data);
+      }
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in TestCloudRepository.setTestStatus: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('TestCloudRepository.setTestStatus: $error\n$stack');
       rethrow;
     }
   }

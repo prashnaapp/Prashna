@@ -37,10 +37,7 @@ class SyllabusTopicsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.lg),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                Text(
-                  'Select Topic',
-                  style: AppTextStyles.titleLarge(context),
-                ),
+                Text('Select Topic', style: AppTextStyles.titleLarge(context)),
                 const SizedBox(height: AppSpacing.lg),
                 for (final topic in topics) ...[
                   SyllabusListTileCard(

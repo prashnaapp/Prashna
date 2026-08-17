@@ -1,11 +1,11 @@
 import 'course.dart';
 import 'user_course.dart';
 
-/// Immutable in-memory snapshot of catalog + enrollments for the signed-in user.
+/// Immutable in-memory snapshot of catalog + entitlements for the signed-in user.
 ///
-/// [enrollments] is the single source of truth for access checks.
+/// [enrollments] are authoritative [UserCourse] entitlement documents.
 /// Use [enrollmentFor] for course-specific lookups — never authorize from a
-/// single "current" enrollment.
+/// single "current" enrollment, and never from payment transactions.
 class CourseContext {
   const CourseContext({
     required this.publishedCourses,

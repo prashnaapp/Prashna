@@ -1,5 +1,7 @@
 import '../../../progress/data/models/attempt_analytics_models.dart';
 import '../../../progress/services/progress_service.dart';
+import '../../../question_bank/data/models/question_models.dart';
+import '../../../question_bank/data/services/question_service.dart';
 import '../models/study_planner_models.dart';
 import 'study_planner_calculator.dart';
 
@@ -10,13 +12,13 @@ class StudyPlannerService {
   static final StudyPlannerService instance = StudyPlannerService._();
 
   static const _defaultCourseId = 'group-ii';
-  static const _questionsPerChapter = 10;
   static const _minutesPerChapter = 15;
 
   Future<StudyPlannerData> getPlan({String courseId = _defaultCourseId}) async {
     final progress = ProgressService.instance;
     final overall = progress.getOverallProgress(courseId);
-    final chapters = StudyPlannerCalculator.flattenChapters(overall);
+    final chapters = StudyPlannerCalculator.flattenCanonical(overall);
+    final questionCounts = await _questionCounts(courseId);
     final incomplete = StudyPlannerCalculator.incompleteChapters(chapters);
     final completed = StudyPlannerCalculator.completedCount(chapters);
     final total = chapters.length;
@@ -39,10 +41,13 @@ class StudyPlannerService {
           ? null
           : TodayGoalPlan(
               paperLabel: today.paperLabel,
-              partLabel: today.partLabel,
-              chapterLabel: today.chapterLabel,
-              questionCount: _questionsPerChapter,
+              partLabel: today.parentLabel,
+              chapterLabel: today.unitLabel,
+              questionCount: questionCounts[todayUnitKey(today)] ?? 0,
               estimatedMinutes: _minutesPerChapter,
+              majorStudyAreaLabel: today.majorStudyAreaLabel,
+              contentTopicLabel: today.contentTopicLabel,
+              lessonLabel: today.lessonLabel,
             ),
       studyProgress: StudyProgressPlan(
         percent: percent,
@@ -62,8 +67,11 @@ class StudyPlannerService {
           .map(
             (item) => UpcomingTaskPlan(
               paperLabel: item.paperLabel,
-              chapterLabel: item.chapterLabel,
+              chapterLabel: item.unitLabel,
               estimatedMinutes: _minutesPerChapter,
+              questionCount: questionCounts[todayUnitKey(item)] ?? 0,
+              parentLabel: item.parentLabel,
+              unitLabel: item.unitLabel,
             ),
           )
           .toList(growable: false),
@@ -74,7 +82,7 @@ class StudyPlannerService {
   StudyPlannerData getPlanSync({String courseId = _defaultCourseId}) {
     final progress = ProgressService.instance;
     final overall = progress.getOverallProgress(courseId);
-    final chapters = StudyPlannerCalculator.flattenChapters(overall);
+    final chapters = StudyPlannerCalculator.flattenCanonical(overall);
     final incomplete = StudyPlannerCalculator.incompleteChapters(chapters);
     final completed = StudyPlannerCalculator.completedCount(chapters);
     final total = chapters.length;
@@ -92,10 +100,13 @@ class StudyPlannerService {
           ? null
           : TodayGoalPlan(
               paperLabel: today.paperLabel,
-              partLabel: today.partLabel,
-              chapterLabel: today.chapterLabel,
-              questionCount: _questionsPerChapter,
+              partLabel: today.parentLabel,
+              chapterLabel: today.unitLabel,
+              questionCount: 0,
               estimatedMinutes: _minutesPerChapter,
+              majorStudyAreaLabel: today.majorStudyAreaLabel,
+              contentTopicLabel: today.contentTopicLabel,
+              lessonLabel: today.lessonLabel,
             ),
       studyProgress: StudyProgressPlan(
         percent: percent,
@@ -115,13 +126,41 @@ class StudyPlannerService {
           .map(
             (item) => UpcomingTaskPlan(
               paperLabel: item.paperLabel,
-              chapterLabel: item.chapterLabel,
+              chapterLabel: item.unitLabel,
               estimatedMinutes: _minutesPerChapter,
+              questionCount: 0,
+              parentLabel: item.parentLabel,
+              unitLabel: item.unitLabel,
             ),
           )
           .toList(growable: false),
     );
   }
+
+  Future<Map<String, int>> _questionCounts(String courseId) async {
+    try {
+      final questions = await QuestionService.instance.fetchQuestions(
+        filter: QuestionFilter(courseId: courseId),
+      );
+      final counts = <String, int>{};
+      for (final question in questions) {
+        final key =
+            question.lessonId ??
+            question.contentTopicId ??
+            question.syllabus?.topicId;
+        if (key != null && key.isNotEmpty) {
+          counts[key] = (counts[key] ?? 0) + 1;
+        }
+      }
+      return counts;
+    } catch (_) {
+      // A missing/unavailable question bank must not fabricate counts.
+      return const {};
+    }
+  }
+
+  String todayUnitKey(PlannerChapterRef unit) =>
+      unit.lessonId ?? unit.contentTopicId ?? unit.topicId ?? unit.chapter.id;
 
   List<WeeklyPlanDay> _buildWeeklyPlan() {
     const labels = [

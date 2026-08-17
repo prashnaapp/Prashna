@@ -74,6 +74,19 @@ class AdminDashboardScreen extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Card(
                 child: ListTile(
+                  title: const Text('Import Questions'),
+                  subtitle: const Text(
+                    'Validate bilingual JSON and import as drafts',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).pushNamed(AdminRoutes.questionImport),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Card(
+                child: ListTile(
                   title: const Text('Tests'),
                   subtitle: const Text('Create, edit, and publish tests'),
                   trailing: const Icon(Icons.chevron_right),

@@ -20,53 +20,38 @@ class CustomBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxWidth = MediaQuery.sizeOf(context).width;
-    final isTablet = maxWidth >= 600;
-    final horizontalMargin = isTablet
-        ? AppSpacing.section
-        : AppNavMetrics.horizontalMargin;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
 
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          horizontalMargin,
-          0,
-          horizontalMargin,
-          AppNavMetrics.bottomMargin,
+    return SizedBox(
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: AppShadows.medium,
         ),
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppNavMetrics.barRadius,
-                boxShadow: AppShadows.medium,
-              ),
-              child: SizedBox(
-                height: AppNavMetrics.barHeight,
-                child: Semantics(
-                  container: true,
-                  label: 'Main navigation',
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < items.length; i++)
-                        Expanded(
-                          child: _NavDestination(
-                            item: items[i],
-                            selected: i == currentIndex,
-                            onTap: () {
-                              if (i == currentIndex) return;
-                              HapticFeedback.selectionClick();
-                              onDestinationSelected(i);
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+        child: Padding(
+          padding: EdgeInsets.only(bottom: safeBottom),
+          child: Semantics(
+            container: true,
+            label: 'Main navigation',
+            child: SizedBox(
+              height: AppNavMetrics.barHeight,
+              child: Row(
+                children: [
+                  for (var i = 0; i < items.length; i++)
+                    Expanded(
+                      child: _NavDestination(
+                        item: items[i],
+                        selected: i == currentIndex,
+                        onTap: () {
+                          if (i == currentIndex) return;
+                          HapticFeedback.selectionClick();
+                          onDestinationSelected(i);
+                        },
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -89,10 +74,12 @@ class _NavDestination extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor =
-        selected ? AppColors.textOnPrimary : AppColors.textSecondary;
-    final labelColor =
-        selected ? AppColors.primary : AppColors.textSecondary;
+    final iconColor = selected
+        ? AppColors.textOnPrimary
+        : AppColors.textTertiary;
+    final labelColor = selected
+        ? AppColors.primaryStrong
+        : AppColors.textTertiary;
 
     return Semantics(
       button: true,
@@ -117,26 +104,21 @@ class _NavDestination extends StatelessWidget {
                     AnimatedContainer(
                       duration: AppAnimations.navigation,
                       curve: AppAnimations.curveStandard,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppNavMetrics.pillHorizontalPadding,
-                        vertical: AppNavMetrics.pillVerticalPadding,
-                      ),
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: selected
-                            ? AppColors.primary
+                            ? AppColors.primaryStrong
                             : Colors.transparent,
-                        borderRadius: AppRadius.xxlAll,
+                        shape: BoxShape.circle,
                       ),
                       child: TweenAnimationBuilder<Color?>(
                         duration: AppAnimations.navigation,
                         curve: AppAnimations.curveStandard,
                         tween: ColorTween(end: iconColor),
                         builder: (context, color, _) {
-                          return Icon(
-                            item.icon,
-                            size: AppNavMetrics.iconSize,
-                            color: color,
-                          );
+                          return Icon(item.icon, size: 22, color: color);
                         },
                       ),
                     ),
@@ -146,8 +128,9 @@ class _NavDestination extends StatelessWidget {
                       curve: AppAnimations.curveStandard,
                       style: AppTextStyles.caption(context).copyWith(
                         color: labelColor,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                       ),
                       child: Text(
                         item.label,

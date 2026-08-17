@@ -1,28 +1,18 @@
-enum TestMode {
-  practice,
-  topic,
-  section,
-  paper,
-  mock,
-  previousYear,
-  grand,
-}
+import '../../../question_bank/data/models/question_models.dart';
 
-enum QuestionStatus {
-  notVisited,
-  notAnswered,
-  answered,
-  markedForReview,
-}
+enum TestMode { practice, topic, section, paper, mock, previousYear, grand }
+
+enum QuestionStatus { notVisited, notAnswered, answered, markedForReview }
+
+/// Catalog attempt submission lifecycle for the student UI.
+enum TestSubmissionPhase { idle, submitting, submitted, submissionFailed }
 
 class TestOption {
-  const TestOption({
-    required this.label,
-    required this.text,
-  });
+  const TestOption({required this.label, required this.text, this.teluguText});
 
   final String label;
   final String text;
+  final String? teluguText;
 }
 
 class TestQuestion {
@@ -35,6 +25,8 @@ class TestQuestion {
     this.paperId,
     this.sectionId,
     this.topicId,
+    this.content,
+    this.syllabus,
   });
 
   final String id;
@@ -45,6 +37,14 @@ class TestQuestion {
   final String? paperId;
   final String? sectionId;
   final String? topicId;
+  final QuestionContent? content;
+  final QuestionSyllabusAttribution? syllabus;
+
+  String? get teluguText => content?.te?.question;
+  String? get majorStudyAreaId => syllabus?.majorStudyAreaId;
+  String? get contentTopicId => syllabus?.contentTopicId;
+  String? get partId => syllabus?.partId;
+  String? get lessonId => syllabus?.lessonId;
 
   String get correctAnswerText {
     for (final option in options) {
@@ -70,6 +70,10 @@ class Test {
     this.paperId,
     this.sectionId,
     this.topicId,
+    this.partId,
+    this.lessonId,
+    this.majorStudyAreaId,
+    this.contentTopicId,
   });
 
   final String id;
@@ -78,6 +82,10 @@ class Test {
   final String? paperId;
   final String? sectionId;
   final String? topicId;
+  final String? partId;
+  final String? lessonId;
+  final String? majorStudyAreaId;
+  final String? contentTopicId;
   final Duration duration;
   final int totalQuestions;
   final int totalMarks;
@@ -88,9 +96,7 @@ class Test {
 }
 
 class QuestionAttempt {
-  QuestionAttempt({
-    required this.questionId,
-  });
+  QuestionAttempt({required this.questionId});
 
   final String questionId;
   String? selectedOption;
@@ -130,6 +136,8 @@ class TestResult {
     required this.percentage,
     required this.timeTaken,
     required this.passed,
+    this.authority,
+    this.attemptId,
   });
 
   final int totalQuestions;
@@ -142,6 +150,14 @@ class TestResult {
   final double percentage;
   final Duration timeTaken;
   final bool passed;
+
+  /// `server_verified` for callable-scored attempts; null/local for practice.
+  final String? authority;
+
+  /// Server attempt id when submitted via [submitTestAttempt].
+  final String? attemptId;
+
+  bool get isServerVerified => authority == 'server_verified';
 }
 
 class AreaPerformance {

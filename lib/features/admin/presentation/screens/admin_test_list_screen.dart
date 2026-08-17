@@ -86,8 +86,8 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
     if (mounted) await _loadTests();
   }
 
-  Future<void> _setPublished(TestModel test, bool published) async {
-    if (published) {
+  Future<void> _setStatus(TestModel test, TestPublicationStatus status) async {
+    if (status == TestPublicationStatus.published) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -111,11 +111,7 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
       if (confirmed != true) return;
     }
     try {
-      if (published) {
-        await _service.publishTest(test.id);
-      } else {
-        await _service.unpublishTest(test.id);
-      }
+      await _service.setStatus(test.id, status);
       if (mounted) await _loadTests();
     } catch (error) {
       if (!mounted) return;
@@ -231,7 +227,7 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
                       test: test,
                       categoryLabel: _categoryLabel(test.category),
                       onEdit: () => _openEdit(test),
-                      onSetPublished: (value) => _setPublished(test, value),
+                      onSetStatus: (status) => _setStatus(test, status),
                     );
                   },
                 ),
@@ -246,29 +242,38 @@ class _TestCard extends StatelessWidget {
     required this.test,
     required this.categoryLabel,
     required this.onEdit,
-    required this.onSetPublished,
+    required this.onSetStatus,
   });
 
   final TestModel test;
   final String categoryLabel;
   final VoidCallback onEdit;
-  final ValueChanged<bool> onSetPublished;
+  final ValueChanged<TestPublicationStatus> onSetStatus;
 
   @override
   Widget build(BuildContext context) {
-    final status = test.isPublished ? 'Published' : 'Draft';
+    final status = switch (test.status) {
+      TestPublicationStatus.draft => 'Draft',
+      TestPublicationStatus.published => 'Published',
+      TestPublicationStatus.archived => 'Archived',
+    };
     return Card(
       child: ListTile(
         title: Text(test.title, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           '${test.id} • $categoryLabel\n'
           '${test.questionCount} questions • ${test.marks} marks • '
-          '${test.durationMinutes} min • ${test.difficulty} • $status',
+          '${test.durationMinutes} min • ${test.difficulty} • $status'
+          '${test.questionIds.isEmpty ? '' : ' • ${test.questionIds.length} fixed IDs'}',
         ),
         isThreeLine: true,
         leading: Icon(
-          test.isPublished ? Icons.publish : Icons.edit_note,
-          color: test.isPublished
+          test.status == TestPublicationStatus.published
+              ? Icons.publish
+              : test.status == TestPublicationStatus.archived
+              ? Icons.archive_outlined
+              : Icons.edit_note,
+          color: test.status == TestPublicationStatus.published
               ? Theme.of(context).colorScheme.primary
               : Theme.of(context).colorScheme.outline,
         ),
@@ -280,15 +285,24 @@ class _TestCard extends StatelessWidget {
               onPressed: onEdit,
               icon: const Icon(Icons.edit_outlined),
             ),
-            IconButton(
-              tooltip: test.isPublished ? 'Unpublish' : 'Publish',
-              onPressed: () => onSetPublished(!test.isPublished),
-              icon: Icon(
-                test.isPublished
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
+            if (test.status != TestPublicationStatus.published)
+              IconButton(
+                tooltip: 'Publish',
+                onPressed: () => onSetStatus(TestPublicationStatus.published),
+                icon: const Icon(Icons.visibility_outlined),
               ),
-            ),
+            if (test.status == TestPublicationStatus.published)
+              IconButton(
+                tooltip: 'Unpublish',
+                onPressed: () => onSetStatus(TestPublicationStatus.draft),
+                icon: const Icon(Icons.visibility_off_outlined),
+              ),
+            if (test.status != TestPublicationStatus.archived)
+              IconButton(
+                tooltip: 'Archive',
+                onPressed: () => onSetStatus(TestPublicationStatus.archived),
+                icon: const Icon(Icons.archive_outlined),
+              ),
           ],
         ),
       ),

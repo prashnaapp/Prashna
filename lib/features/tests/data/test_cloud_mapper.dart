@@ -1,30 +1,32 @@
+import '../../syllabus/data/models/canonical_scope.dart';
 import 'models/test_models.dart';
 
 /// Maps Firestore `tests/{testId}` documents to catalog [TestModel].
 ///
 /// Pure functions — no Firebase dependency (unit-testable).
 abstract final class TestCloudMapper {
-  /// Returns null when required fields are missing or [isPublished] is not true.
+  /// Returns null when required fields are missing or the test is not published.
   ///
-  /// Student catalog path — drafts are never surfaced.
+  /// Student catalog path — drafts and archived tests are never surfaced.
   static TestModel? fromFirestore(String docId, Map<String, dynamic> data) {
-    if (data['isPublished'] != true) return null;
-    return _mapDocument(docId, data, isPublished: true);
+    final mapped = _mapDocument(docId, data);
+    if (mapped == null ||
+        mapped.status != TestPublicationStatus.published ||
+        data['isPublished'] != true) {
+      return null;
+    }
+    return mapped;
   }
 
-  /// Admin read path — includes published and draft tests.
+  /// Admin read path — includes draft, published, and archived tests.
   static TestModel? fromFirestoreAdmin(
     String docId,
     Map<String, dynamic> data,
   ) {
-    return _mapDocument(docId, data, isPublished: data['isPublished'] == true);
+    return _mapDocument(docId, data);
   }
 
-  static TestModel? _mapDocument(
-    String docId,
-    Map<String, dynamic> data, {
-    required bool isPublished,
-  }) {
+  static TestModel? _mapDocument(String docId, Map<String, dynamic> data) {
     final rawCourseId = data['courseId'];
     if (rawCourseId is! String || rawCourseId.isEmpty) return null;
     final courseId = rawCourseId;
@@ -37,19 +39,32 @@ abstract final class TestCloudMapper {
     final id = (rawId != null && rawId.isNotEmpty) ? rawId : docId;
 
     final title = data['title'] as String? ?? '';
+    final description = data['description'] as String? ?? '';
 
     return TestModel(
       id: id,
       examId: courseId,
       category: category,
       title: title,
+      description: description,
       questionCount: asInt(data['questionCount']) ?? 0,
       marks: asInt(data['totalMarks']) ?? 0,
       durationMinutes: asInt(data['durationMinutes']) ?? 0,
       negativeMarking: formatNegativeMarking(data['negativeMarks']),
       difficulty: _difficulty(data['difficulty']),
       questionIds: parseQuestionIds(data['questionIds']),
-      isPublished: isPublished,
+      status: parsePublicationStatus(
+        data['status'] as String?,
+        isPublished: data['isPublished'] == true,
+      ),
+      paperId: readOptionalString(data['paperId']),
+      partId: readOptionalString(data['partId']),
+      syllabusUnitId: readOptionalString(data['syllabusUnitId']),
+      majorStudyAreaId: readOptionalString(data['majorStudyAreaId']),
+      contentTopicId: readOptionalString(data['contentTopicId']),
+      canonicalTopicId: readOptionalString(data['canonicalTopicId']),
+      lessonId: readOptionalString(data['lessonId']),
+      scopeShape: parseScopeShape(data['scopeShape'] as String?),
     );
   }
 
@@ -93,6 +108,10 @@ abstract final class TestCloudMapper {
     if (test.difficulty.trim().isEmpty) {
       errors.add('Difficulty is required.');
     }
+    if (test.questionIds.isNotEmpty &&
+        test.questionIds.length != test.questionCount) {
+      errors.add('Question count must match assigned question IDs.');
+    }
     return errors;
   }
 
@@ -110,6 +129,9 @@ abstract final class TestCloudMapper {
     }
     if (test.id.trim().isEmpty && !errors.contains('Test ID is required.')) {
       errors.insert(0, 'Test ID is required.');
+    }
+    if (test.status == TestPublicationStatus.archived) {
+      errors.add('Archived tests cannot be published.');
     }
     return errors;
   }
@@ -129,10 +151,11 @@ abstract final class TestCloudMapper {
         : test.id.trim();
     final negative = parseNegativeMarkingValue(test.negativeMarking)!;
 
-    return {
+    final data = <String, dynamic>{
       'id': id,
       'courseId': test.examId.trim(),
       'title': test.title.trim(),
+      'description': test.description.trim(),
       'category': categoryToFirestore(test.category)!,
       'questionCount': test.questionCount,
       'totalMarks': test.marks,
@@ -143,12 +166,84 @@ abstract final class TestCloudMapper {
         for (final questionId in test.questionIds)
           if (questionId.trim().isNotEmpty) questionId.trim(),
       ],
+      'status': test.status.name,
+      // Keep boolean for student security-rule queries.
       'isPublished': test.isPublished,
     };
+
+    // Optional syllabus location. Omitted when unset so existing
+    // Group-II documents remain unchanged in shape.
+    final paperId = test.paperId?.trim();
+    final partId = test.partId?.trim();
+    final syllabusUnitId = test.syllabusUnitId?.trim();
+    if (paperId != null && paperId.isNotEmpty) {
+      data['paperId'] = paperId;
+    }
+    if (partId != null && partId.isNotEmpty) {
+      data['partId'] = partId;
+    }
+    if (syllabusUnitId != null && syllabusUnitId.isNotEmpty) {
+      data['syllabusUnitId'] = syllabusUnitId;
+    }
+
+    void addOptional(String key, String? value) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        data[key] = trimmed;
+      }
+    }
+
+    addOptional('majorStudyAreaId', test.majorStudyAreaId);
+    addOptional('contentTopicId', test.contentTopicId);
+    addOptional('canonicalTopicId', test.canonicalTopicId);
+    addOptional('lessonId', test.lessonId);
+    if (test.scopeShape != null) {
+      data['scopeShape'] = test.scopeShape!.name;
+    }
+    // scopeKey is derived — not persisted to production documents.
+    return data;
+  }
+
+  static String? readOptionalString(dynamic value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  static CanonicalScopeShape? parseScopeShape(String? raw) {
+    switch (raw?.trim()) {
+      case 'groupIiPaperI':
+        return CanonicalScopeShape.groupIiPaperI;
+      case 'groupIiPartUnit':
+        return CanonicalScopeShape.groupIiPartUnit;
+      case 'groupIiiPaperUnit':
+        return CanonicalScopeShape.groupIiiPaperUnit;
+      case 'groupIiiPartUnit':
+        return CanonicalScopeShape.groupIiiPartUnit;
+      default:
+        return null;
+    }
   }
 
   static Map<String, dynamic> toPublishMap({required bool isPublished}) {
-    return {'isPublished': isPublished};
+    return {
+      'isPublished': isPublished,
+      'status': isPublished
+          ? TestPublicationStatus.published.name
+          : TestPublicationStatus.draft.name,
+    };
+  }
+
+  static Map<String, dynamic> toStatusMap(TestPublicationStatus status) {
+    return {
+      'status': status.name,
+      'isPublished': status == TestPublicationStatus.published,
+    };
+  }
+
+  static bool hasConsistentPublishedState(Map<String, dynamic> data) {
+    return data['status'] == TestPublicationStatus.published.name &&
+        data['isPublished'] == true;
   }
 
   /// Canonical Firestore category string for writes.
@@ -189,6 +284,24 @@ abstract final class TestCloudMapper {
       ids.add(trimmed);
     }
     return List<String>.unmodifiable(ids);
+  }
+
+  static TestPublicationStatus parsePublicationStatus(
+    String? raw, {
+    required bool isPublished,
+  }) {
+    switch (raw?.trim().toLowerCase()) {
+      case 'draft':
+        return TestPublicationStatus.draft;
+      case 'published':
+        return TestPublicationStatus.published;
+      case 'archived':
+        return TestPublicationStatus.archived;
+      default:
+        return isPublished
+            ? TestPublicationStatus.published
+            : TestPublicationStatus.draft;
+    }
   }
 
   /// Firestore `category` string → [TestCategoryType].

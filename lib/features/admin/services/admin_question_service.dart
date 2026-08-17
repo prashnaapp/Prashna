@@ -3,6 +3,7 @@ import '../../course_enrollment/service/course_catalog_service.dart';
 import '../../question_bank/data/models/question_models.dart';
 import '../../question_bank/data/question_cloud_mapper.dart';
 import '../../question_bank/repository/question_cloud_repository.dart';
+import '../../syllabus/services/syllabus_service.dart';
 
 /// Admin-only orchestration for Question Bank content.
 ///
@@ -13,8 +14,8 @@ class AdminQuestionService {
   AdminQuestionService({
     QuestionCloudRepository? questionRepository,
     CourseCatalogService? courseCatalogService,
-  })  : _questions = questionRepository ?? QuestionCloudRepository(),
-        _courses = courseCatalogService;
+  }) : _questions = questionRepository ?? QuestionCloudRepository(),
+       _courses = courseCatalogService;
 
   static final AdminQuestionService instance = AdminQuestionService();
 
@@ -40,10 +41,14 @@ class AdminQuestionService {
   }
 
   List<String> validate(Question question, {String? documentId}) {
-    return QuestionCloudMapper.validateForWrite(
+    final errors = QuestionCloudMapper.validateForWrite(
       question,
       documentId: documentId,
     );
+    if (question.status != null) {
+      errors.addAll(_validateCanonicalAdminQuestion(question));
+    }
+    return errors;
   }
 
   Future<String> createQuestion(Question question) {
@@ -70,5 +75,138 @@ class AdminQuestionService {
 
   Future<void> reactivateQuestion(String questionId) {
     return _questions.setQuestionActive(questionId, isActive: true);
+  }
+
+  Future<void> setStatus(String questionId, QuestionPublicationStatus status) {
+    return _questions.setQuestionStatus(questionId, status);
+  }
+
+  List<String> _validateCanonicalAdminQuestion(Question question) {
+    final errors = <String>[];
+    final content = question.content;
+    final syllabus = question.syllabus;
+    if (content == null) {
+      errors.add('Bilingual content is required.');
+      return errors;
+    }
+    if (content.en.question.trim().isEmpty) {
+      errors.add('English question is required.');
+    }
+    if (content.te?.question.trim().isEmpty != false) {
+      errors.add('Telugu question is required.');
+    }
+    if (content.en.options.length != 4) {
+      errors.add('Exactly four English options are required.');
+    }
+    if (content.te?.options.length != 4) {
+      errors.add('Exactly four Telugu options are required.');
+    }
+    if (content.en.options.any((option) => option.text.trim().isEmpty)) {
+      errors.add('English options cannot be empty.');
+    }
+    if (content.te?.options.any((option) => option.text.trim().isEmpty) !=
+        false) {
+      errors.add('Telugu options cannot be empty.');
+    }
+    if (content.en.explanation.trim().isEmpty) {
+      errors.add('English explanation is required.');
+    }
+    if (content.te?.explanation.trim().isEmpty != false) {
+      errors.add('Telugu explanation is required.');
+    }
+    if (!const ['A', 'B', 'C', 'D'].contains(question.correctOption)) {
+      errors.add('Correct answer must be A, B, C, or D.');
+    }
+    if (syllabus == null) {
+      errors.add('Canonical syllabus attribution is required.');
+      return errors;
+    }
+    if (question.courseId.trim() == 'group-iii') {
+      errors.addAll(_validateGroupIiiSyllabus(syllabus));
+      return errors;
+    }
+    if (syllabus.paperId == 'group-ii-paper-i') {
+      if (syllabus.majorStudyAreaId == null ||
+          syllabus.contentTopicId == null ||
+          syllabus.partId != null ||
+          syllabus.lessonId != null ||
+          syllabus.syllabusUnitId != null) {
+        errors.add('Paper I requires Major Study Area and Content Topic only.');
+      }
+    } else if (syllabus.partId == null || syllabus.topicId == null) {
+      errors.add('Papers II–IV require Part and Topic attribution.');
+    } else if (syllabus.syllabusUnitId != null) {
+      errors.add('Group-II questions must not use syllabusUnitId.');
+    }
+    return errors;
+  }
+
+  List<String> _validateGroupIiiSyllabus(QuestionSyllabusAttribution syllabus) {
+    final errors = <String>[];
+    final paperId = syllabus.paperId.trim();
+    if (paperId.isEmpty) {
+      errors.add('Paper is required.');
+      return errors;
+    }
+    if (syllabus.majorStudyAreaId != null ||
+        syllabus.contentTopicId != null ||
+        syllabus.topicId != null ||
+        syllabus.lessonId != null) {
+      errors.add(
+        'Group-III questions use Paper / Part / Syllabus Unit only '
+        '(no Topic or Lesson).',
+      );
+    }
+
+    final paper = SyllabusService.instance.getPaper(
+      courseId: 'group-iii',
+      paperId: paperId,
+    );
+    if (paper == null) {
+      errors.add('Unknown Group-III paper "$paperId".');
+      return errors;
+    }
+
+    final unitId = syllabus.syllabusUnitId?.trim();
+    if (unitId == null || unitId.isEmpty) {
+      errors.add('Syllabus Unit is required for Group-III.');
+      return errors;
+    }
+
+    if (paper.hasDirectSyllabusUnits) {
+      if (syllabus.partId != null && syllabus.partId!.trim().isNotEmpty) {
+        errors.add('Group-III Paper-I must not include partId.');
+      }
+      final known = paper.syllabusUnits.any((unit) => unit.id == unitId);
+      if (!known) {
+        errors.add('Unknown Syllabus Unit "$unitId" for Paper-I.');
+      }
+      return errors;
+    }
+
+    if (paper.hasPartSyllabusUnits) {
+      final partId = syllabus.partId?.trim();
+      if (partId == null || partId.isEmpty) {
+        errors.add('Part is required for this Group-III paper.');
+        return errors;
+      }
+      final part = SyllabusService.instance.getPart(
+        courseId: 'group-iii',
+        paperId: paperId,
+        partId: partId,
+      );
+      if (part == null) {
+        errors.add('Unknown Part "$partId".');
+        return errors;
+      }
+      final known = part.syllabusUnits.any((unit) => unit.id == unitId);
+      if (!known) {
+        errors.add('Unknown Syllabus Unit "$unitId" for the selected Part.');
+      }
+      return errors;
+    }
+
+    errors.add('Paper has no Group-III syllabus units.');
+    return errors;
   }
 }

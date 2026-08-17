@@ -5,11 +5,7 @@ import '../../data/models/test_engine_models.dart';
 import '../controllers/test_engine_controller.dart';
 
 class TestAnalysisScreen extends StatelessWidget {
-  const TestAnalysisScreen({
-    super.key,
-    required this.controller,
-    this.onBack,
-  });
+  const TestAnalysisScreen({super.key, required this.controller, this.onBack});
 
   final TestEngineController controller;
   final VoidCallback? onBack;
@@ -38,14 +34,50 @@ class TestAnalysisScreen extends StatelessWidget {
         title: const Text('Detailed Analysis'),
         leading: onBack == null
             ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: onBack,
-              ),
+            : IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
+          if (controller.result != null) ...[
+            Center(
+              child: AppProgressRing(
+                progress: controller.result!.percentage / 100,
+                size: 120,
+                strokeWidth: 10,
+                label: '${controller.result!.percentage}%',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: _MiniStat(
+                    'Correct',
+                    '${controller.result!.correct}',
+                    AppColors.success,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: _MiniStat(
+                    'Wrong',
+                    '${controller.result!.wrong}',
+                    AppColors.error,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: _MiniStat(
+                    'Skipped',
+                    '${controller.result!.skipped}',
+                    AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+          ],
           _AreaSection(title: 'By Paper', areas: analysis.byPaper),
           _AreaSection(title: 'By Section', areas: analysis.bySection),
           _AreaSection(title: 'By Topic', areas: analysis.byTopic),
@@ -55,12 +87,34 @@ class TestAnalysisScreen extends StatelessWidget {
           Text('Question Review', style: AppTextStyles.headline(context)),
           const SizedBox(height: AppSpacing.md),
           for (var i = 0; i < analysis.reviews.length; i++) ...[
-            _QuestionReviewCard(
-              index: i + 1,
-              item: analysis.reviews[i],
-            ),
+            _QuestionReviewCard(index: i + 1, item: analysis.reviews[i]),
             const SizedBox(height: AppSpacing.md),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat(this.label, this.value, this.color);
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      showShadow: false,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: AppTextStyles.titleMedium(context).copyWith(color: color),
+          ),
+          Text(label, style: AppTextStyles.caption(context)),
         ],
       ),
     );
@@ -80,19 +134,31 @@ class _AreaSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: AppTextStyles.headline(context)),
+        Text(title, style: AppTextStyles.titleMedium(context)),
         const SizedBox(height: AppSpacing.md),
         for (final area in areas) ...[
           AppCard(
             showShadow: false,
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: Text(area.label, style: AppTextStyles.bodyLarge(context)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        area.label,
+                        style: AppTextStyles.bodyLarge(context),
+                      ),
+                    ),
+                    Text(
+                      '${area.correct}/${area.total} · ${area.accuracy.toStringAsFixed(0)}%',
+                      style: AppTextStyles.label(context),
+                    ),
+                  ],
                 ),
-                Text(
-                  '${area.correct}/${area.total} · ${area.accuracy.toStringAsFixed(0)}%',
-                  style: AppTextStyles.label(context),
+                const SizedBox(height: AppSpacing.sm),
+                AppLinearProgress(
+                  value: area.total == 0 ? 0 : area.correct / area.total,
+                  height: 8,
                 ),
               ],
             ),
@@ -106,10 +172,7 @@ class _AreaSection extends StatelessWidget {
 }
 
 class _QuestionReviewCard extends StatelessWidget {
-  const _QuestionReviewCard({
-    required this.index,
-    required this.item,
-  });
+  const _QuestionReviewCard({required this.index, required this.item});
 
   final int index;
   final QuestionReviewItem item;
@@ -120,8 +183,8 @@ class _QuestionReviewCard extends StatelessWidget {
     final color = !item.attempt.answered
         ? AppColors.textTertiary
         : item.isCorrect
-            ? AppColors.success
-            : AppColors.error;
+        ? AppColors.success
+        : AppColors.error;
 
     return AppCard(
       showShadow: false,
@@ -136,8 +199,8 @@ class _QuestionReviewCard extends StatelessWidget {
                 !item.attempt.answered
                     ? 'Skipped'
                     : item.isCorrect
-                        ? 'Correct'
-                        : 'Wrong',
+                    ? 'Correct'
+                    : 'Wrong',
                 style: AppTextStyles.label(context).copyWith(color: color),
               ),
             ],
@@ -151,9 +214,9 @@ class _QuestionReviewCard extends StatelessWidget {
           ),
           Text(
             'Correct answer: ${item.question.correctOption} — ${item.question.correctAnswerText}',
-            style: AppTextStyles.bodyMedium(context).copyWith(
-              color: AppColors.success,
-            ),
+            style: AppTextStyles.bodyMedium(
+              context,
+            ).copyWith(color: AppColors.success),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(

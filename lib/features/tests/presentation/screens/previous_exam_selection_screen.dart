@@ -8,10 +8,7 @@ import '../widgets/tests_scroll_body.dart';
 
 /// Previous Papers → choose exam (Group-II / Group-III).
 class PreviousExamSelectionScreen extends StatelessWidget {
-  const PreviousExamSelectionScreen({
-    super.key,
-    required this.title,
-  });
+  const PreviousExamSelectionScreen({super.key, required this.title});
 
   final String title;
 
@@ -30,10 +27,7 @@ class PreviousExamSelectionScreen extends StatelessWidget {
             TestCategoryCard(
               title: exams[i].title,
               subtitle: 'Previous year papers',
-              onTap: () => openPreviousYears(
-                context: context,
-                exam: exams[i],
-              ),
+              onTap: () => openPreviousYears(context: context, exam: exams[i]),
             ),
           ],
         ],
