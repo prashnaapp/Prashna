@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:telangana_prep/features/admin/services/question_import_service.dart';
 import 'package:telangana_prep/features/question_bank/data/models/question_models.dart';
@@ -336,4 +337,40 @@ void main() {
     expect(result.errors.where((e) => e.field == 'question'), isEmpty);
     expect(result.canImport, isTrue);
   });
+
+  test(
+    'write-time ID collision fails the batch and does not overwrite',
+    () async {
+      final store = <String, Map<String, dynamic>>{
+        'q-race': {'id': 'q-race', 'question': 'Original'},
+      };
+      final svc = QuestionImportService(
+        questionRepository: QuestionCloudRepository.withHandlers(
+          getByIds: (ids) async => const [],
+          createBatch: ({required items}) async {
+            for (final item in items) {
+              if (store.containsKey(item.questionId)) {
+                throw FirebaseException(
+                  plugin: 'cloud_firestore',
+                  code: 'already-exists',
+                  message: 'Document already exists: ${item.questionId}',
+                );
+              }
+              store[item.questionId] = item.data;
+            }
+          },
+        ),
+      );
+
+      final validation = await svc.validateJson(
+        wrap([validPaperIRecord(id: 'q-race')]),
+      );
+      expect(validation.canImport, isTrue);
+
+      final report = await svc.importValidatedBatch(validation);
+      expect(report.succeeded, isFalse);
+      expect(report.recordsImported, 0);
+      expect(store['q-race']?['question'], 'Original');
+    },
+  );
 }

@@ -6,6 +6,7 @@
  */
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { createAdminContentService } from './admin_content_service.js';
 import { createEntitlementService } from './entitlement_service.js';
 import { getDb } from './firebase.js';
 import { createPaymentProcessingService } from './payment_processing_service.js';
@@ -59,7 +60,17 @@ function services() {
     playPurchases: createPlayPurchaseService({ db }),
     testAttempts: createTestAttemptService({ db }),
     syllabusCompletion: createSyllabusCompletionService(db),
+    content: createAdminContentService(db),
   };
+}
+
+async function withAdminContent(request, run) {
+  assertAdmin(request);
+  try {
+    return await run(services().content, request.data || {});
+  } catch (error) {
+    mapServiceError(error);
+  }
 }
 
 export const adminGrantEntitlement = onCall(
@@ -109,18 +120,27 @@ export const adminGetEntitlement = onCall(async (request) => {
 });
 
 /**
- * Test/trusted path for a verified payment event.
- * Future Play/Razorpay handlers will call the same service after verification.
+ * Closed: this callable previously accepted admin-supplied payment facts
+ * (success, amount, expiry, courseId, providerTransactionId) and wrote
+ * payment_transactions + entitlements with no Google Play verification.
+ *
+ * Trusted payment grants must go through verifyPlayPurchase / RTDN after
+ * the Android Publisher API confirms PURCHASED. processVerifiedPayment()
+ * remains an internal service for those verified callers only.
  */
-export const adminProcessVerifiedPayment = onCall(async (request) => {
+export function rejectUnverifiedAdminPayment(request) {
   assertAdmin(request);
-  const event = request.data || {};
-  const { payments } = services();
-  const result = await payments.processVerifiedPayment({
-    ...event,
-    expiresAt: event.expiresAt ? new Date(event.expiresAt) : null,
-  });
-  return result;
+  throw new HttpsError(
+    'failed-precondition',
+    'Unverified admin payment processing is disabled. '
+      + 'Successful payment records, entitlements, amounts, and expiry '
+      + 'must be derived from Google Play verification '
+      + '(verifyPlayPurchase or RTDN), not from client- or admin-supplied fields.',
+  );
+}
+
+export const adminProcessVerifiedPayment = onCall(async (request) => {
+  rejectUnverifiedAdminPayment(request);
 });
 
 export const adminGetTransaction = onCall(async (request) => {
@@ -268,4 +288,49 @@ export const setSyllabusCompletion = onCall(
       mapServiceError(error);
     }
   },
+);
+
+export const adminCreateQuestion = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(request, (content, data) => content.createQuestion(data)),
+);
+
+export const adminUpdateQuestion = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(request, (content, data) => content.updateQuestion(data)),
+);
+
+export const adminCreateQuestionsBatch = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(request, (content, data) => content.createQuestionsBatch(data)),
+);
+
+export const adminSetQuestionStatus = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(request, (content, data) => content.setQuestionStatus(data)),
+);
+
+export const adminSetQuestionActive = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(request, (content, data) => content.setQuestionActive(data)),
+);
+
+export const adminCreateTest = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(request, (content, data) => content.createTest(data)),
+);
+
+export const adminUpdateTest = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(request, (content, data) => content.updateTest(data)),
+);
+
+export const adminPublishTest = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(request, (content, data) => content.publishTest(data)),
+);
+
+export const adminSetTestStatus = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(request, (content, data) => content.setTestStatus(data)),
 );

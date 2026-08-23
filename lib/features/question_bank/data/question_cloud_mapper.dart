@@ -152,10 +152,16 @@ abstract final class QuestionCloudMapper {
   ///
   /// [documentId] is used by create/update boundaries to make the document
   /// ID authoritative and prevent `data.id` drift.
+  ///
+  /// When [forUpdate] is true, known optional syllabus fields that are empty
+  /// in the current model are written as [FieldValue.delete] so Firestore
+  /// `update()` removes stale values. Create continues to omit empty optional
+  /// fields instead of emitting delete sentinels.
   static Map<String, dynamic> toFirestore(
     Question question, {
     bool includeCreatedAt = false,
     String? documentId,
+    bool forUpdate = false,
   }) {
     final errors = validateForWrite(question, documentId: documentId);
     if (errors.isNotEmpty) {
@@ -176,9 +182,6 @@ abstract final class QuestionCloudMapper {
     final data = <String, dynamic>{
       'id': id,
       'courseId': question.courseId.trim(),
-      'paperId': question.paperId.trim(),
-      'sectionId': question.sectionId.trim(),
-      'topicId': question.topicId.trim(),
       'question': questionText,
       'options': [for (final option in options) option.trim()],
       'correctOption': question.correctOption.trim().toUpperCase(),
@@ -202,6 +205,61 @@ abstract final class QuestionCloudMapper {
       'isActive': question.isActive,
       'updatedAt': FieldValue.serverTimestamp(),
     };
+    if (forUpdate) {
+      _writeOptionalSyllabusField(
+        data,
+        'paperId',
+        _firstNonEmpty(question.syllabus?.paperId, question.paperId),
+        clearNested: true,
+      );
+      _writeOptionalSyllabusField(
+        data,
+        'sectionId',
+        _firstNonEmpty(question.syllabus?.legacySectionId, question.sectionId),
+        clearNested: true,
+      );
+      _writeOptionalSyllabusField(
+        data,
+        'topicId',
+        _firstNonEmpty(question.syllabus?.topicId, question.topicId),
+        clearNested: true,
+      );
+      _writeOptionalSyllabusField(
+        data,
+        'majorStudyAreaId',
+        question.syllabus?.majorStudyAreaId,
+        clearNested: true,
+      );
+      _writeOptionalSyllabusField(
+        data,
+        'contentTopicId',
+        question.syllabus?.contentTopicId,
+        clearNested: true,
+      );
+      _writeOptionalSyllabusField(
+        data,
+        'partId',
+        question.syllabus?.partId,
+        clearNested: true,
+      );
+      _writeOptionalSyllabusField(
+        data,
+        'lessonId',
+        question.syllabus?.lessonId,
+        clearNested: true,
+      );
+      _writeOptionalSyllabusField(
+        data,
+        'syllabusUnitId',
+        question.syllabus?.syllabusUnitId,
+        clearNested: true,
+      );
+    } else {
+      data['paperId'] = question.paperId.trim();
+      data['sectionId'] = question.sectionId.trim();
+      data['topicId'] = question.topicId.trim();
+      _addCanonicalAttribution(data, question.syllabus);
+    }
     if (question.status != null) {
       data['status'] = question.status!.name;
       data['isActive'] = question.status == QuestionPublicationStatus.published;
@@ -209,7 +267,6 @@ abstract final class QuestionCloudMapper {
     if (content != null) {
       data['content'] = _contentToFirestore(content);
     }
-    _addCanonicalAttribution(data, question.syllabus);
     if (includeCreatedAt) {
       data['createdAt'] = FieldValue.serverTimestamp();
     }
@@ -322,6 +379,31 @@ abstract final class QuestionCloudMapper {
     add('topicId', syllabus.topicId);
     add('lessonId', syllabus.lessonId);
     add('syllabusUnitId', syllabus.syllabusUnitId);
+  }
+
+  static void _writeOptionalSyllabusField(
+    Map<String, dynamic> data,
+    String key,
+    String? value, {
+    bool clearNested = false,
+  }) {
+    final trimmed = value?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      data[key] = trimmed;
+    } else {
+      data[key] = FieldValue.delete();
+    }
+    if (clearNested) {
+      data['syllabus.$key'] = FieldValue.delete();
+    }
+  }
+
+  static String? _firstNonEmpty(String? primary, String? fallback) {
+    final first = primary?.trim();
+    if (first != null && first.isNotEmpty) return first;
+    final second = fallback?.trim();
+    if (second != null && second.isNotEmpty) return second;
+    return null;
   }
 
   static bool _isFiniteNonNegative(double value) {

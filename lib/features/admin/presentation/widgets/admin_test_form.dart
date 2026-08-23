@@ -209,6 +209,13 @@ class _AdminTestFormState extends State<AdminTestForm> {
       paperId: _isSyllabusCourse ? _paperId : null,
       partId: _isSyllabusCourse ? _partId : null,
       syllabusUnitId: _isSyllabusCourse ? _syllabusUnitId : null,
+      // The form does not edit these. Preserve them so update() cannot
+      // treat "not shown" as "explicitly cleared".
+      majorStudyAreaId: initial?.majorStudyAreaId,
+      contentTopicId: initial?.contentTopicId,
+      canonicalTopicId: initial?.canonicalTopicId,
+      lessonId: initial?.lessonId,
+      scopeShape: initial?.scopeShape,
     );
   }
 

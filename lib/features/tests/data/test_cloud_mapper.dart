@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../syllabus/data/models/canonical_scope.dart';
 import 'models/test_models.dart';
 
@@ -137,9 +139,15 @@ abstract final class TestCloudMapper {
   }
 
   /// Maps a canonical test to the existing Firestore schema.
+  ///
+  /// When [forUpdate] is true, known optional syllabus fields that are empty
+  /// in the current model are written as [FieldValue.delete] so Firestore
+  /// `update()` removes stale values. Create continues to omit empty optional
+  /// fields instead of emitting delete sentinels.
   static Map<String, dynamic> toFirestore(
     TestModel test, {
     String? documentId,
+    bool forUpdate = false,
   }) {
     final errors = validateForWrite(test, documentId: documentId);
     if (errors.isNotEmpty) {
@@ -171,34 +179,26 @@ abstract final class TestCloudMapper {
       'isPublished': test.isPublished,
     };
 
-    // Optional syllabus location. Omitted when unset so existing
-    // Group-II documents remain unchanged in shape.
-    final paperId = test.paperId?.trim();
-    final partId = test.partId?.trim();
-    final syllabusUnitId = test.syllabusUnitId?.trim();
-    if (paperId != null && paperId.isNotEmpty) {
-      data['paperId'] = paperId;
-    }
-    if (partId != null && partId.isNotEmpty) {
-      data['partId'] = partId;
-    }
-    if (syllabusUnitId != null && syllabusUnitId.isNotEmpty) {
-      data['syllabusUnitId'] = syllabusUnitId;
-    }
-
-    void addOptional(String key, String? value) {
+    void writeOptional(String key, String? value) {
       final trimmed = value?.trim();
       if (trimmed != null && trimmed.isNotEmpty) {
         data[key] = trimmed;
+      } else if (forUpdate) {
+        data[key] = FieldValue.delete();
       }
     }
 
-    addOptional('majorStudyAreaId', test.majorStudyAreaId);
-    addOptional('contentTopicId', test.contentTopicId);
-    addOptional('canonicalTopicId', test.canonicalTopicId);
-    addOptional('lessonId', test.lessonId);
+    writeOptional('paperId', test.paperId);
+    writeOptional('partId', test.partId);
+    writeOptional('syllabusUnitId', test.syllabusUnitId);
+    writeOptional('majorStudyAreaId', test.majorStudyAreaId);
+    writeOptional('contentTopicId', test.contentTopicId);
+    writeOptional('canonicalTopicId', test.canonicalTopicId);
+    writeOptional('lessonId', test.lessonId);
     if (test.scopeShape != null) {
       data['scopeShape'] = test.scopeShape!.name;
+    } else if (forUpdate) {
+      data['scopeShape'] = FieldValue.delete();
     }
     // scopeKey is derived — not persisted to production documents.
     return data;

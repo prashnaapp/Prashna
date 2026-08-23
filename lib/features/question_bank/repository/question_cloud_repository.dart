@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../admin/data/admin_content_callable_client.dart';
 import '../data/models/question_models.dart';
 import '../data/question_cloud_mapper.dart';
 
@@ -9,15 +10,20 @@ import '../data/question_cloud_mapper.dart';
 /// All list queries are course-scoped (and typically `isActive == true`) so
 /// they satisfy security rules and never mix courses.
 class QuestionCloudRepository {
-  QuestionCloudRepository({this._firestore})
-    : _loadQuestionsForTest = null,
-      _getByIdForTest = null,
-      _getByIdsForTest = null,
-      _createForTest = null,
-      _createBatchForTest = null,
-      _updateForTest = null,
-      _deactivateForTest = null,
-      _idGeneratorForTest = null;
+  QuestionCloudRepository({
+    FirebaseFirestore? firestore,
+    AdminContentCallableClient? contentCallables,
+  }) : _firestore = firestore, // ignore: prefer_initializing_formals
+       _contentCallables =
+           contentCallables, // ignore: prefer_initializing_formals
+       _loadQuestionsForTest = null,
+       _getByIdForTest = null,
+       _getByIdsForTest = null,
+       _createForTest = null,
+       _createBatchForTest = null,
+       _updateForTest = null,
+       _deactivateForTest = null,
+       _idGeneratorForTest = null;
 
   /// Unit-test constructor — does not touch Firestore.
   @visibleForTesting
@@ -43,6 +49,7 @@ class QuestionCloudRepository {
     deactivate,
     String Function()? idGenerator,
   }) : _firestore = null,
+       _contentCallables = null,
        _loadQuestionsForTest = loadQuestions,
        _getByIdForTest = getById,
        _getByIdsForTest = getByIds,
@@ -56,6 +63,7 @@ class QuestionCloudRepository {
   static const int maxBatchSize = 500;
 
   final FirebaseFirestore? _firestore;
+  final AdminContentCallableClient? _contentCallables;
   final Future<List<Question>> Function(QuestionFilter? filter)?
   _loadQuestionsForTest;
   final Future<Question?> Function(String id)? _getByIdForTest;
@@ -85,6 +93,9 @@ class QuestionCloudRepository {
 
   CollectionReference<Map<String, dynamic>> get _questions =>
       _db.collection(collectionName);
+
+  AdminContentCallableClient get _callables =>
+      _contentCallables ?? AdminContentCallableClient();
 
   /// Loads questions matching [filter].
   ///
@@ -271,7 +282,7 @@ class QuestionCloudRepository {
       if (testCreate != null) {
         await testCreate(questionId: questionId, data: data);
       } else {
-        await _questions.doc(questionId).set(data);
+        await _callables.createQuestion(questionId: questionId, data: data);
       }
       return questionId;
     } on FirebaseException catch (error, stack) {
@@ -286,11 +297,13 @@ class QuestionCloudRepository {
     }
   }
 
-  /// Atomically creates many questions in one WriteBatch.
+  /// Atomically creates many questions.
   ///
   /// Uses a supplied question ID when non-empty; otherwise generates one with
-  /// the same strategy as [createQuestion]. Fails the whole batch if any write
-  /// cannot be prepared. Firestore batches are capped at [maxBatchSize].
+  /// the same strategy as [createQuestion]. Flutter's WriteBatch has no
+  /// create-only API, so a transaction reads every ID first and writes only
+  /// when none exist. A concurrent import that created the same ID fails the
+  /// whole batch instead of overwriting. Capped at [maxBatchSize].
   Future<List<String>> createQuestionsBatch(List<Question> questions) async {
     if (questions.isEmpty) return const [];
     if (questions.length > maxBatchSize) {
@@ -335,12 +348,7 @@ class QuestionCloudRepository {
     }
 
     try {
-      final batch = _db.batch();
-      for (final item in items) {
-        batch.set(_questions.doc(item.questionId), item.data);
-      }
-      await batch.commit();
-      return [for (final item in items) item.questionId];
+      return _callables.createQuestionsBatch(items: items);
     } on FirebaseException catch (error, stack) {
       debugPrint(
         'FirebaseException in QuestionCloudRepository.createQuestionsBatch: '
@@ -364,13 +372,14 @@ class QuestionCloudRepository {
     final data = QuestionCloudMapper.toFirestore(
       question,
       documentId: questionId,
+      forUpdate: true,
     );
     try {
       final testUpdate = _updateForTest;
       if (testUpdate != null) {
         await testUpdate(questionId: questionId, data: data);
       } else {
-        await _questions.doc(questionId).update(data);
+        await _callables.updateQuestion(questionId: questionId, data: data);
       }
     } on FirebaseException catch (error, stack) {
       debugPrint(
@@ -393,13 +402,12 @@ class QuestionCloudRepository {
     if (id.isEmpty) {
       throw const FormatException('Question ID is required.');
     }
-    final data = QuestionCloudMapper.toDeactivateMap(isActive: isActive);
     try {
       final testDeactivate = _deactivateForTest;
       if (testDeactivate != null) {
         await testDeactivate(questionId: id, isActive: isActive);
       } else {
-        await _questions.doc(id).update(data);
+        await _callables.setQuestionActive(questionId: id, isActive: isActive);
       }
     } on FirebaseException catch (error, stack) {
       debugPrint(
@@ -421,12 +429,14 @@ class QuestionCloudRepository {
     if (id.isEmpty) {
       throw const FormatException('Question ID is required.');
     }
-    final data = QuestionCloudMapper.toStatusMap(status);
     final testUpdate = _updateForTest;
     if (testUpdate != null) {
-      await testUpdate(questionId: id, data: data);
+      await testUpdate(
+        questionId: id,
+        data: QuestionCloudMapper.toStatusMap(status),
+      );
     } else {
-      await _questions.doc(id).update(data);
+      await _callables.setQuestionStatus(questionId: id, status: status.name);
     }
   }
 

@@ -1,9 +1,14 @@
 /**
  * Idempotent verified-payment → transaction + entitlement grant.
  *
- * Provider SDKs are NOT integrated here. Callers pass a verified payment
- * event that a future Play/Razorpay webhook handler will construct after
- * server-side verification.
+ * INTERNAL ONLY. Callers must already have verified the purchase with
+ * Google Play (Android Publisher API) and constructed this event from
+ * that verified state. Do not expose this as an HTTPS callable that
+ * accepts client- or admin-supplied success/amount/expiry/courseId.
+ *
+ * Trusted callers today:
+ * - play_purchase_service.verifyAndGrant (after purchases.products.get)
+ * - rtdn_service (after re-querying Google for current purchase state)
  *
  * Atomicity: a single Firestore transaction writes (or confirms) the
  * payment_transactions doc and upserts user_courses entitlement together.

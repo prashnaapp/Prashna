@@ -35,35 +35,49 @@ describe('Firestore rules — admin claim isolation', () => {
     });
   });
 
-  it('1/3: admin can create and read a question (admin claim)', async () => {
+  it('1/3: admin can read a question but cannot write it directly', async () => {
+    await seed(async (db) => {
+      await seedQuestion(db, 'q-admin-1', PAID_COURSE_ID, { isActive: false });
+    });
     const db = adminContext().firestore();
-    await assertSucceeds(
-      setDoc(doc(db, 'questions', 'q-admin-1'), {
-        questionId: 'q-admin-1',
+    await assertSucceeds(getDoc(doc(db, 'questions', 'q-admin-1')));
+    await assertFails(
+      setDoc(doc(db, 'questions', 'q-admin-2'), {
+        questionId: 'q-admin-2',
         courseId: PAID_COURSE_ID,
         isActive: false,
-        stem: 'Admin draft question',
+        stem: 'Admin must use callable',
         questionType: 'mcq',
       }),
     );
-    await assertSucceeds(getDoc(doc(db, 'questions', 'q-admin-1')));
+    await assertFails(
+      updateDoc(doc(db, 'questions', 'q-admin-1'), {
+        stem: 'Admin must use callable',
+      }),
+    );
+    await assertFails(deleteDoc(doc(db, 'questions', 'q-admin-1')));
   });
 
-  it('2/3: admin can create and update a test (admin claim)', async () => {
+  it('2/3: admin can read a test but cannot write it directly', async () => {
+    await seed(async (db) => {
+      await seedTest(db, 't-admin-1', PAID_COURSE_ID, { isPublished: false });
+    });
     const db = adminContext().firestore();
-    await assertSucceeds(
-      setDoc(doc(db, 'tests', 't-admin-1'), {
-        testId: 't-admin-1',
+    await assertSucceeds(getDoc(doc(db, 'tests', 't-admin-1')));
+    await assertFails(
+      setDoc(doc(db, 'tests', 't-admin-2'), {
+        testId: 't-admin-2',
         courseId: PAID_COURSE_ID,
         isPublished: false,
-        title: 'Admin draft test',
+        title: 'Admin must use callable',
       }),
     );
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(db, 'tests', 't-admin-1'), {
-        title: 'Admin draft test (updated)',
+        title: 'Admin must use callable',
       }),
     );
+    await assertFails(deleteDoc(doc(db, 'tests', 't-admin-1')));
   });
 
   it('3/3: student cannot perform the same admin operations', async () => {

@@ -3,6 +3,8 @@
  *
  * Phase 5.11–5.16: entitlements, Play Billing, RTDN, void reconciliation.
  * Phase 5.20: server-authoritative test attempts (startTestAttempt / submitTestAttempt).
+ * adminProcessVerifiedPayment is exported but rejects unverified admin-supplied
+ * payment facts — grants require Google Play verification.
  * Do not deploy without secrets + Play Console / Pub/Sub configured.
  */
 import { setGlobalOptions } from 'firebase-functions/v2';
@@ -14,6 +16,15 @@ import {
   adminGrantEntitlement,
   adminProcessVerifiedPayment,
   adminRevokeEntitlement,
+  adminCreateQuestion,
+  adminUpdateQuestion,
+  adminCreateQuestionsBatch,
+  adminSetQuestionStatus,
+  adminSetQuestionActive,
+  adminCreateTest,
+  adminUpdateTest,
+  adminPublishTest,
+  adminSetTestStatus,
   setSyllabusCompletion,
   startTestAttempt,
   submitTestAttempt,
@@ -41,6 +52,15 @@ export {
   adminGetEntitlement,
   adminProcessVerifiedPayment,
   adminGetTransaction,
+  adminCreateQuestion,
+  adminUpdateQuestion,
+  adminCreateQuestionsBatch,
+  adminSetQuestionStatus,
+  adminSetQuestionActive,
+  adminCreateTest,
+  adminUpdateTest,
+  adminPublishTest,
+  adminSetTestStatus,
   verifyPlayPurchase,
   startTestAttempt,
   submitTestAttempt,
@@ -111,4 +131,10 @@ export {
   voidedReasonName,
 } from './src/void_reasons.js';
 export { stableTransactionId } from './src/ids.js';
+export { createAdminContentService } from './src/admin_content_service.js';
+export {
+  validateQuestionPayload,
+  validateTestPayload,
+  decodeWriteData,
+} from './src/content_validation_service.js';
 export { assertAdmin, assertAuthenticated } from './src/callables.js';

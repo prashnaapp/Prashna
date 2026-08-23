@@ -101,14 +101,14 @@ export function pastTimestamp(days = 30) {
   return Timestamp.fromMillis(ms);
 }
 
-export async function seedCourse(db, courseId, { isFree }) {
+export async function seedCourse(db, courseId, { isFree, isPublished = true } = {}) {
   await setDoc(doc(db, 'courses', courseId), {
     courseId,
     title: courseId,
     shortTitle: courseId,
     description: '',
     isFree,
-    isPublished: true,
+    isPublished,
     price: isFree ? 0 : 299,
     sortOrder: 0,
   });

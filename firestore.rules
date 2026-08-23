@@ -131,10 +131,12 @@ service cloud.firestore {
     // ============================================================
     // COURSE CATALOG
     // ============================================================
-    // Authenticated users can read published course information.
+    // Students may read only published course documents.
+    // Admins (custom claim admin == true) may read unpublished drafts.
     // Clients cannot modify courses.
     match /courses/{courseId} {
-      allow read: if request.auth != null;
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.isPublished == true);
 
       allow create, update: if false;
       allow delete: if false;
@@ -236,10 +238,11 @@ service cloud.firestore {
         && resource.data.isActive == true
         && canAccessCourse(resource.data.courseId);
 
-      // Admins: full read (including inactive) + CRUD.
+      // Admins: full read (including inactive).
+      // Writes are trusted Cloud Functions / Admin SDK only.
       allow read: if isAdmin();
 
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
 
@@ -252,10 +255,11 @@ service cloud.firestore {
         && resource.data.isPublished == true
         && canAccessCourse(resource.data.courseId);
 
-      // Admins: full read (including unpublished) + CRUD.
+      // Admins: full read (including unpublished).
+      // Writes are trusted Cloud Functions / Admin SDK only.
       allow read: if isAdmin();
 
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
 

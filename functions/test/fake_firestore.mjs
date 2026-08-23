@@ -18,6 +18,57 @@ function isServerTimestamp(value) {
   }
 }
 
+function isDeleteValue(value) {
+  try {
+    return (
+      value != null &&
+      typeof value.isEqual === 'function' &&
+      value.isEqual(FieldValue.delete())
+    );
+  } catch {
+    return false;
+  }
+}
+
+function setDotted(target, path, value) {
+  const parts = path.split('.');
+  let cursor = target;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const key = parts[i];
+    if (!cursor[key] || typeof cursor[key] !== 'object' || Array.isArray(cursor[key])) {
+      cursor[key] = {};
+    }
+    cursor = cursor[key];
+  }
+  cursor[parts[parts.length - 1]] = value;
+}
+
+function deleteDotted(target, path) {
+  const parts = path.split('.');
+  let cursor = target;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const key = parts[i];
+    if (!cursor[key] || typeof cursor[key] !== 'object') return;
+    cursor = cursor[key];
+  }
+  delete cursor[parts[parts.length - 1]];
+}
+
+function applyUpdate(existing, incoming, now) {
+  const out = { ...(existing || {}) };
+  for (const [key, value] of Object.entries(incoming || {})) {
+    if (isDeleteValue(value)) {
+      if (key.includes('.')) deleteDotted(out, key);
+      else delete out[key];
+      continue;
+    }
+    const materialized = materialize(value, now);
+    if (key.includes('.')) setDotted(out, key, materialized);
+    else out[key] = materialized;
+  }
+  return out;
+}
+
 function materialize(value, now) {
   if (isServerTimestamp(value)) {
     return Timestamp.fromDate(now);
@@ -88,6 +139,24 @@ class FakeDocRef {
     }
     this.db._bumpVersion(this.path);
   }
+  async update(data) {
+    const existing = this.db._store.get(this.path);
+    if (!existing) {
+      const error = new Error(`No document to update: ${this.path}`);
+      error.code = 'not-found';
+      throw error;
+    }
+    this.db._store.set(this.path, applyUpdate(existing, data, this.db._now()));
+    this.db._bumpVersion(this.path);
+  }
+  async create(data) {
+    if (this.db._store.has(this.path)) {
+      const error = new Error(`Document already exists: ${this.path}`);
+      error.code = 'already-exists';
+      throw error;
+    }
+    await this.set(data);
+  }
   async delete() {
     this.db._store.delete(this.path);
     this.db._bumpVersion(this.path);
@@ -118,7 +187,10 @@ class FakeTransaction {
     return ref.get();
   }
   set(ref, data, options = {}) {
-    this._writes.push({ ref, data, options });
+    this._writes.push({ type: 'set', ref, data, options });
+  }
+  update(ref, data) {
+    this._writes.push({ type: 'update', ref, data });
   }
   /**
    * Apply buffered writes. Must be called under the store commit lock.
@@ -132,8 +204,18 @@ class FakeTransaction {
     }
     for (const write of this._writes) {
       const now = this.db._now();
+      if (write.type === 'update') {
+        const existing = this.db._store.get(write.ref.path);
+        if (!existing) return false;
+        this.db._store.set(
+          write.ref.path,
+          applyUpdate(existing, write.data, now),
+        );
+        this.db._bumpVersion(write.ref.path);
+        continue;
+      }
       const incoming = materialize(write.data, now);
-      if (write.options.merge) {
+      if (write.options?.merge) {
         const existing = this.db._store.get(write.ref.path) ?? {};
         this.db._store.set(write.ref.path, deepMerge(existing, incoming));
       } else {

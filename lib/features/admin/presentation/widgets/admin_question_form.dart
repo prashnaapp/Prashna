@@ -266,7 +266,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
               ),
             )
           : null,
-      syllabus: _canonicalMode ? _canonicalAttribution() : null,
+      syllabus: _canonicalMode ? _canonicalAttribution() : _initial?.syllabus,
       status: _canonicalMode ? _status : _initial?.status,
     );
 

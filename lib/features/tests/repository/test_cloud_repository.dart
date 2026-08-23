@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../admin/data/admin_content_callable_client.dart';
 import '../data/models/test_models.dart';
 import '../data/test_cloud_mapper.dart';
 
@@ -8,15 +9,19 @@ import '../data/test_cloud_mapper.dart';
 ///
 /// Does not load questions, attempts, or unpublished tests.
 class TestCloudRepository {
-  TestCloudRepository({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance,
-      _loadPublishedTestsForTest = null,
-      _loadAdminTestsForTest = null,
-      _getByIdForTest = null,
-      _createForTest = null,
-      _updateForTest = null,
-      _setPublishedForTest = null,
-      _idGeneratorForTest = null;
+  TestCloudRepository({
+    FirebaseFirestore? firestore,
+    AdminContentCallableClient? contentCallables,
+  }) : _firestore = firestore, // ignore: prefer_initializing_formals
+       _contentCallables =
+           contentCallables, // ignore: prefer_initializing_formals
+       _loadPublishedTestsForTest = null,
+       _loadAdminTestsForTest = null,
+       _getByIdForTest = null,
+       _createForTest = null,
+       _updateForTest = null,
+       _setPublishedForTest = null,
+       _idGeneratorForTest = null;
 
   /// Unit-test constructor — does not touch Firestore.
   @visibleForTesting
@@ -39,6 +44,7 @@ class TestCloudRepository {
     setPublished,
     String Function()? idGenerator,
   }) : _firestore = null,
+       _contentCallables = null,
        _loadAdminTestsForTest = loadAdminTests,
        _getByIdForTest = getById,
        _createForTest = create,
@@ -49,6 +55,7 @@ class TestCloudRepository {
   static const String collectionName = 'tests';
 
   final FirebaseFirestore? _firestore;
+  final AdminContentCallableClient? _contentCallables;
 
   /// Optional override for unit tests — never used in production.
   final Future<List<TestModel>> Function(String courseId)?
@@ -77,6 +84,9 @@ class TestCloudRepository {
 
   CollectionReference<Map<String, dynamic>> get _tests =>
       _db.collection(collectionName);
+
+  AdminContentCallableClient get _callables =>
+      _contentCallables ?? AdminContentCallableClient();
 
   /// Published tests for exactly [courseId] (`group-ii` / `group-iii`).
   ///
@@ -217,7 +227,7 @@ class TestCloudRepository {
       if (testCreate != null) {
         await testCreate(testId: testId, data: data);
       } else {
-        await _tests.doc(testId).set(data);
+        await _callables.createTest(testId: testId, data: data);
       }
       return testId;
     } on FirebaseException catch (error, stack) {
@@ -238,12 +248,16 @@ class TestCloudRepository {
     if (testId.isEmpty) {
       throw const FormatException('Test ID is required for update.');
     }
-    final data = TestCloudMapper.toFirestore(test, documentId: testId);
+    final data = TestCloudMapper.toFirestore(
+      test,
+      documentId: testId,
+      forUpdate: true,
+    );
     try {
       if (_updateForTest != null) {
         await _updateForTest(testId: testId, data: data);
       } else {
-        await _tests.doc(testId).update(data);
+        await _callables.updateTest(testId: testId, data: data);
       }
     } on FirebaseException catch (error, stack) {
       debugPrint(
@@ -266,12 +280,13 @@ class TestCloudRepository {
     if (id.isEmpty) {
       throw const FormatException('Test ID is required.');
     }
-    final data = TestCloudMapper.toPublishMap(isPublished: isPublished);
     try {
       if (_setPublishedForTest != null) {
         await _setPublishedForTest(testId: id, isPublished: isPublished);
+      } else if (isPublished) {
+        await _callables.publishTest(testId: id);
       } else {
-        await _tests.doc(id).update(data);
+        await _callables.setTestStatus(testId: id, status: 'draft');
       }
     } on FirebaseException catch (error, stack) {
       debugPrint(
@@ -294,17 +309,19 @@ class TestCloudRepository {
     if (id.isEmpty) {
       throw const FormatException('Test ID is required.');
     }
-    final data = TestCloudMapper.toStatusMap(status);
     try {
       if (_updateForTest != null) {
-        await _updateForTest(testId: id, data: data);
+        await _updateForTest(
+          testId: id,
+          data: TestCloudMapper.toStatusMap(status),
+        );
       } else if (_setPublishedForTest != null) {
         await _setPublishedForTest(
           testId: id,
           isPublished: status == TestPublicationStatus.published,
         );
       } else {
-        await _tests.doc(id).update(data);
+        await _callables.setTestStatus(testId: id, status: status.name);
       }
     } on FirebaseException catch (error, stack) {
       debugPrint(
