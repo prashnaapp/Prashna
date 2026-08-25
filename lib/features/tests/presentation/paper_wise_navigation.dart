@@ -1,29 +1,44 @@
 import 'package:flutter/material.dart';
 
 import '../data/models/test_models.dart';
+import '../data/test_series_browser_groups.dart';
 import '../services/test_service.dart';
 import 'screens/paper_wise_part_list_screen.dart';
 import 'screens/test_list_screen.dart';
+import 'screens/test_series_browser_screen.dart';
 
 /// Category entry routing for Test Series group dashboards.
 ///
-/// Every executable list is Firestore-backed [TestListScreen]. Dummy
-/// paper/mock/previous helpers must not start server attempts.
+/// Paper-wise, Grand Tests, and Previous Papers use the Chapters-style
+/// tab + card browser. Other categories keep the published [TestListScreen].
 void openTestCategory({
   required BuildContext context,
   required String examId,
   required TestCategoryModel category,
   TestService? testService,
 }) {
+  final mode = switch (category.type) {
+    TestCategoryType.partTests => TestSeriesBrowserMode.paperWise,
+    TestCategoryType.mockTests => TestSeriesBrowserMode.grandTests,
+    TestCategoryType.previousYear => TestSeriesBrowserMode.previousPapers,
+    _ => null,
+  };
+
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => TestListScreen(
-        examId: examId,
-        category: category.type,
-        title: category.title,
-        testService: testService,
-      ),
+      builder: (_) => mode == null
+          ? TestListScreen(
+              examId: examId,
+              category: category.type,
+              title: category.title,
+              testService: testService,
+            )
+          : TestSeriesBrowserScreen(
+              examId: examId,
+              mode: mode,
+              testService: testService,
+            ),
     ),
   );
 }

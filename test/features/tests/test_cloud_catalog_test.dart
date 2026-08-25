@@ -51,6 +51,68 @@ void main() {
       expect(model!.questionIds, ['q-test-group-ii-001']);
     });
 
+    test('reads optional year and seriesId without requiring admin writes', () {
+      final model = TestCloudMapper.fromFirestore('py-2016', {
+        'id': 'py-2016',
+        'courseId': 'group-ii',
+        'title': 'Paper I',
+        'category': 'previousyear',
+        'questionCount': 1,
+        'totalMarks': 1,
+        'durationMinutes': 1,
+        'negativeMarks': 0,
+        'isPublished': true,
+        'paperId': 'group-ii-paper-i',
+        'year': 2016,
+        'seriesId': 'set-1',
+      });
+
+      expect(model, isNotNull);
+      expect(model!.year, 2016);
+      expect(model.seriesId, 'set-1');
+      expect(model.paperId, 'group-ii-paper-i');
+    });
+
+    test('writes year and seriesId for previous and grand tests', () {
+      final previous = TestCloudMapper.toFirestore(
+        const TestModel(
+          id: 'py-2016',
+          examId: 'group-ii',
+          category: TestCategoryType.previousYear,
+          title: 'Paper I',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-i',
+          year: 2016,
+        ),
+        documentId: 'py-2016',
+      );
+      expect(previous['year'], 2016);
+      expect(previous.containsKey('seriesId'), isFalse);
+
+      final grand = TestCloudMapper.toFirestore(
+        const TestModel(
+          id: 'gt-1',
+          examId: 'group-ii',
+          category: TestCategoryType.mockTests,
+          title: 'Paper I Grand Test',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-i',
+          seriesId: 'Grand Test 1',
+        ),
+        documentId: 'gt-1',
+      );
+      expect(grand['seriesId'], 'Grand Test 1');
+      expect(grand.containsKey('year'), isFalse);
+    });
+
     test('missing questionIds defaults to empty list', () {
       final model = TestCloudMapper.fromFirestore('t1', {
         'courseId': 'group-ii',
@@ -71,14 +133,7 @@ void main() {
       expect(TestCloudMapper.parseQuestionIds(null), isEmpty);
       expect(TestCloudMapper.parseQuestionIds('not-a-list'), isEmpty);
       expect(
-        TestCloudMapper.parseQuestionIds([
-          'q1',
-          42,
-          '',
-          '  ',
-          'q2',
-          null,
-        ]),
+        TestCloudMapper.parseQuestionIds(['q1', 42, '', '  ', 'q2', null]),
         ['q1', 'q2'],
       );
     });
@@ -333,6 +388,46 @@ void main() {
       );
       expect(mocks.map((t) => t.id), ['mock-1']);
     });
+
+    test(
+      'Paper-wise filter includes legacy chapter-classified published tests',
+      () async {
+        final service = TestService(
+          cloudRepository: TestCloudRepository.withLoader(
+            (courseId) async => [
+              cloudTest(
+                id: 'test-group-ii-001',
+                courseId: courseId,
+                category: TestCategoryType.chapterTests,
+                title: 'Group-II Practice Test 1',
+              ),
+              cloudTest(
+                id: 'part-1',
+                courseId: courseId,
+                category: TestCategoryType.partTests,
+                title: 'Paper-wise Part Test',
+              ),
+              cloudTest(
+                id: 'mock-1',
+                courseId: courseId,
+                category: TestCategoryType.mockTests,
+              ),
+            ],
+          ),
+        );
+
+        final paperWise = await service.getTests(
+          examId: 'group-ii',
+          category: TestCategoryType.partTests,
+        );
+
+        expect(
+          paperWise.map((t) => t.id),
+          containsAll(<String>['test-group-ii-001', 'part-1']),
+        );
+        expect(paperWise.any((t) => t.id == 'mock-1'), isFalse);
+      },
+    );
 
     test('propagates repository errors (no dummy fallback)', () async {
       final service = TestService(

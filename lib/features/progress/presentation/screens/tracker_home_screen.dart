@@ -17,19 +17,46 @@ import '../widgets/revision_center_card.dart';
 /// The hero is fixed and the sheet scrolls beneath its wave, so the header
 /// stays legible while the sections below can exceed one screen.
 class TrackerHomeScreen extends StatefulWidget {
-  const TrackerHomeScreen({super.key});
+  const TrackerHomeScreen({super.key, this.isActive = true});
+
+  /// When the Progress tab becomes selected in the shell [IndexedStack],
+  /// Attempt Analytics re-fetches submitted `test_attempts`.
+  final bool isActive;
 
   @override
   State<TrackerHomeScreen> createState() => _TrackerHomeScreenState();
 }
 
-class _TrackerHomeScreenState extends State<TrackerHomeScreen> {
+class _TrackerHomeScreenState extends State<TrackerHomeScreen>
+    with WidgetsBindingObserver {
   late Future<ProgressSummary> _summaryFuture;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _summaryFuture = ProgressService.instance.generateSummary();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant TrackerHomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _refreshSummary();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.isActive) {
+      _refreshSummary();
+    }
   }
 
   void _refreshSummary() {

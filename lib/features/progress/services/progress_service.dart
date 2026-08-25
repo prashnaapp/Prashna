@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import '../../progress_cloud/model/user_progress.dart';
 import '../../progress_cloud/repository/course_progress_cloud_repository.dart';
 import '../../syllabus/services/syllabus_service.dart';
+import '../../test_engine/data/models/test_attempt_history.dart';
 import '../../test_engine/data/models/test_engine_models.dart';
+import '../../test_engine/repository/test_attempt_cloud_repository.dart';
 import '../../authentication/services/user_session_state_coordinator.dart';
 import '../calculators/progress_calculator.dart';
 import '../data/models/attempt_analytics_models.dart';
@@ -26,16 +28,23 @@ enum CourseProgressHydrationState {
 /// Durable authority is `user_progress/{uid}/courses/{courseId}`.
 /// Local state is a session cache: hydrate before sync; never wipe cloud with
 /// empty pre-hydration snapshots.
+///
+/// Attempt Analytics (tests / accuracy / streak) reads submitted
+/// `test_attempts` via [TestAttemptCloudRepository] — the same source as
+/// Profile → Test History. Catalog server submits do not write the local
+/// session attempt cache.
 class ProgressService {
   ProgressService._({
     ProgressRepository? repository,
     Future<void> Function(UserProgress snapshot)? cloudSync,
     UserSessionStateCoordinator? sessionCoordinator,
     CourseProgressCloudRepository? courseCloudRepository,
+    TestAttemptCloudRepository? attemptCloudRepository,
   }) : _repository = repository ?? ProgressRepository.instance,
        _cloudSyncOverride = cloudSync,
        _sessions = sessionCoordinator ?? UserSessionStateCoordinator.instance,
-       _courseCloudOverride = courseCloudRepository;
+       _courseCloudOverride = courseCloudRepository,
+       _attemptCloudOverride = attemptCloudRepository;
 
   static final ProgressService instance = ProgressService._()
     .._registerSessionReset();
@@ -45,7 +54,9 @@ class ProgressService {
   final UserSessionStateCoordinator _sessions;
   final Future<void> Function(UserProgress snapshot)? _cloudSyncOverride;
   final CourseProgressCloudRepository? _courseCloudOverride;
+  final TestAttemptCloudRepository? _attemptCloudOverride;
   CourseProgressCloudRepository? _courseCloudCache;
+  TestAttemptCloudRepository? _attemptCloudCache;
   final Map<String, OverallProgress> _overallCache = {};
   final Map<String, double> _testMarkCredits = {};
 
@@ -67,17 +78,22 @@ class ProgressService {
       _courseCloudOverride ??
       CourseProgressCloudRepository(sessionCoordinator: _sessions);
 
+  TestAttemptCloudRepository get _attemptCloud => _attemptCloudCache ??=
+      _attemptCloudOverride ?? TestAttemptCloudRepository();
+
   @visibleForTesting
   ProgressService.debug({
     required ProgressRepository repository,
     Future<void> Function(UserProgress snapshot)? cloudSync,
     UserSessionStateCoordinator? sessionCoordinator,
     CourseProgressCloudRepository? courseCloudRepository,
+    TestAttemptCloudRepository? attemptCloudRepository,
   }) : this._(
          repository: repository,
          cloudSync: cloudSync,
          sessionCoordinator: sessionCoordinator,
          courseCloudRepository: courseCloudRepository,
+         attemptCloudRepository: attemptCloudRepository,
        );
 
   @visibleForTesting
@@ -169,12 +185,61 @@ class ProgressService {
     return _repository.saveAttempt(attempt);
   }
 
-  Future<ProgressSummary> generateSummary({String? courseId}) {
-    return _repository.loadSummary(courseId: courseId);
+  /// Attempt Analytics: submitted `test_attempts` (same source as Test History).
+  Future<ProgressSummary> generateSummary({String? courseId}) async {
+    final history = await _loadSubmittedCloudHistory(courseId: courseId);
+    return _repository.summaryFromHistory(history);
   }
 
+  /// Local session attempt history used by cloud cumulative sync snapshots.
   Future<List<AttemptHistory>> loadHistory({String? courseId, int? limit}) {
     return _repository.loadHistory(courseId: courseId, limit: limit);
+  }
+
+  /// Submitted `test_attempts` for the signed-in user (Test History source).
+  Future<List<AttemptHistory>> _loadSubmittedCloudHistory({
+    String? courseId,
+  }) async {
+    try {
+      final items = await _attemptCloud.getMyCompletedAttempts(
+        courseId: courseId,
+      );
+      final history = <AttemptHistory>[
+        for (final item in items)
+          if (_isSubmittedAttempt(item)) _attemptHistoryFromCloud(item),
+      ];
+      history.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+      return history;
+    } catch (error, stack) {
+      debugPrint(
+        'ProgressService: failed to load submitted test_attempts: '
+        '$error\n$stack',
+      );
+      return const [];
+    }
+  }
+
+  static bool _isSubmittedAttempt(TestAttemptHistoryItem item) {
+    return item.status.trim().toLowerCase() == 'submitted';
+  }
+
+  static AttemptHistory _attemptHistoryFromCloud(TestAttemptHistoryItem item) {
+    final when = item.submittedAt ?? item.startedAt ?? DateTime.now();
+    return AttemptHistory(
+      attemptId: item.attemptId,
+      testId: item.testId,
+      courseId: item.courseId,
+      courseName: item.courseTitle,
+      testMode: item.mode,
+      dateTime: when,
+      score: item.score,
+      percentage: item.percentage,
+      accuracy: item.accuracy,
+      correct: item.correct,
+      wrong: item.wrong,
+      skipped: item.skipped,
+      timeTaken: Duration(seconds: item.timeSpentSeconds),
+    );
   }
 
   Future<List<WeakTopic>> calculateWeakAreas({

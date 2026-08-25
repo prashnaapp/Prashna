@@ -92,6 +92,95 @@ export function extractExplanation(data) {
   return trimString(data?.content?.en?.explanation);
 }
 
+/**
+ * One language block: { question, options:[{text}], explanation }.
+ * Accepts Firestore string options or { text } objects.
+ */
+function extractLocalizedContentBlock(block) {
+  if (!block || typeof block !== 'object') return null;
+  const question = trimString(block.question);
+  const explanation = trimString(block.explanation);
+  const options = [];
+  if (Array.isArray(block.options)) {
+    for (const option of block.options) {
+      const text =
+        typeof option === 'string'
+          ? trimString(option)
+          : trimString(option?.text);
+      if (!text) continue;
+      options.push({ text });
+    }
+  }
+  if (!question && options.length === 0 && !explanation) return null;
+  return { question, options, explanation };
+}
+
+/**
+ * Preserve bilingual student content from the live question document.
+ * English falls back to top-level question/options/explanation when needed.
+ */
+export function buildSnapshotContent(data, {
+  englishText,
+  englishOptions,
+  englishExplanation,
+} = {}) {
+  const enFromContent = extractLocalizedContentBlock(data?.content?.en);
+  const teFromContent = extractLocalizedContentBlock(data?.content?.te);
+
+  const enOptions =
+    enFromContent?.options?.length > 0
+      ? enFromContent.options
+      : (englishOptions || [])
+          .map((option) => ({ text: trimString(option?.text) }))
+          .filter((option) => option.text);
+
+  const en = {
+    question: enFromContent?.question || trimString(englishText),
+    options: enOptions,
+    explanation:
+      enFromContent?.explanation || trimString(englishExplanation) || '',
+  };
+  if (!en.question) return null;
+
+  const content = { en };
+  if (teFromContent?.question) {
+    content.te = teFromContent;
+  }
+  return content;
+}
+
+function attachTeluguOptionText(options, teBlock) {
+  const teOptions = teBlock?.options;
+  if (!Array.isArray(teOptions) || teOptions.length === 0) return options;
+  return options.map((option, index) => {
+    const teluguText = trimString(teOptions[index]?.text);
+    if (!teluguText) return option;
+    return { ...option, teluguText };
+  });
+}
+
+/** Student-safe content: keep en/te question+options; never expose explanations. */
+function toStudentSafeContent(content) {
+  if (!content?.en?.question) return null;
+  const out = {
+    en: {
+      question: content.en.question,
+      options: (content.en.options || []).map((option) => ({
+        text: option.text,
+      })),
+    },
+  };
+  if (content.te?.question) {
+    out.te = {
+      question: content.te.question,
+      options: (content.te.options || []).map((option) => ({
+        text: option.text,
+      })),
+    };
+  }
+  return out;
+}
+
 function compactAttribution(attribution) {
   const out = {};
   for (const [key, value] of Object.entries(attribution || {})) {
@@ -190,14 +279,21 @@ export function buildQuestionSnapshot(questionId, data, position, courseId) {
   }
 
   const attribution = buildSnapshotAttribution(data, courseId);
+  const content = buildSnapshotContent(data, {
+    englishText: text,
+    englishOptions: options,
+    englishExplanation: explanation,
+  });
+  const optionsWithTelugu = attachTeluguOptionText(options, content?.te);
 
   return {
     questionId: String(questionId),
     position,
     text,
-    options,
+    options: optionsWithTelugu,
     correctOption,
     explanation,
+    ...(content ? { content } : {}),
     questionType: optionalString(data?.questionType),
     marks: asNumber(data?.marks, 1),
     difficulty: optionalString(data?.difficulty),
@@ -207,27 +303,36 @@ export function buildQuestionSnapshot(questionId, data, position, courseId) {
 
 /** Strip answer-key fields for in-progress student reads / start response. */
 export function toStudentSafeQuestion(snapshot) {
+  // Omit null/undefined/empty optional fields so Firestore never sees undefined
+  // (Paper-I has no partId / canonicalTopicId / lessonId).
+  const safeContent = toStudentSafeContent(snapshot.content);
   return {
     questionId: snapshot.questionId,
     position: snapshot.position,
     text: snapshot.text,
-    options: snapshot.options.map((option) => ({
-      label: option.label,
-      text: option.text,
-    })),
-    questionType: snapshot.questionType,
-    marks: snapshot.marks,
-    difficulty: snapshot.difficulty,
-    courseId: snapshot.courseId,
-    paperId: snapshot.paperId,
-    partId: snapshot.partId,
-    syllabusUnitId: snapshot.syllabusUnitId,
-    majorStudyAreaId: snapshot.majorStudyAreaId,
-    contentTopicId: snapshot.contentTopicId,
-    canonicalTopicId: snapshot.canonicalTopicId,
-    lessonId: snapshot.lessonId,
-    scopeShape: snapshot.scopeShape,
-    scopeKey: snapshot.scopeKey,
+    options: (snapshot.options || []).map((option) =>
+      compactAttribution({
+        label: option.label,
+        text: option.text,
+        teluguText: option.teluguText,
+      }),
+    ),
+    ...(safeContent ? { content: safeContent } : {}),
+    ...compactAttribution({
+      questionType: snapshot.questionType,
+      marks: snapshot.marks,
+      difficulty: snapshot.difficulty,
+      courseId: snapshot.courseId,
+      paperId: snapshot.paperId,
+      partId: snapshot.partId,
+      syllabusUnitId: snapshot.syllabusUnitId,
+      majorStudyAreaId: snapshot.majorStudyAreaId,
+      contentTopicId: snapshot.contentTopicId,
+      canonicalTopicId: snapshot.canonicalTopicId,
+      lessonId: snapshot.lessonId,
+      scopeShape: snapshot.scopeShape,
+      scopeKey: snapshot.scopeKey,
+    }),
   };
 }
 

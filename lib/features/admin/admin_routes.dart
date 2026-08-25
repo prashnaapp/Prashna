@@ -10,4 +10,6 @@ abstract final class AdminRoutes {
   static const tests = '/admin/tests';
   static const testCreate = '/admin/tests/create';
   static const testEdit = '/admin/tests/edit';
+  static const chapters = '/admin/chapters';
+  static const testSeries = '/admin/test-series';
 }

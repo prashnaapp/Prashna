@@ -70,6 +70,8 @@ class AdminTestService {
       paperId: test.paperId,
       partId: test.partId,
       syllabusUnitId: test.syllabusUnitId,
+      year: test.year,
+      seriesId: test.seriesId,
     );
     final errors = validate(draft, documentId: 'generated-on-create');
     if (errors.isNotEmpty) {
@@ -158,17 +160,100 @@ class AdminTestService {
     return [for (final question in questions) question.id];
   }
 
+  /// Published questions whose canonical chapter/topic equals [syllabusUnitId].
+  ///
+  /// Group-II Paper I stores that identity on `majorStudyAreaId`. Group-II
+  /// Papers II–IV store it on `topicId`. Group-III stores `syllabusUnitId`.
+  /// Matching uses [Question.canonicalScope], never titles.
+  Future<List<String>> findQuestionIdsForChapterTest({
+    required String courseId,
+    required String paperId,
+    String? partId,
+    required String syllabusUnitId,
+  }) async {
+    final unitId = syllabusUnitId.trim();
+    if (unitId.isEmpty) return const [];
+    final questions = await _questions.loadQuestions(
+      filter: QuestionFilter(
+        courseId: courseId,
+        paperId: paperId,
+        partId: partId,
+        activeOnly: true,
+      ),
+    );
+    return [
+      for (final question in questions)
+        if (questionMatchesChapterUnit(question, unitId)) question.id,
+    ];
+  }
+
+  /// Canonical Chapter/Topic identity for assignment. Not raw Firestore
+  /// `syllabusUnitId`, which Group-II questions are forbidden from storing.
+  static bool questionMatchesChapterUnit(Question question, String unitId) {
+    return question.canonicalScope?.syllabusUnitId == unitId;
+  }
+
   List<String> _validateSyllabusLocation(TestModel test) {
     final errors = <String>[];
     final courseId = test.examId.trim();
     final paperId = test.paperId?.trim();
     final partId = test.partId?.trim();
     final unitId = test.syllabusUnitId?.trim();
+    final seriesId = test.seriesId?.trim();
 
     if (courseId.isEmpty) return errors;
     if (SyllabusService.instance.getCourseById(courseId) == null) {
       errors.add('Course "$courseId" is not in the syllabus catalog.');
       return errors;
+    }
+
+    switch (test.category) {
+      case TestCategoryType.partTests:
+        return _validatePaperAndOptionalPart(
+          courseId: courseId,
+          paperId: paperId,
+          partId: partId,
+          unitId: unitId,
+          paperRequired: true,
+          partRequiredIfPaperHasParts: true,
+          unitRequired: false,
+        );
+      case TestCategoryType.mockTests:
+        if (seriesId == null || seriesId.isEmpty) {
+          errors.add('Grand Test group is required.');
+        }
+        errors.addAll(
+          _validatePaperAndOptionalPart(
+            courseId: courseId,
+            paperId: paperId,
+            partId: partId,
+            unitId: unitId,
+            paperRequired: true,
+            partRequiredIfPaperHasParts: false,
+            unitRequired: false,
+          ),
+        );
+        return errors;
+      case TestCategoryType.previousYear:
+        final year = test.year;
+        if (year == null || year < 1900 || year > 2100) {
+          errors.add('A valid exam year is required.');
+        }
+        errors.addAll(
+          _validatePaperAndOptionalPart(
+            courseId: courseId,
+            paperId: paperId,
+            partId: partId,
+            unitId: unitId,
+            paperRequired: true,
+            partRequiredIfPaperHasParts: false,
+            unitRequired: false,
+          ),
+        );
+        return errors;
+      case TestCategoryType.chapterTests:
+      case TestCategoryType.paperTests:
+        break;
     }
 
     final hasLocation = [
@@ -178,8 +263,34 @@ class AdminTestService {
     ].any((value) => value != null && value.isNotEmpty);
     if (!hasLocation) return errors; // Legacy tests remain valid.
 
+    errors.addAll(
+      _validatePaperAndOptionalPart(
+        courseId: courseId,
+        paperId: paperId,
+        partId: partId,
+        unitId: unitId,
+        paperRequired: true,
+        partRequiredIfPaperHasParts: true,
+        unitRequired: true,
+      ),
+    );
+    return errors;
+  }
+
+  List<String> _validatePaperAndOptionalPart({
+    required String courseId,
+    required String? paperId,
+    required String? partId,
+    required String? unitId,
+    required bool paperRequired,
+    required bool partRequiredIfPaperHasParts,
+    required bool unitRequired,
+  }) {
+    final errors = <String>[];
     if (paperId == null || paperId.isEmpty) {
-      errors.add('Paper is required when a syllabus location is specified.');
+      if (paperRequired) {
+        errors.add('Paper is required when a syllabus location is specified.');
+      }
       return errors;
     }
     final paper = SyllabusService.instance.getPaper(
@@ -192,7 +303,9 @@ class AdminTestService {
     }
 
     final usesParts = paper.parts.isNotEmpty;
-    if (usesParts && (partId == null || partId.isEmpty)) {
+    if (partRequiredIfPaperHasParts &&
+        usesParts &&
+        (partId == null || partId.isEmpty)) {
       errors.add('Part is required for paper "$paperId".');
       return errors;
     }
@@ -213,7 +326,9 @@ class AdminTestService {
     }
 
     if (unitId == null || unitId.isEmpty) {
-      errors.add('Syllabus Unit is required when a location is specified.');
+      if (unitRequired) {
+        errors.add('Syllabus Unit is required when a location is specified.');
+      }
       return errors;
     }
 
@@ -257,10 +372,13 @@ class AdminTestService {
           question.partId != test.partId) {
         errors.add('Question "$id" does not match the test part.');
       }
-      if (test.syllabusUnitId != null &&
-          test.syllabusUnitId!.isNotEmpty &&
-          question.syllabusUnitId != test.syllabusUnitId) {
-        errors.add('Question "$id" does not match the test syllabus unit.');
+      if (test.syllabusUnitId != null && test.syllabusUnitId!.isNotEmpty) {
+        if (!questionMatchesChapterUnit(question, test.syllabusUnitId!)) {
+          errors.add(
+            'This question belongs to another Chapter/Topic and cannot be '
+            'added to this test. (Question "$id")',
+          );
+        }
       }
     }
     if (errors.isNotEmpty) {

@@ -92,6 +92,8 @@ void main() {
       difficulty: 'Medium',
       questionIds: questionIds,
       status: status,
+      paperId: 'group-ii-paper-i',
+      seriesId: 'Grand Test 1',
     );
   }
 
@@ -134,7 +136,7 @@ void main() {
       questionRepository: QuestionCloudRepository.withHandlers(
         getByIds: (ids) async => [
           for (final id in ids)
-            q(id: id, courseId: 'group-ii', paperId: 'legacy-paper'),
+            q(id: id, courseId: 'group-ii', paperId: 'group-ii-paper-i'),
         ],
       ),
     );
@@ -177,7 +179,7 @@ void main() {
       questionRepository: QuestionCloudRepository.withHandlers(
         getByIds: (ids) async => [
           for (final id in ids)
-            q(id: id, courseId: 'group-ii', paperId: 'legacy-paper'),
+            q(id: id, courseId: 'group-ii', paperId: 'group-ii-paper-i'),
         ],
       ),
     );
@@ -240,7 +242,7 @@ void main() {
       questionRepository: QuestionCloudRepository.withHandlers(
         getByIds: (ids) async => [
           for (final id in ids)
-            q(id: id, courseId: 'group-ii', paperId: 'legacy-paper'),
+            q(id: id, courseId: 'group-ii', paperId: 'group-ii-paper-i'),
         ],
       ),
     );

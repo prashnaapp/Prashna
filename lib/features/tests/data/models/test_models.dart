@@ -45,6 +45,8 @@ class TestModel {
     this.canonicalTopicId,
     this.lessonId,
     this.scopeShape,
+    this.year,
+    this.seriesId,
   });
 
   final String id;
@@ -81,6 +83,12 @@ class TestModel {
   final String? canonicalTopicId;
   final String? lessonId;
   final CanonicalScopeShape? scopeShape;
+
+  /// Optional previous-paper year. Required when [category] is previousYear.
+  final int? year;
+
+  /// Grand Test group identity (`seriesId`). Required when [category] is mockTests.
+  final String? seriesId;
 
   /// Catalog visibility for Firestore student queries (`isPublished == true`).
   bool get isPublished => status == TestPublicationStatus.published;

@@ -175,3 +175,76 @@ test('adminSetQuestionActive: non-admin is rejected', () => {
     (err) => err.code === 'permission-denied',
   );
 });
+
+test('adminUpdateQuestion: non-admin is still rejected', () => {
+  assert.throws(
+    () => assertAdmin({
+      auth: { uid: 'student', token: {} },
+      data: {
+        questionId: 'q-legacy-1',
+        isAdmin: true,
+        admin: true,
+        data: { paperId: 'paper-1' },
+      },
+    }),
+    (err) => err.code === 'permission-denied',
+  );
+});
+
+test('adminUpdateQuestion: existing legacy Group-II paper-1 can be updated', async () => {
+  const db = new FakeFirestore();
+  const svc = createAdminContentService(db);
+  await db.collection('questions').doc('q-legacy-1').set({
+    id: 'q-legacy-1',
+    courseId: 'group-ii',
+    paperId: 'paper-1',
+    sectionId: 'section-1',
+    topicId: 'topic-1',
+    question: 'Legacy stem?',
+    options: ['A', 'B', 'C', 'D'],
+    correctOption: 'A',
+    explanation: 'Because',
+    difficulty: 'easy',
+    questionType: 'practice',
+    language: 'en',
+    marks: 1,
+    negativeMarks: 0,
+    estimatedTimeSeconds: 60,
+    isActive: false,
+  });
+
+  const result = await invoke(
+    (content, data) => content.updateQuestion(data),
+    {
+      ...adminRequest({
+        questionId: 'q-legacy-1',
+        data: {
+          id: 'q-legacy-1',
+          courseId: 'group-ii',
+          paperId: 'paper-1',
+          sectionId: 'section-1',
+          topicId: 'topic-1',
+          question: 'Updated legacy stem?',
+          options: ['A', 'B', 'C', 'D'],
+          correctOption: 'A',
+          explanation: 'Because',
+          difficulty: 'easy',
+          questionType: 'practice',
+          language: 'en',
+          marks: 1,
+          negativeMarks: 0,
+          estimatedTimeSeconds: 60,
+          isActive: false,
+        },
+      }),
+      _service: svc,
+    },
+  );
+
+  assert.equal(result.questionId, 'q-legacy-1');
+  const stored = (await db.collection('questions').doc('q-legacy-1').get()).data();
+  assert.equal(stored.question, 'Updated legacy stem?');
+  assert.equal(stored.paperId, 'paper-1');
+  assert.equal(stored.sectionId, 'section-1');
+  assert.equal(stored.topicId, 'topic-1');
+});

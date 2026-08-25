@@ -250,14 +250,34 @@ class TestService {
     if (optionsRaw is! List || optionsRaw.isEmpty) {
       throw StateError('Student-safe question missing options.');
     }
-    final options = <TestOption>[
-      for (final option in optionsRaw)
-        if (option is Map)
-          TestOption(
-            label: (option['label']?.toString() ?? '').trim().toUpperCase(),
-            text: (option['text']?.toString() ?? '').trim(),
-          ),
-    ].where((option) => option.label.isNotEmpty && option.text.isNotEmpty).toList();
+
+    // Same bilingual convention as QuestionBankMapper: content.te + option.teluguText.
+    final content = _contentFromStudentSafe(raw['content']);
+    final teluguOptions = content?.te?.options;
+
+    final options = <TestOption>[];
+    for (var i = 0; i < optionsRaw.length; i++) {
+      final option = optionsRaw[i];
+      if (option is! Map) continue;
+      final label = (option['label']?.toString() ?? '').trim().toUpperCase();
+      final optionText = (option['text']?.toString() ?? '').trim();
+      if (label.isEmpty || optionText.isEmpty) continue;
+
+      String? teluguText = (option['teluguText']?.toString() ?? '').trim();
+      if (teluguText.isEmpty) {
+        teluguText = null;
+      }
+      if (teluguText == null &&
+          teluguOptions != null &&
+          i < teluguOptions.length) {
+        final fromContent = teluguOptions[i].text.trim();
+        teluguText = fromContent.isEmpty ? null : fromContent;
+      }
+
+      options.add(
+        TestOption(label: label, text: optionText, teluguText: teluguText),
+      );
+    }
     if (options.length < 2) {
       throw StateError('Student-safe question has invalid options.');
     }
@@ -265,6 +285,8 @@ class TestService {
     final paperId = (raw['paperId'] as String?)?.trim();
     final partId = (raw['partId'] as String?)?.trim();
     final syllabusUnitId = (raw['syllabusUnitId'] as String?)?.trim();
+    final majorStudyAreaId = (raw['majorStudyAreaId'] as String?)?.trim();
+    final contentTopicId = (raw['contentTopicId'] as String?)?.trim();
     final resolvedCourseId =
         (raw['courseId'] as String?)?.trim().isNotEmpty == true
         ? (raw['courseId'] as String).trim()
@@ -278,12 +300,48 @@ class TestService {
       correctOption: '',
       explanation: '',
       paperId: paperId,
+      content: content,
       syllabus: QuestionSyllabusAttribution(
         courseId: resolvedCourseId,
         paperId: paperId ?? '',
         partId: partId,
         syllabusUnitId: syllabusUnitId,
+        majorStudyAreaId: majorStudyAreaId,
+        contentTopicId: contentTopicId,
       ),
+    );
+  }
+
+  /// Parses snapshot `content` using the same shape as Question Bank documents.
+  QuestionContent? _contentFromStudentSafe(dynamic raw) {
+    if (raw is! Map) return null;
+    final en = _localizedFromStudentSafe(raw['en']);
+    if (en == null) return null;
+    return QuestionContent(en: en, te: _localizedFromStudentSafe(raw['te']));
+  }
+
+  QuestionLocalizedContent? _localizedFromStudentSafe(dynamic raw) {
+    if (raw is! Map) return null;
+    final question = (raw['question'] as String?)?.trim() ?? '';
+    if (question.isEmpty) return null;
+    final optionsRaw = raw['options'];
+    final options = <QuestionOption>[];
+    if (optionsRaw is List) {
+      for (final option in optionsRaw) {
+        if (option is String) {
+          final text = option.trim();
+          if (text.isNotEmpty) options.add(QuestionOption(text: text));
+        } else if (option is Map) {
+          final text = (option['text']?.toString() ?? '').trim();
+          if (text.isNotEmpty) options.add(QuestionOption(text: text));
+        }
+      }
+    }
+    return QuestionLocalizedContent(
+      question: question,
+      options: options,
+      // Attempt snapshots intentionally omit explanations until reveal.
+      explanation: (raw['explanation'] as String?)?.trim() ?? '',
     );
   }
 

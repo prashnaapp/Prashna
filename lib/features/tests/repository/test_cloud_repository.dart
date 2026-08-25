@@ -220,6 +220,8 @@ class TestCloudRepository {
         canonicalTopicId: test.canonicalTopicId,
         lessonId: test.lessonId,
         scopeShape: test.scopeShape,
+        year: test.year,
+        seriesId: test.seriesId,
       ),
       documentId: testId,
     );

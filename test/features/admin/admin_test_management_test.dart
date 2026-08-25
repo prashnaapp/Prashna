@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:telangana_prep/features/admin/admin_routes.dart';
+import 'package:telangana_prep/features/admin/data/admin_test_scope.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_test_list_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/widgets/admin_test_form.dart';
 import 'package:telangana_prep/features/admin/services/admin_test_service.dart';
@@ -61,11 +62,7 @@ void main() {
 
   Future<void> tapSubmit(WidgetTester tester) async {
     final submit = find.byKey(const ValueKey('submit-test'));
-    await tester.dragUntilVisible(
-      submit,
-      find.byType(SingleChildScrollView),
-      const Offset(0, -300),
-    );
+    await tester.ensureVisible(submit);
     await tester.pumpAndSettle();
     await tester.tap(submit);
     await tester.pumpAndSettle();
@@ -235,6 +232,78 @@ void main() {
       service.statuses['test-group-ii-001'],
       TestPublicationStatus.draft,
     );
+  });
+
+  testWidgets('8: locked chapter scope hides category pickers', (tester) async {
+    TestModel? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdminTestForm(
+            courses: const [course],
+            scope: const AdminTestScope(
+              category: TestCategoryType.chapterTests,
+              courseId: 'group-ii',
+              paperId: 'group-ii-paper-i',
+              syllabusUnitId: 'group-ii-paper-i-area-01',
+            ),
+            onSubmit: (model) async => submitted = model,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Placement'), findsOneWidget);
+    expect(find.text('Chapter Tests'), findsNothing);
+    await tester.enterText(find.byType(TextFormField).first, 'CA Test 1');
+    await tapSubmit(tester);
+
+    expect(submitted, isNotNull);
+    expect(submitted!.category, TestCategoryType.chapterTests);
+    expect(submitted!.paperId, 'group-ii-paper-i');
+    expect(submitted!.syllabusUnitId, 'group-ii-paper-i-area-01');
+    expect(submitted!.partId, isNull);
+    expect(
+      find.text('Append questions from this Chapter/Topic'),
+      findsOneWidget,
+    );
+    expect(find.text('Paper ID'), findsNothing);
+  });
+
+  testWidgets('9: locked previous-paper scope keeps the examination year', (
+    tester,
+  ) async {
+    TestModel? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdminTestForm(
+            courses: const [course],
+            scope: const AdminTestScope(
+              category: TestCategoryType.previousYear,
+              courseId: 'group-ii',
+              paperId: 'group-ii-paper-i',
+              year: 2016,
+            ),
+            onSubmit: (model) async => submitted = model,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('Examination year: 2016'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField).first, '2016 Paper I');
+    await tapSubmit(tester);
+
+    expect(submitted, isNotNull);
+    expect(submitted!.category, TestCategoryType.previousYear);
+    expect(submitted!.year, 2016);
+    expect(submitted!.paperId, 'group-ii-paper-i');
+    expect(submitted!.seriesId, isNull);
   });
 }
 

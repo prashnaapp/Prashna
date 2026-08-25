@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:telangana_prep/features/tests/presentation/screens/exam_test_home_screen.dart';
 import 'package:telangana_prep/features/tests/presentation/screens/test_list_screen.dart';
+import 'package:telangana_prep/features/tests/presentation/screens/test_series_browser_screen.dart';
 import 'package:telangana_prep/features/tests/presentation/widgets/exam_category_hero.dart';
 import 'package:telangana_prep/features/tests/presentation/widgets/exam_category_tile.dart';
 import 'package:telangana_prep/features/tests/repository/test_cloud_repository.dart';
@@ -194,6 +195,7 @@ void main() {
 
     await tester.tap(find.text('Paper-wise Tests'));
     await tester.pumpAndSettle();
-    expect(find.byType(TestListScreen), findsOneWidget);
+    expect(find.byType(TestSeriesBrowserScreen), findsOneWidget);
+    expect(find.byType(TestListScreen), findsNothing);
   });
 }

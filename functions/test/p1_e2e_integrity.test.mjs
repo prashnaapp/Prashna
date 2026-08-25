@@ -238,7 +238,7 @@ test('P1-1.7 Paper-I direct-unit scope accepted', async () => {
         courseId: 'group-ii',
         paperId: 'group-ii-paper-i',
         partId: null,
-        syllabusUnitId: unit,
+        majorStudyAreaId: unit,
       },
       {
         courseId: 'group-ii',
@@ -248,6 +248,131 @@ test('P1-1.7 Paper-I direct-unit scope accepted', async () => {
       },
     ),
     true,
+  );
+});
+
+test('P1-1.7b Paper-I Current Affairs accepts majorStudyAreaId-only question', async () => {
+  const db = new FakeFirestore({ now: () => NOW });
+  await seedAccess(db, 'group-ii');
+  await seedQuestion(db, {
+    id: 'ca-only-area',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-i',
+    partId: null,
+    majorStudyAreaId: 'group-ii-paper-i-area-01',
+    contentTopicId: 'group-ii-paper-i-area-01-topic-01',
+  });
+  await seedConfiguredTest(db, {
+    testId: 'ca-test',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-i',
+    partId: null,
+    syllabusUnitId: 'group-ii-paper-i-area-01',
+    questionIds: ['ca-only-area'],
+  });
+  const started = await createService(db).startAttempt({
+    uid: UID,
+    testId: 'ca-test',
+    startRequestId: 'sr-ca-only-area',
+  });
+  assert.deepEqual(started.questionIds, ['ca-only-area']);
+  const safe = started.studentQuestions[0];
+  assert.equal(
+    safe.scopeKey,
+    'v1|group-ii|group-ii-paper-i||group-ii-paper-i-area-01',
+  );
+  assert.ok(!('partId' in safe));
+  assert.ok(!('canonicalTopicId' in safe));
+  assert.ok(!('lessonId' in safe));
+  assert.ok(
+    Object.values(safe).every((value) => value !== undefined),
+    'Paper-I studentQuestions must not contain undefined',
+  );
+});
+
+test('P1-1.7c Paper-I Current Affairs rejects a different chapter area', async () => {
+  const db = new FakeFirestore({ now: () => NOW });
+  await seedAccess(db, 'group-ii');
+  await seedQuestion(db, {
+    id: 'ir-area-02',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-i',
+    partId: null,
+    majorStudyAreaId: 'group-ii-paper-i-area-02',
+    contentTopicId: 'group-ii-paper-i-area-02-topic-01',
+  });
+  await seedConfiguredTest(db, {
+    testId: 'ca-test-wrong-unit',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-i',
+    partId: null,
+    syllabusUnitId: 'group-ii-paper-i-area-01',
+    questionIds: ['ir-area-02'],
+  });
+  await assert.rejects(
+    () =>
+      createService(db).startAttempt({
+        uid: UID,
+        testId: 'ca-test-wrong-unit',
+        startRequestId: 'sr-ca-wrong-unit',
+      }),
+    /exact canonical syllabus scope/,
+  );
+});
+
+test('P1-1.7d Paper-II Part chapter test accepts topicId as the unit', async () => {
+  const db = new FakeFirestore({ now: () => NOW });
+  await seedAccess(db, 'group-ii');
+  const unit = 'group-ii-paper-ii-part-01-topic-01';
+  await seedQuestion(db, {
+    id: 'ancient-india-q',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-ii',
+    partId: 'group-ii-paper-ii-part-01',
+    topicId: unit,
+  });
+  await seedConfiguredTest(db, {
+    testId: 'paper-ii-part-test',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-ii',
+    partId: 'group-ii-paper-ii-part-01',
+    syllabusUnitId: unit,
+    questionIds: ['ancient-india-q'],
+  });
+  const started = await createService(db).startAttempt({
+    uid: UID,
+    testId: 'paper-ii-part-test',
+    startRequestId: 'sr-paper-ii-part',
+  });
+  assert.deepEqual(started.questionIds, ['ancient-india-q']);
+});
+
+test('P1-1.7e Paper-II Part chapter test rejects a different topic', async () => {
+  const db = new FakeFirestore({ now: () => NOW });
+  await seedAccess(db, 'group-ii');
+  await seedQuestion(db, {
+    id: 'other-topic-q',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-ii',
+    partId: 'group-ii-paper-ii-part-01',
+    topicId: 'group-ii-paper-ii-part-01-topic-02',
+  });
+  await seedConfiguredTest(db, {
+    testId: 'paper-ii-part-wrong-topic',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-ii',
+    partId: 'group-ii-paper-ii-part-01',
+    syllabusUnitId: 'group-ii-paper-ii-part-01-topic-01',
+    questionIds: ['other-topic-q'],
+  });
+  await assert.rejects(
+    () =>
+      createService(db).startAttempt({
+        uid: UID,
+        testId: 'paper-ii-part-wrong-topic',
+        startRequestId: 'sr-paper-ii-wrong-topic',
+      }),
+    /exact canonical syllabus scope/,
   );
 });
 

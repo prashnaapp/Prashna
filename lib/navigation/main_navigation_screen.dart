@@ -25,19 +25,13 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late int _currentIndex;
 
-  /// Order must match [AppNavItems.all].
-  static const _pages = <Widget>[
-    HomeScreen(),
-    ChaptersScreen(),
-    TestsScreen(),
-    StudyTrackerScreen(),
-    ProfileScreen(),
-  ];
-
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialTab.index.clamp(0, _pages.length - 1);
+    _currentIndex = widget.initialTab.index.clamp(
+      0,
+      AppNavItems.all.length - 1,
+    );
     // Covers fresh Google Sign-In → Home when Splash did not load courses.
     if (CourseLoaderService.instance.current == null) {
       unawaited(CourseLoaderService.instance.load());
@@ -51,6 +45,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pages = <Widget>[
+      const HomeScreen(),
+      const ChaptersScreen(),
+      const TestsScreen(),
+      StudyTrackerScreen(isActive: _currentIndex == AppTab.progress.index),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -60,8 +62,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             index: _currentIndex,
             sizing: StackFit.expand,
             children: [
-              for (var i = 0; i < _pages.length; i++)
-                _TabTransition(active: i == _currentIndex, child: _pages[i]),
+              for (var i = 0; i < pages.length; i++)
+                _TabTransition(active: i == _currentIndex, child: pages[i]),
             ],
           ),
           Positioned(

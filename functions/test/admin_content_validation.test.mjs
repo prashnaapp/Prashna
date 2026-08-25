@@ -88,6 +88,32 @@ function publishedQuestion(overrides = {}) {
   });
 }
 
+function legacyGroupIiQuestion(overrides = {}) {
+  return {
+    id: 'q-legacy-1',
+    courseId: 'group-ii',
+    paperId: 'paper-1',
+    sectionId: 'section-1',
+    topicId: 'topic-1',
+    question: 'Which Article guarantees Equality before Law?',
+    options: ['Article 12', 'Article 14', 'Article 19', 'Article 21'],
+    correctOption: 'B',
+    explanation: 'Article 14.',
+    difficulty: 'easy',
+    questionType: 'practice',
+    language: 'en',
+    marks: 1,
+    negativeMarks: 0.25,
+    estimatedTimeSeconds: 45,
+    isActive: false,
+    ...overrides,
+  };
+}
+
+async function seedLegacyQuestion(db, data = legacyGroupIiQuestion()) {
+  await db.collection('questions').doc(data.id).set(data);
+}
+
 test('question: valid create payload is accepted', () => {
   assert.equal(
     validateQuestionPayload(validQuestion(), { documentId: 'q-valid-1' }).id,
@@ -162,6 +188,136 @@ test('question: invalid publication state is rejected', () => {
     () => validateQuestionPayload(validQuestion({ status: 'published', isActive: false })),
     (err) => /must be active/.test(err.message),
   );
+});
+
+test('question: new questions with legacy paperId paper-1 are rejected', () => {
+  assert.throws(
+    () => validateQuestionPayload(legacyGroupIiQuestion()),
+    (err) => /incompatible|does not belong/.test(err.message),
+  );
+});
+
+test('question: canonical Group-II paper/course combinations still validate', () => {
+  assert.equal(
+    validateQuestionPayload(validQuestion(), { documentId: 'q-valid-1' }).courseId,
+    'group-ii',
+  );
+  assert.throws(
+    () => validateQuestionPayload(validQuestion({
+      paperId: 'group-iii-paper-i',
+    })),
+    (err) => /incompatible|does not belong/.test(err.message),
+  );
+});
+
+test('question service: existing legacy Group-II paper-1 can be updated in place', async () => {
+  const isolated = new FakeFirestore();
+  const svc = createAdminContentService(isolated);
+  await seedLegacyQuestion(isolated);
+
+  await svc.updateQuestion({
+    questionId: 'q-legacy-1',
+    data: legacyGroupIiQuestion({
+      question: 'Updated legacy stem',
+      explanation: 'Updated explanation',
+    }),
+  });
+
+  const stored = (await isolated.collection('questions').doc('q-legacy-1').get()).data();
+  assert.equal(stored.question, 'Updated legacy stem');
+  assert.equal(stored.paperId, 'paper-1');
+  assert.equal(stored.sectionId, 'section-1');
+  assert.equal(stored.topicId, 'topic-1');
+  assert.equal(stored.courseId, 'group-ii');
+});
+
+test('question service: legacy sectionId/topicId stay unchanged when omitted from update', async () => {
+  const isolated = new FakeFirestore();
+  const svc = createAdminContentService(isolated);
+  await seedLegacyQuestion(isolated);
+
+  const payload = legacyGroupIiQuestion({ question: 'Stem only' });
+  delete payload.sectionId;
+  delete payload.topicId;
+
+  await svc.updateQuestion({
+    questionId: 'q-legacy-1',
+    data: payload,
+  });
+
+  const stored = (await isolated.collection('questions').doc('q-legacy-1').get()).data();
+  assert.equal(stored.paperId, 'paper-1');
+  assert.equal(stored.sectionId, 'section-1');
+  assert.equal(stored.topicId, 'topic-1');
+});
+
+test('question service: create still rejects paper-1', async () => {
+  const isolated = new FakeFirestore();
+  const svc = createAdminContentService(isolated);
+  await assert.rejects(
+    () => svc.createQuestion({
+      questionId: 'q-new-legacy',
+      data: legacyGroupIiQuestion({ id: 'q-new-legacy' }),
+    }),
+    (err) => /incompatible|does not belong/.test(err.message),
+  );
+  assert.equal((await isolated.collection('questions').doc('q-new-legacy').get()).exists, false);
+});
+
+test('question service: client paper-1 on a canonical document is still rejected', async () => {
+  const isolated = new FakeFirestore();
+  const svc = createAdminContentService(isolated);
+  await svc.createQuestion({
+    questionId: 'q-valid-1',
+    data: validQuestion(),
+  });
+  await assert.rejects(
+    () => svc.updateQuestion({
+      questionId: 'q-valid-1',
+      data: validQuestion({
+        paperId: 'paper-1',
+        majorStudyAreaId: undefined,
+        contentTopicId: undefined,
+      }),
+    }),
+    (err) => /incompatible|does not belong/.test(err.message),
+  );
+  const stored = (await isolated.collection('questions').doc('q-valid-1').get()).data();
+  assert.equal(stored.paperId, 'group-ii-paper-i');
+});
+
+test('question service: legacy question moved onto an invalid canonical paper is rejected', async () => {
+  const isolated = new FakeFirestore();
+  const svc = createAdminContentService(isolated);
+  await seedLegacyQuestion(isolated);
+  await assert.rejects(
+    () => svc.updateQuestion({
+      questionId: 'q-legacy-1',
+      data: legacyGroupIiQuestion({
+        paperId: 'group-iii-paper-i',
+        sectionId: undefined,
+        topicId: undefined,
+      }),
+    }),
+    (err) => /incompatible|does not belong/.test(err.message),
+  );
+  const stored = (await isolated.collection('questions').doc('q-legacy-1').get()).data();
+  assert.equal(stored.paperId, 'paper-1');
+  assert.equal(stored.sectionId, 'section-1');
+  assert.equal(stored.topicId, 'topic-1');
+});
+
+test('question service: publishing a legacy paper-1 question remains strict', async () => {
+  const isolated = new FakeFirestore();
+  const svc = createAdminContentService(isolated);
+  await seedLegacyQuestion(isolated);
+  await assert.rejects(
+    () => svc.setQuestionStatus({ questionId: 'q-legacy-1', status: 'published' }),
+    (err) => /incompatible|does not belong|Paper/.test(err.message),
+  );
+  const stored = (await isolated.collection('questions').doc('q-legacy-1').get()).data();
+  assert.notEqual(stored.status, 'published');
+  assert.equal(stored.paperId, 'paper-1');
 });
 
 test('decodeWriteData converts explicit clear sentinels to FieldValue.delete', () => {
@@ -260,6 +416,78 @@ test('test: invalid metadata, category, status, and questionCount are rejected',
   assert.throws(
     () => validateTestPayload(validTest({ paperId: 'group-iii-paper-i' })),
     (err) => /does not belong/.test(err.message),
+  );
+});
+
+test('test: paper-wise requires paper and part when the paper has parts', () => {
+  assert.throws(
+    () => validateTestPayload(validTest({ paperId: undefined, syllabusUnitId: undefined })),
+    (err) => /Paper is required for Paper-wise Tests/.test(err.message),
+  );
+  assert.throws(
+    () => validateTestPayload(validTest({
+      paperId: 'group-ii-paper-ii',
+      syllabusUnitId: undefined,
+    })),
+    (err) => /Part is required/.test(err.message),
+  );
+  assert.equal(
+    validateTestPayload(validTest({
+      paperId: 'group-ii-paper-ii',
+      partId: 'group-ii-paper-ii-part-01',
+      syllabusUnitId: undefined,
+    }), { documentId: 't-valid-1' }).id,
+    't-valid-1',
+  );
+});
+
+test('test: grand tests require seriesId and paper without a syllabus unit', () => {
+  assert.throws(
+    () => validateTestPayload(validTest({
+      category: 'mock',
+      paperId: 'group-ii-paper-i',
+      syllabusUnitId: undefined,
+    })),
+    (err) => /Grand Test group is required/.test(err.message),
+  );
+  assert.throws(
+    () => validateTestPayload(validTest({
+      category: 'mock',
+      seriesId: 'Grand Test 1',
+      paperId: undefined,
+      syllabusUnitId: undefined,
+    })),
+    (err) => /Paper is required for Grand Tests/.test(err.message),
+  );
+  assert.equal(
+    validateTestPayload(validTest({
+      category: 'mock',
+      seriesId: 'Grand Test 1',
+      paperId: 'group-ii-paper-ii',
+      partId: undefined,
+      syllabusUnitId: undefined,
+    }), { documentId: 't-valid-1' }).id,
+    't-valid-1',
+  );
+});
+
+test('test: previous papers require year and paper without hardcoded years', () => {
+  assert.throws(
+    () => validateTestPayload(validTest({
+      category: 'previousyear',
+      paperId: 'group-ii-paper-i',
+      syllabusUnitId: undefined,
+    })),
+    (err) => /valid exam year/.test(err.message),
+  );
+  assert.equal(
+    validateTestPayload(validTest({
+      category: 'previousyear',
+      year: 2016,
+      paperId: 'group-ii-paper-i',
+      syllabusUnitId: undefined,
+    }), { documentId: 't-valid-1' }).id,
+    't-valid-1',
   );
 });
 

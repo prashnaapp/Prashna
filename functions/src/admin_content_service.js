@@ -60,12 +60,13 @@ export function createAdminContentService(db) {
     async updateQuestion({ questionId, data } = {}) {
       const id = trimToNull(questionId) || trimToNull(data?.id);
       if (!id) fail('invalid-argument', 'Question ID is required.');
+      const { snap, data: existing } = await readQuestion(db, id);
+      if (!snap.exists) fail('not-found', 'Question was not found.');
       const payload = prepareQuestionWrite(data || {}, {
         documentId: id,
         forUpdate: true,
+        existing,
       });
-      const { snap } = await readQuestion(db, id);
-      if (!snap.exists) fail('not-found', 'Question was not found.');
       await questionsCol(db).doc(id).update(payload);
       return { questionId: id };
     },

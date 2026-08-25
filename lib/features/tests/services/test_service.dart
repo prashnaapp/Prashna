@@ -86,15 +86,39 @@ class TestService {
   ///
   /// Primary source: `tests` collection (`courseId` + `isPublished`).
   /// Does not fall back to [TestsDummyData] on error.
+  ///
+  /// Product UI exposes only Paper-wise / Grand / Previous Papers. Legacy
+  /// Firestore `chapter` tests ([TestCategoryType.chapterTests]) are included
+  /// when loading Paper-wise ([TestCategoryType.partTests]) so existing
+  /// published catalog rows remain reachable without a Chapter Tests UI.
   Future<List<TestModel>> getTests({
     required String examId,
     required TestCategoryType category,
   }) async {
     final published = await _cloudRepository.loadPublishedTests(examId);
+    final matching = _categoriesMatchingProductFilter(category);
     return [
       for (final test in published)
-        if (test.category == category) test,
+        if (matching.contains(test.category)) test,
     ];
+  }
+
+  /// Categories that belong under a product-facing Test Series filter.
+  static Set<TestCategoryType> _categoriesMatchingProductFilter(
+    TestCategoryType category,
+  ) {
+    switch (category) {
+      case TestCategoryType.partTests:
+        return const {
+          TestCategoryType.partTests,
+          TestCategoryType.chapterTests,
+        };
+      case TestCategoryType.chapterTests:
+      case TestCategoryType.paperTests:
+      case TestCategoryType.mockTests:
+      case TestCategoryType.previousYear:
+        return {category};
+    }
   }
 
   /// Published tests linked to a Group-III syllabus unit.

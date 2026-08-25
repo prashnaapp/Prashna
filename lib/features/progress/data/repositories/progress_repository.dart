@@ -141,6 +141,14 @@ class ProgressRepository {
 
   Future<ProgressSummary> loadSummary({String? courseId}) async {
     final history = await loadHistory(courseId: courseId);
+    return summaryFromHistory(history);
+  }
+
+  /// Builds aggregate Attempt Analytics from an already-loaded history list.
+  ///
+  /// Used when history comes from server `test_attempts` rather than the
+  /// in-memory session cache.
+  ProgressSummary summaryFromHistory(List<AttemptHistory> history) {
     return _buildSummary(history);
   }
 

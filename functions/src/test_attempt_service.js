@@ -23,6 +23,7 @@ import {
   isSnapshotEnabledAttempt,
   toStudentSafeQuestion,
 } from './attempt_snapshot.js';
+import { tryResolveCanonicalScope } from './canonical_scope.js';
 import { calculateScoreV1, SCORING_VERSION_V1 } from './test_scoring.js';
 
 export const ATTEMPT_STATUS_IN_PROGRESS = 'in_progress';
@@ -134,8 +135,12 @@ function questionMatchesTestScope(data, testData) {
 }
 
 /**
- * Exact canonical scope for configured questionIds.
- * No topicId / lessonId fallback. partId null must match null.
+ * Exact canonical Chapter/Topic for configured questionIds.
+ *
+ * Compares resolved canonical syllabusUnitId, not raw Firestore
+ * `question.syllabusUnitId`. Group-II Paper I stores the unit on
+ * `majorStudyAreaId`; Papers II–IV store it on `topicId`.
+ * Paper-only matching is not sufficient.
  */
 export function questionMatchesExactCanonicalScope(data, testData) {
   const courseId = String(testData.courseId || '').trim();
@@ -151,8 +156,22 @@ export function questionMatchesExactCanonicalScope(data, testData) {
 
   if (optionalTrimmedId(data?.paperId) !== testPaperId) return false;
   if (optionalTrimmedId(data?.partId) !== testPartId) return false;
-  if (optionalTrimmedId(data?.syllabusUnitId) !== testUnitId) return false;
-  return true;
+
+  const questionScope = tryResolveCanonicalScope({
+    courseId: data?.courseId,
+    paperId: data?.paperId,
+    partId: data?.partId,
+    syllabusUnitId: data?.syllabusUnitId,
+    majorStudyAreaId: data?.majorStudyAreaId,
+    contentTopicId: data?.contentTopicId,
+    topicId: data?.topicId,
+    lessonId: data?.lessonId,
+    shape: data?.scopeShape || data?.shape,
+  });
+  if (!questionScope) return false;
+  if (questionScope.paperId !== testPaperId) return false;
+  if (optionalTrimmedId(questionScope.partId) !== testPartId) return false;
+  return questionScope.syllabusUnitId === testUnitId;
 }
 
 function hasCanonicalSyllabusMetadata(testData) {

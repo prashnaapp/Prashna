@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:telangana_prep/features/admin/services/admin_test_service.dart';
+import 'package:telangana_prep/features/question_bank/data/models/question_models.dart';
+import 'package:telangana_prep/features/question_bank/repository/question_cloud_repository.dart';
 import 'package:telangana_prep/features/tests/data/models/test_models.dart';
 import 'package:telangana_prep/features/tests/data/test_cloud_mapper.dart';
 import 'package:telangana_prep/features/tests/repository/test_cloud_repository.dart';
@@ -149,6 +151,135 @@ void main() {
       documentId: 'gii-invalid-location',
     );
     expect(errors, contains(contains('does not belong')));
+  });
+
+  test('paper-wise tests require paper and part when the paper has parts', () {
+    final service = AdminTestService(
+      testRepository: TestCloudRepository.withLoader((_) async => const []),
+    );
+    expect(
+      service.validate(
+        const TestModel(
+          id: 'pw-1',
+          examId: 'group-ii',
+          category: TestCategoryType.partTests,
+          title: 'Part I Test',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-ii',
+        ),
+        documentId: 'pw-1',
+      ),
+      contains(contains('Part is required')),
+    );
+    expect(
+      service.validate(
+        const TestModel(
+          id: 'pw-2',
+          examId: 'group-ii',
+          category: TestCategoryType.partTests,
+          title: 'Part I Test',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-ii',
+          partId: 'group-ii-paper-ii-part-01',
+        ),
+        documentId: 'pw-2',
+      ),
+      isEmpty,
+    );
+  });
+
+  test('grand tests require seriesId and paper without a syllabus unit', () {
+    final service = AdminTestService(
+      testRepository: TestCloudRepository.withLoader((_) async => const []),
+    );
+    expect(
+      service.validate(
+        const TestModel(
+          id: 'gt-1',
+          examId: 'group-ii',
+          category: TestCategoryType.mockTests,
+          title: 'Paper II Grand Test',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-ii',
+        ),
+        documentId: 'gt-1',
+      ),
+      contains('Grand Test group is required.'),
+    );
+    expect(
+      service.validate(
+        const TestModel(
+          id: 'gt-2',
+          examId: 'group-ii',
+          category: TestCategoryType.mockTests,
+          title: 'Paper II Grand Test',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-ii',
+          seriesId: 'Grand Test 1',
+        ),
+        documentId: 'gt-2',
+      ),
+      isEmpty,
+    );
+  });
+
+  test('previous papers require year and paper', () {
+    final service = AdminTestService(
+      testRepository: TestCloudRepository.withLoader((_) async => const []),
+    );
+    expect(
+      service.validate(
+        const TestModel(
+          id: 'py-1',
+          examId: 'group-ii',
+          category: TestCategoryType.previousYear,
+          title: 'Paper I',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-i',
+        ),
+        documentId: 'py-1',
+      ),
+      contains('A valid exam year is required.'),
+    );
+    expect(
+      service.validate(
+        const TestModel(
+          id: 'py-2',
+          examId: 'group-ii',
+          category: TestCategoryType.previousYear,
+          title: 'Paper I',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-i',
+          year: 2016,
+        ),
+        documentId: 'py-2',
+      ),
+      isEmpty,
+    );
   });
 
   test('5: questionCount <= 0 rejected', () {
@@ -489,4 +620,161 @@ void main() {
     );
     expect(called, isFalse);
   });
+
+  Question paperIQuestion({
+    required String id,
+    required String majorStudyAreaId,
+  }) {
+    final now = DateTime(2026, 8, 24);
+    return Question(
+      id: id,
+      courseId: 'group-ii',
+      paperId: 'group-ii-paper-i',
+      question: 'Sample question?',
+      options: const ['A', 'B', 'C', 'D'],
+      correctOption: 'A',
+      explanation: 'Because.',
+      difficulty: QuestionDifficulty.medium,
+      questionType: QuestionType.practice,
+      marks: 1,
+      negativeMarks: 0,
+      tags: const [],
+      estimatedTime: const Duration(seconds: 60),
+      createdAt: now,
+      updatedAt: now,
+      isActive: true,
+      syllabus: QuestionSyllabusAttribution(
+        courseId: 'group-ii',
+        paperId: 'group-ii-paper-i',
+        majorStudyAreaId: majorStudyAreaId,
+        contentTopicId: '$majorStudyAreaId-topic-01',
+      ),
+    );
+  }
+
+  TestModel currentAffairsTest({required List<String> questionIds}) {
+    return TestModel(
+      id: '',
+      examId: 'group-ii',
+      category: TestCategoryType.chapterTests,
+      title: 'Current Affairs Test 1',
+      questionCount: questionIds.length,
+      marks: questionIds.length,
+      durationMinutes: 1,
+      negativeMarking: '0',
+      difficulty: 'Medium',
+      questionIds: questionIds,
+      paperId: 'group-ii-paper-i',
+      syllabusUnitId: 'group-ii-paper-i-area-01',
+    );
+  }
+
+  test(
+    'Chapter test accepts a Paper I question whose majorStudyAreaId is the unit',
+    () async {
+      final currentAffairs = paperIQuestion(
+        id: 'ca-1',
+        majorStudyAreaId: 'group-ii-paper-i-area-01',
+      );
+      expect(currentAffairs.syllabusUnitId, isNull);
+      expect(
+        currentAffairs.canonicalScope?.syllabusUnitId,
+        'group-ii-paper-i-area-01',
+      );
+
+      var created = false;
+      final service = AdminTestService(
+        testRepository: TestCloudRepository.withLoader(
+          (_) async => const [],
+          create: ({required testId, required data}) async {
+            created = true;
+          },
+        ),
+        questionRepository: QuestionCloudRepository.withHandlers(
+          getByIds: (ids) async => [currentAffairs],
+        ),
+      );
+
+      await service.createTest(currentAffairsTest(questionIds: const ['ca-1']));
+      expect(created, isTrue);
+    },
+  );
+
+  test(
+    'Chapter test rejects a Paper I question from another syllabus unit',
+    () async {
+      final internationalRelations = paperIQuestion(
+        id: 'ir-1',
+        majorStudyAreaId: 'group-ii-paper-i-area-02',
+      );
+      var created = false;
+      final service = AdminTestService(
+        testRepository: TestCloudRepository.withLoader(
+          (_) async => const [],
+          create: ({required testId, required data}) async {
+            created = true;
+          },
+        ),
+        questionRepository: QuestionCloudRepository.withHandlers(
+          getByIds: (ids) async => [internationalRelations],
+        ),
+      );
+
+      expect(
+        () => service.createTest(currentAffairsTest(questionIds: const ['ir-1'])),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains(
+              'This question belongs to another Chapter/Topic and cannot be '
+              'added to this test.',
+            ),
+          ),
+        ),
+      );
+      expect(created, isFalse);
+    },
+  );
+
+  test(
+    'Chapter question picker returns only the selected syllabus unit',
+    () async {
+      final currentAffairs = paperIQuestion(
+        id: 'ca-1',
+        majorStudyAreaId: 'group-ii-paper-i-area-01',
+      );
+      final internationalRelations = paperIQuestion(
+        id: 'ir-1',
+        majorStudyAreaId: 'group-ii-paper-i-area-02',
+      );
+      final service = AdminTestService(
+        testRepository: TestCloudRepository.withLoader((_) async => const []),
+        questionRepository: QuestionCloudRepository.withHandlers(
+          loadQuestions: (_) async => [currentAffairs, internationalRelations],
+        ),
+      );
+
+      final ids = await service.findQuestionIdsForChapterTest(
+        courseId: 'group-ii',
+        paperId: 'group-ii-paper-i',
+        syllabusUnitId: 'group-ii-paper-i-area-01',
+      );
+      expect(ids, ['ca-1']);
+      expect(
+        AdminTestService.questionMatchesChapterUnit(
+          currentAffairs,
+          'group-ii-paper-i-area-01',
+        ),
+        isTrue,
+      );
+      expect(
+        AdminTestService.questionMatchesChapterUnit(
+          internationalRelations,
+          'group-ii-paper-i-area-01',
+        ),
+        isFalse,
+      );
+    },
+  );
 }

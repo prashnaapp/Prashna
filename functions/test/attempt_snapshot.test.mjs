@@ -310,6 +310,212 @@ test('9: student-safe payload never includes answer key', () => {
   assert.equal(safe.explanation, undefined);
   assert.ok(!('correctOption' in safe));
   assert.ok(!('explanation' in safe));
+  assert.equal(safe.partId, 'part');
+});
+
+function assertNoUndefinedFirestoreValues(value, path = 'root') {
+  assert.notEqual(
+    value,
+    undefined,
+    `undefined Firestore value at ${path}`,
+  );
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      assertNoUndefinedFirestoreValues(item, `${path}.${index}`);
+    });
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      assertNoUndefinedFirestoreValues(child, `${path}.${key}`);
+    }
+  }
+}
+
+test('9b: Paper-I start omits null part/topic/lesson; no undefined in studentQuestions', async () => {
+  const db = new FakeFirestore({ now: () => NOW });
+  await seedAccess(db, 'group-ii');
+  await db.collection('questions').doc('paper-i-q').set({
+    id: 'paper-i-q',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-i',
+    majorStudyAreaId: 'group-ii-paper-i-area-01',
+    contentTopicId: 'group-ii-paper-i-area-01-topic-01',
+    isActive: true,
+    question: 'NDRF is under which ministry?',
+    explanation: 'Home Affairs',
+    correctOption: 'B',
+    options: [
+      'Ministry of Urban Development',
+      'Ministry of Home Affairs',
+      'Ministry of Defence',
+      'Ministry of Environment',
+    ],
+  });
+  await seedTest(db, {
+    testId: 'paper-i-home',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-i',
+    partId: null,
+    syllabusUnitId: 'group-ii-paper-i-area-01',
+    questionIds: ['paper-i-q'],
+    title: 'Home',
+  });
+
+  const started = await createService(db, {
+    generateAttemptId: () => 'attempt-paper-i-1',
+  }).startAttempt({
+    uid: UID,
+    testId: 'paper-i-home',
+    startRequestId: 'req-paper-i-safe',
+  });
+
+  assert.equal(started.duplicate, false);
+  const safe = started.studentQuestions[0];
+  assert.equal(
+    safe.scopeKey,
+    'v1|group-ii|group-ii-paper-i||group-ii-paper-i-area-01',
+  );
+  assert.equal(safe.syllabusUnitId, 'group-ii-paper-i-area-01');
+  assert.equal(safe.majorStudyAreaId, 'group-ii-paper-i-area-01');
+  assert.ok(!('partId' in safe));
+  assert.ok(!('canonicalTopicId' in safe));
+  assert.ok(!('lessonId' in safe));
+  assert.notEqual(safe.partId, '');
+  assertNoUndefinedFirestoreValues(started.studentQuestions, 'studentQuestions');
+  assertNoUndefinedFirestoreValues(started.testSnapshot, 'testSnapshot');
+
+  const attempt = db._store.get('test_attempts/attempt-paper-i-1');
+  assert.ok(attempt);
+  assertNoUndefinedFirestoreValues(attempt.studentQuestions, 'attempt.studentQuestions');
+  const grading = db._store.get(`${GRADING_SNAPSHOT_COLLECTION}/attempt-paper-i-1`);
+  assert.ok(grading);
+  assert.equal(
+    grading.questions[0].scopeKey,
+    'v1|group-ii|group-ii-paper-i||group-ii-paper-i-area-01',
+  );
+});
+
+test('9c: Paper-I bilingual content retained; answer key stays out of student snapshot', async () => {
+  const db = new FakeFirestore({ now: () => NOW });
+  await seedAccess(db, 'group-ii');
+  await db.collection('questions').doc('ndrf-q').set({
+    id: 'ndrf-q',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-i',
+    majorStudyAreaId: 'group-ii-paper-i-area-01',
+    contentTopicId: 'group-ii-paper-i-area-01-topic-01',
+    isActive: true,
+    question:
+      'National Disaster Response Force (NDRF) is a specialized disaster response force under which ministry?',
+    explanation: 'Ministry of Home Affairs',
+    correctOption: 'B',
+    options: [
+      'Ministry of Urban Development',
+      'Ministry of Home Affairs',
+      'Ministry of Defence',
+      'Ministry of Environment, Forest and Climate Change',
+    ],
+    content: {
+      en: {
+        question:
+          'National Disaster Response Force (NDRF) is a specialized disaster response force under which ministry?',
+        options: [
+          'Ministry of Urban Development',
+          'Ministry of Home Affairs',
+          'Ministry of Defence',
+          'Ministry of Environment, Forest and Climate Change',
+        ],
+        explanation: 'Ministry of Home Affairs',
+      },
+      te: {
+        question:
+          'నేషనల్ డిజాస్టర్ రెస్పాన్స్ ఫోర్స్ (NDRF) అనేది ఏ మంత్రిత్వ శాఖ పరిధిలోని ప్రత్యేక విపత్తు ప్రతిస్పందన దళం?',
+        options: [
+          'పట్టణాభివృద్ధి మంత్రిత్వ శాఖ',
+          'హోం వ్యవహారాల మంత్రిత్వ శాఖ',
+          'రక్షణ మంత్రిత్వ శాఖ',
+          'పర్యావరణ, అటవీ మరియు వాతావరణ మార్పుల మంత్రిత్వ శాఖ',
+        ],
+        explanation: 'హోం వ్యవహారాల మంత్రిత్వ శాఖ',
+      },
+    },
+  });
+  await seedTest(db, {
+    testId: 'ndrf-test',
+    courseId: 'group-ii',
+    paperId: 'group-ii-paper-i',
+    partId: null,
+    syllabusUnitId: 'group-ii-paper-i-area-01',
+    questionIds: ['ndrf-q'],
+    title: 'Home',
+  });
+
+  const started = await createService(db, {
+    generateAttemptId: () => 'attempt-ndrf-1',
+  }).startAttempt({
+    uid: UID,
+    testId: 'ndrf-test',
+    startRequestId: 'req-ndrf-bilingual',
+  });
+
+  const safe = started.studentQuestions[0];
+  assert.equal(
+    safe.text,
+    'National Disaster Response Force (NDRF) is a specialized disaster response force under which ministry?',
+  );
+  assert.equal(
+    safe.content.te.question,
+    'నేషనల్ డిజాస్టర్ రెస్పాన్స్ ఫోర్స్ (NDRF) అనేది ఏ మంత్రిత్వ శాఖ పరిధిలోని ప్రత్యేక విపత్తు ప్రతిస్పందన దళం?',
+  );
+  assert.equal(safe.options[0].text, 'Ministry of Urban Development');
+  assert.equal(safe.options[0].teluguText, 'పట్టణాభివృద్ధి మంత్రిత్వ శాఖ');
+  assert.equal(safe.options[1].teluguText, 'హోం వ్యవహారాల మంత్రిత్వ శాఖ');
+  assert.equal(safe.content.te.options[1].text, 'హోం వ్యవహారాల మంత్రిత్వ శాఖ');
+  assert.equal(
+    safe.scopeKey,
+    'v1|group-ii|group-ii-paper-i||group-ii-paper-i-area-01',
+  );
+
+  // Answer key + explanations stay out of the student-safe payload.
+  assert.ok(!('correctOption' in safe));
+  assert.ok(!('explanation' in safe));
+  assert.ok(!('explanation' in safe.content.en));
+  assert.ok(!('explanation' in safe.content.te));
+
+  const grading = db._store.get(`${GRADING_SNAPSHOT_COLLECTION}/attempt-ndrf-1`);
+  assert.equal(grading.questions[0].correctOption, 'B');
+  assert.equal(grading.questions[0].explanation, 'Ministry of Home Affairs');
+  assert.equal(
+    grading.questions[0].content.te.explanation,
+    'హోం వ్యవహారాల మంత్రిత్వ శాఖ',
+  );
+});
+
+test('9d: English-only question still snapshots without Telugu content', async () => {
+  const db = new FakeFirestore({ now: () => NOW });
+  await seedAccess(db, 'group-ii');
+  await seedQuestion(db, {
+    id: 'en-only',
+    correctOption: 'A',
+    text: 'English only question',
+    explanation: 'Why',
+  });
+  await seedTest(db, { questionIds: ['en-only'] });
+
+  const started = await createService(db, {
+    generateAttemptId: () => 'attempt-en-only',
+  }).startAttempt({
+    uid: UID,
+    testId: 'test-snap-1',
+    startRequestId: 'req-en-only',
+  });
+
+  const safe = started.studentQuestions[0];
+  assert.equal(safe.text, 'English only question');
+  assert.ok(!safe.content?.te);
+  assert.ok(!('teluguText' in (safe.options[0] || {})));
+  assert.ok(!('correctOption' in safe));
 });
 
 test('11: legacy attempts without snapshot still score from live bank', async () => {

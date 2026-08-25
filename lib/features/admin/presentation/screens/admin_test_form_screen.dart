@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../course_enrollment/model/course.dart';
 import '../../../tests/data/models/test_models.dart';
+import '../../data/admin_test_scope.dart';
 import '../../services/admin_test_service.dart';
 import '../widgets/admin_test_form.dart';
 
@@ -10,11 +11,13 @@ class AdminTestFormScreen extends StatefulWidget {
     super.key,
     this.test,
     this.initialCourseId,
+    this.scope,
     this.service,
   });
 
   final TestModel? test;
   final String? initialCourseId;
+  final AdminTestScope? scope;
   final AdminTestService? service;
 
   @override
@@ -76,6 +79,7 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
                   courses: courses,
                   initialTest: widget.test,
                   initialCourseId: widget.initialCourseId,
+                  scope: widget.scope,
                   service: _service,
                   onSubmit: _save,
                 ),

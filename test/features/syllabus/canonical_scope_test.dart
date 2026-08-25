@@ -269,7 +269,7 @@ void main() {
       const test = TestModel(
         id: 'gii-legacy',
         examId: 'group-ii',
-        category: TestCategoryType.mockTests,
+        category: TestCategoryType.chapterTests,
         title: 'Legacy Group-II Mock',
         questionCount: 10,
         marks: 10,

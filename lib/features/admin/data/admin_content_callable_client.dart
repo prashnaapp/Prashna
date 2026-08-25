@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 /// Encodes Flutter mapper payloads for HTTPS callables.
 ///
@@ -24,6 +28,9 @@ Map<String, dynamic> encodeCallableWriteData(Map<String, dynamic> data) {
 /// Thin asia-south1 callable client for trusted admin catalog writes.
 class AdminContentCallableClient {
   AdminContentCallableClient({this.functions, this.callOverride});
+
+  static const _region = 'asia-south1';
+  static const _projectId = 'prashna-67689';
 
   FirebaseFunctions? functions;
 
@@ -133,8 +140,11 @@ class AdminContentCallableClient {
     final override = callOverride;
     if (override != null) return override(name, data);
     try {
+      if (kIsWeb) {
+        return await _callViaHttp(name, data);
+      }
       final resolved = functions ??= FirebaseFunctions.instanceFor(
-        region: 'asia-south1',
+        region: _region,
       );
       final result = await resolved.httpsCallable(name).call(data);
       final payload = result.data;
@@ -146,5 +156,71 @@ class AdminContentCallableClient {
       );
       throw FormatException(error.message ?? error.code);
     }
+  }
+
+  /// Flutter Web dart2js cannot serialize Int64 used by the Functions plugin.
+  /// Direct callable HTTP keeps Auth + assertAdmin and avoids that path.
+  Future<Map<String, dynamic>> _callViaHttp(
+    String name,
+    Map<String, dynamic> data,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw const FormatException('Authentication required.');
+    }
+    final token = await user.getIdToken();
+    if (token == null || token.isEmpty) {
+      throw const FormatException('Authentication required.');
+    }
+
+    final uri = Uri.https(
+      '$_region-$_projectId.cloudfunctions.net',
+      '/$name',
+    );
+    final response = await http
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'data': data}),
+        )
+        .timeout(const Duration(seconds: 70));
+
+    final decoded = _decodeJsonMap(response.body);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final result = decoded['result'];
+      if (result is Map) return Map<String, dynamic>.from(result);
+      return const {};
+    }
+
+    final error = decoded['error'];
+    final message = _callableErrorMessage(error) ??
+        'Callable $name failed (${response.statusCode}).';
+    debugPrint(
+      'AdminContentCallableClient.$name failed: HTTP ${response.statusCode} $message',
+    );
+    throw FormatException(message);
+  }
+
+  Map<String, dynamic> _decodeJsonMap(String body) {
+    if (body.trim().isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      // Non-JSON gateway bodies fall through to a generic HTTP error.
+    }
+    return const {};
+  }
+
+  String? _callableErrorMessage(Object? error) {
+    if (error is! Map) return null;
+    final message = error['message'];
+    if (message is String && message.trim().isNotEmpty) return message;
+    final status = error['status'];
+    if (status is String && status.trim().isNotEmpty) return status;
+    return null;
   }
 }

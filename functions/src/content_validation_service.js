@@ -179,6 +179,75 @@ function hasCanonicalLocation(data) {
   );
 }
 
+const LEGACY_GENERIC_PAPER_ID = /^paper-\d+$/;
+const LEGACY_GENERIC_SECTION_ID = /^section-\d+$/;
+const LEGACY_GENERIC_TOPIC_ID = /^topic-\d+$/;
+
+function isLegacyGenericPaperId(value) {
+  return typeof value === 'string' && LEGACY_GENERIC_PAPER_ID.test(value);
+}
+
+function isLegacyGenericSectionId(value) {
+  return value == null || LEGACY_GENERIC_SECTION_ID.test(value);
+}
+
+function isLegacyGenericTopicId(value) {
+  return value == null || LEGACY_GENERIC_TOPIC_ID.test(value);
+}
+
+function fieldIsDeleted(data, key) {
+  if (isDeleteSentinel(data[key])) return true;
+  const nested = data.syllabus && typeof data.syllabus === 'object'
+    ? data.syllabus[key]
+    : undefined;
+  return isDeleteSentinel(nested);
+}
+
+function resolvedIncomingSyllabusId(incoming, existing, key) {
+  if (fieldIsDeleted(incoming, key)) return null;
+  return syllabusField(incoming, key) || syllabusField(existing, key);
+}
+
+/**
+ * Documented production shape from the pre-canonical catalog:
+ * courseId + paper-N [+ section-N] [+ topic-N], with no canonical location fields.
+ * Detected from the persisted document, never from the client payload alone.
+ */
+function isDocumentedLegacyQuestionShape(data) {
+  if (!data || typeof data !== 'object') return false;
+  if (hasCanonicalLocation(data)) return false;
+  const courseId = trimToNull(data.courseId);
+  if (!courseId || !SUPPORTED_COURSES.includes(courseId)) return false;
+  if (!isLegacyGenericPaperId(syllabusField(data, 'paperId'))) return false;
+  if (!isLegacyGenericSectionId(syllabusField(data, 'sectionId'))) return false;
+  if (!isLegacyGenericTopicId(syllabusField(data, 'topicId'))) return false;
+  return true;
+}
+
+function isPreservingExistingLegacySyllabus(incoming, existing) {
+  if (!existing || !isDocumentedLegacyQuestionShape(existing)) return false;
+  if (hasCanonicalLocation(incoming)) return false;
+
+  const incomingCourse = trimToNull(incoming.courseId);
+  const existingCourse = trimToNull(existing.courseId);
+  if (incomingCourse && incomingCourse !== existingCourse) return false;
+
+  if (fieldIsDeleted(incoming, 'paperId')) return false;
+  const paperId = resolvedIncomingSyllabusId(incoming, existing, 'paperId');
+  if (paperId !== syllabusField(existing, 'paperId')) return false;
+  if (!isLegacyGenericPaperId(paperId)) return false;
+
+  if (fieldIsDeleted(incoming, 'sectionId')) return false;
+  const sectionId = resolvedIncomingSyllabusId(incoming, existing, 'sectionId');
+  if (!isLegacyGenericSectionId(sectionId)) return false;
+
+  if (fieldIsDeleted(incoming, 'topicId')) return false;
+  const topicId = resolvedIncomingSyllabusId(incoming, existing, 'topicId');
+  if (!isLegacyGenericTopicId(topicId)) return false;
+
+  return true;
+}
+
 function validateGroupIiQuestionSyllabus(data, addError) {
   const paperId = syllabusField(data, 'paperId');
   if (!paperId) {
@@ -301,7 +370,13 @@ function validateGroupIiiQuestionSyllabus(data, addError) {
   }
 }
 
-function validateQuestionSyllabus(data, { requireCanonical }) {
+function validateQuestionSyllabus(data, { requireCanonical, existing } = {}) {
+  // UPDATE of a persisted documented-legacy question may keep paper-N/section-N/topic-N.
+  // Create, publish, and any move onto canonical IDs still run the checks below.
+  if (isPreservingExistingLegacySyllabus(data, existing)) {
+    return;
+  }
+
   const courseId = trimToNull(data.courseId);
   const paperId = syllabusField(data, 'paperId');
   if (paperId && courseId) {
@@ -355,7 +430,7 @@ function validatePublishedBilingualContent(data) {
   }
 }
 
-export function validateQuestionPayload(data = {}, { documentId } = {}) {
+export function validateQuestionPayload(data = {}, { documentId, existing } = {}) {
   const id = trimToNull(data.id) || trimToNull(documentId);
   const expectedId = trimToNull(documentId);
   if (!id) fail('invalid-argument', 'Question ID is required.');
@@ -420,7 +495,7 @@ export function validateQuestionPayload(data = {}, { documentId } = {}) {
   if (isPublishedCanonical) {
     validatePublishedBilingualContent(data);
   }
-  validateQuestionSyllabus(data, { requireCanonical: isPublishedCanonical });
+  validateQuestionSyllabus(data, { requireCanonical: isPublishedCanonical, existing });
 
   return {
     id,
@@ -494,7 +569,7 @@ export function validateTestPayload(data = {}, { documentId, requireExistingId =
     fail('invalid-argument', 'Question count must match assigned question IDs.');
   }
 
-  validateTestSyllabusLocation(data, courseId);
+  validateTestCategoryLocation(data, courseId, category);
 
   return {
     id,
@@ -504,6 +579,69 @@ export function validateTestPayload(data = {}, { documentId, requireExistingId =
     questionIds,
     questionCount,
   };
+}
+
+function validateOptionalPartAndUnit(data, courseId, paperId, { requirePartIfPaperHasParts }) {
+  const partId = trimToNull(data.partId);
+  const unitId = trimToNull(data.syllabusUnitId);
+  const usesParts = paperUsesParts(courseId, paperId);
+  if (requirePartIfPaperHasParts && usesParts && !partId) {
+    fail('invalid-argument', `Part is required for paper "${paperId}".`);
+  }
+  if (!usesParts && partId) {
+    fail('invalid-argument', `Paper "${paperId}" does not have Parts.`);
+  }
+  if (partId) assertKnownPart(courseId, paperId, partId);
+  if (unitId) assertKnownUnit(courseId, paperId, partId, unitId);
+}
+
+/**
+ * Category-specific Test Series metadata.
+ *
+ * Reuses existing `partId` for Paper-wise Tests. Adds required `seriesId`
+ * (Grand Tests) and `year` (Previous Papers). Does not change chapter/paper
+ * syllabus-unit rules.
+ */
+export function validateTestCategoryLocation(data, courseId, category) {
+  if (category === 'mock') {
+    const seriesId = trimToNull(data.seriesId);
+    if (!seriesId) fail('invalid-argument', 'Grand Test group is required.');
+    const paperId = trimToNull(data.paperId);
+    if (!paperId) fail('invalid-argument', 'Paper is required for Grand Tests.');
+    assertKnownPaper(courseId, paperId);
+    validateOptionalPartAndUnit(data, courseId, paperId, {
+      requirePartIfPaperHasParts: false,
+    });
+    return;
+  }
+
+  if (category === 'previousyear') {
+    const year = asNumber(data.year);
+    if (!Number.isInteger(year) || year < 1900 || year > 2100) {
+      fail('invalid-argument', 'A valid exam year is required.');
+    }
+    const paperId = trimToNull(data.paperId);
+    if (!paperId) fail('invalid-argument', 'Paper is required for Previous Papers.');
+    assertKnownPaper(courseId, paperId);
+    validateOptionalPartAndUnit(data, courseId, paperId, {
+      requirePartIfPaperHasParts: false,
+    });
+    return;
+  }
+
+  if (category === 'part') {
+    const paperId = trimToNull(data.paperId);
+    if (!paperId) {
+      fail('invalid-argument', 'Paper is required for Paper-wise Tests.');
+    }
+    assertKnownPaper(courseId, paperId);
+    validateOptionalPartAndUnit(data, courseId, paperId, {
+      requirePartIfPaperHasParts: true,
+    });
+    return;
+  }
+
+  validateTestSyllabusLocation(data, courseId);
 }
 
 export function validateTestSyllabusLocation(data, courseId) {
@@ -567,8 +705,11 @@ export function assertQuestionCompatibleWithTest(questionData, testData, questio
   }
 }
 
-export function prepareQuestionWrite(data, { documentId, forUpdate = false } = {}) {
-  validateQuestionPayload(data, { documentId });
+export function prepareQuestionWrite(data, { documentId, forUpdate = false, existing } = {}) {
+  validateQuestionPayload(data, {
+    documentId,
+    existing: forUpdate ? existing : undefined,
+  });
   const decoded = decodeWriteData(data);
   decoded.id = trimToNull(documentId) || trimToNull(data.id);
   decoded.updatedAt = FieldValue.serverTimestamp();

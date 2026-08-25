@@ -87,11 +87,25 @@ class AdminDashboardScreen extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Card(
                 child: ListTile(
-                  title: const Text('Tests'),
-                  subtitle: const Text('Create, edit, and publish tests'),
+                  title: const Text('Chapters'),
+                  subtitle: const Text(
+                    'Course → Paper → Part (when applicable) → Chapter → Test',
+                  ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () =>
-                      Navigator.of(context).pushNamed(AdminRoutes.tests),
+                      Navigator.of(context).pushNamed(AdminRoutes.chapters),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Card(
+                child: ListTile(
+                  title: const Text('Test Series'),
+                  subtitle: const Text(
+                    'Paper-wise Tests, Grand Tests, and Previous Papers',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () =>
+                      Navigator.of(context).pushNamed(AdminRoutes.testSeries),
                 ),
               ),
             ],

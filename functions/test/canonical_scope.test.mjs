@@ -122,6 +122,14 @@ test('M: snapshot preserves separate canonical fields', () => {
   assert.equal(safe.explanation, undefined);
   assert.equal(safe.scopeKey, snap.scopeKey);
   assert.equal(safe.majorStudyAreaId, snap.majorStudyAreaId);
+  // Paper-I: omit absent part/topic/lesson — never undefined Firestore fields.
+  assert.ok(!('partId' in safe));
+  assert.ok(!('canonicalTopicId' in safe));
+  assert.ok(!('lessonId' in safe));
+  assert.ok(
+    Object.values(safe).every((value) => value !== undefined),
+    'student-safe payload must not contain undefined values',
+  );
 });
 
 test('N: snapshot does NOT collapse topicId into syllabusUnitId via ??', () => {

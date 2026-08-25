@@ -67,6 +67,8 @@ abstract final class TestCloudMapper {
       canonicalTopicId: readOptionalString(data['canonicalTopicId']),
       lessonId: readOptionalString(data['lessonId']),
       scopeShape: parseScopeShape(data['scopeShape'] as String?),
+      year: asInt(data['year']),
+      seriesId: readOptionalString(data['seriesId']),
     );
   }
 
@@ -113,6 +115,38 @@ abstract final class TestCloudMapper {
     if (test.questionIds.isNotEmpty &&
         test.questionIds.length != test.questionCount) {
       errors.add('Question count must match assigned question IDs.');
+    }
+    errors.addAll(_validateCategoryMetadata(test));
+    return errors;
+  }
+
+  static List<String> _validateCategoryMetadata(TestModel test) {
+    final errors = <String>[];
+    final paperId = test.paperId?.trim();
+    final seriesId = test.seriesId?.trim();
+    switch (test.category) {
+      case TestCategoryType.partTests:
+        if (paperId == null || paperId.isEmpty) {
+          errors.add('Paper is required for Paper-wise Tests.');
+        }
+      case TestCategoryType.mockTests:
+        if (seriesId == null || seriesId.isEmpty) {
+          errors.add('Grand Test group is required.');
+        }
+        if (paperId == null || paperId.isEmpty) {
+          errors.add('Paper is required for Grand Tests.');
+        }
+      case TestCategoryType.previousYear:
+        final year = test.year;
+        if (year == null || year < 1900 || year > 2100) {
+          errors.add('A valid exam year is required.');
+        }
+        if (paperId == null || paperId.isEmpty) {
+          errors.add('Paper is required for Previous Papers.');
+        }
+      case TestCategoryType.chapterTests:
+      case TestCategoryType.paperTests:
+        break;
     }
     return errors;
   }
@@ -195,6 +229,12 @@ abstract final class TestCloudMapper {
     writeOptional('contentTopicId', test.contentTopicId);
     writeOptional('canonicalTopicId', test.canonicalTopicId);
     writeOptional('lessonId', test.lessonId);
+    writeOptional('seriesId', test.seriesId);
+    if (test.year != null) {
+      data['year'] = test.year;
+    } else if (forUpdate) {
+      data['year'] = FieldValue.delete();
+    }
     if (test.scopeShape != null) {
       data['scopeShape'] = test.scopeShape!.name;
     } else if (forUpdate) {

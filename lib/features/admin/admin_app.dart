@@ -3,13 +3,15 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../question_bank/data/models/question_models.dart';
 import '../tests/data/models/test_models.dart';
+import 'presentation/screens/admin_chapters_browser_screen.dart';
 import 'presentation/screens/admin_question_form_screen.dart';
 import 'presentation/screens/admin_question_import_screen.dart';
 import 'presentation/screens/admin_question_list_screen.dart';
 import 'presentation/screens/admin_test_form_screen.dart';
-import 'presentation/screens/admin_test_list_screen.dart';
+import 'presentation/screens/admin_test_series_browser_screen.dart';
 import 'admin_routes.dart';
 import 'presentation/admin_auth_gate.dart';
+import 'data/admin_test_scope.dart';
 
 /// Root widget for the Admin Web application (separate from student app).
 class AdminApp extends StatelessWidget {
@@ -45,21 +47,45 @@ class AdminApp extends StatelessWidget {
             );
           case AdminRoutes.questionImport:
             return _gate(const AdminQuestionImportScreen(), settings: settings);
+          case AdminRoutes.chapters:
+            return _gate(
+              const AdminChaptersBrowserScreen(),
+              settings: settings,
+            );
+          case AdminRoutes.testSeries:
+            return _gate(
+              const AdminTestSeriesBrowserScreen(),
+              settings: settings,
+            );
           case AdminRoutes.tests:
-            return _gate(const AdminTestListScreen(), settings: settings);
+            return _gate(
+              const AdminTestSeriesBrowserScreen(),
+              settings: settings,
+            );
           case AdminRoutes.testCreate:
+            final createArgs = settings.arguments;
             return _gate(
               AdminTestFormScreen(
-                initialCourseId: settings.arguments as String?,
+                initialCourseId: createArgs is String ? createArgs : null,
+                scope: createArgs is AdminTestScope ? createArgs : null,
               ),
               settings: settings,
             );
           case AdminRoutes.testEdit:
             final test = settings.arguments;
             if (test is! TestModel) {
-              return _gate(const AdminTestListScreen(), settings: settings);
+              return _gate(
+                const AdminTestSeriesBrowserScreen(),
+                settings: settings,
+              );
             }
-            return _gate(AdminTestFormScreen(test: test), settings: settings);
+            return _gate(
+              AdminTestFormScreen(
+                test: test,
+                scope: AdminTestScope.fromTest(test),
+              ),
+              settings: settings,
+            );
           case '/':
           case null:
             return _gate(const AdminAuthGate(), settings: settings);

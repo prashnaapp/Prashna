@@ -4,6 +4,7 @@ import '../../../course_enrollment/model/course.dart';
 import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
 import '../../../tests/data/models/test_models.dart';
+import '../../data/admin_test_scope.dart';
 import '../../services/admin_test_service.dart';
 
 typedef AdminTestSubmit = Future<void> Function(TestModel test);
@@ -16,6 +17,7 @@ class AdminTestForm extends StatefulWidget {
     required this.onSubmit,
     this.initialTest,
     this.initialCourseId,
+    this.scope,
     this.service,
     this.onCancel,
     this.syllabusService,
@@ -25,6 +27,7 @@ class AdminTestForm extends StatefulWidget {
   final AdminTestSubmit onSubmit;
   final TestModel? initialTest;
   final String? initialCourseId;
+  final AdminTestScope? scope;
   final AdminTestService? service;
   final VoidCallback? onCancel;
   final SyllabusService? syllabusService;
@@ -48,6 +51,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
   late final TextEditingController _filterTopic;
   late final TextEditingController _filterLesson;
   late final TextEditingController _filterSyllabusUnit;
+  late final TextEditingController _year;
+  late final TextEditingController _seriesId;
 
   String? _courseId;
   String? _paperId;
@@ -69,10 +74,25 @@ class _AdminTestFormState extends State<AdminTestForm> {
   SyllabusService get _syllabus =>
       widget.syllabusService ?? SyllabusService.instance;
 
-  static const _categories = TestCategoryType.values;
+  static const _categories = [
+    TestCategoryType.chapterTests,
+    TestCategoryType.partTests,
+    TestCategoryType.mockTests,
+    TestCategoryType.previousYear,
+  ];
 
-  bool get _isSyllabusCourse =>
-      _courseId == 'group-ii' || _courseId == 'group-iii';
+  bool get _locked => widget.scope != null;
+
+  bool get _isLockedChapter =>
+      _locked &&
+      _category == TestCategoryType.chapterTests &&
+      _syllabusUnitId != null &&
+      _syllabusUnitId!.isNotEmpty;
+
+  bool get _isSyllabusCourse {
+    final course = _syllabus.getCourseById(_courseId ?? '');
+    return course != null && course.papers.isNotEmpty;
+  }
 
   SyllabusPaper? get _selectedPaper {
     final courseId = _courseId;
@@ -130,14 +150,26 @@ class _AdminTestFormState extends State<AdminTestForm> {
     _filterTopic = TextEditingController();
     _filterLesson = TextEditingController();
     _filterSyllabusUnit = TextEditingController();
+    _year = TextEditingController(
+      text: initial?.year == null
+          ? (widget.scope?.year == null ? '' : '${widget.scope!.year}')
+          : '${initial!.year}',
+    );
+    _seriesId = TextEditingController(
+      text: initial?.seriesId ?? widget.scope?.seriesId ?? '',
+    );
     _courseId =
         initial?.examId ??
+        widget.scope?.courseId ??
         widget.initialCourseId ??
         (widget.courses.isEmpty ? null : widget.courses.first.courseId);
-    _paperId = initial?.paperId;
-    _partId = initial?.partId;
-    _syllabusUnitId = initial?.syllabusUnitId;
-    _category = initial?.category ?? TestCategoryType.chapterTests;
+    _paperId = initial?.paperId ?? widget.scope?.paperId;
+    _partId = initial?.partId ?? widget.scope?.partId;
+    _syllabusUnitId = initial?.syllabusUnitId ?? widget.scope?.syllabusUnitId;
+    _category =
+        initial?.category ??
+        widget.scope?.category ??
+        TestCategoryType.chapterTests;
     _status = initial?.status ?? TestPublicationStatus.draft;
   }
 
@@ -156,6 +188,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
     _filterTopic.dispose();
     _filterLesson.dispose();
     _filterSyllabusUnit.dispose();
+    _year.dispose();
+    _seriesId.dispose();
     super.dispose();
   }
 
@@ -168,7 +202,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
       case TestCategoryType.paperTests:
         return 'Paper Tests';
       case TestCategoryType.mockTests:
-        return 'Mock Tests';
+        return 'Grand Tests';
       case TestCategoryType.previousYear:
         return 'Previous Papers';
     }
@@ -191,6 +225,12 @@ class _AdminTestFormState extends State<AdminTestForm> {
     final initial = _initial;
     final questionIds = _parseQuestionIds(_questionIds.text);
     final parsedCount = _parseInt(_questionCount.text) ?? 0;
+    final isPaperWise = _category == TestCategoryType.partTests;
+    final isGrand = _category == TestCategoryType.mockTests;
+    final isPrevious = _category == TestCategoryType.previousYear;
+    final keepChapterLocation =
+        _category == TestCategoryType.chapterTests ||
+        _category == TestCategoryType.paperTests;
     return TestModel(
       id: initial?.id ?? '',
       examId: _courseId!.trim(),
@@ -207,8 +247,14 @@ class _AdminTestFormState extends State<AdminTestForm> {
           ? TestPublicationStatus.draft
           : _status,
       paperId: _isSyllabusCourse ? _paperId : null,
-      partId: _isSyllabusCourse ? _partId : null,
-      syllabusUnitId: _isSyllabusCourse ? _syllabusUnitId : null,
+      partId: _isSyllabusCourse && (isPaperWise || keepChapterLocation)
+          ? _partId
+          : null,
+      syllabusUnitId: _isSyllabusCourse && keepChapterLocation
+          ? _syllabusUnitId
+          : null,
+      year: isPrevious ? _parseInt(_year.text) : null,
+      seriesId: isGrand ? _optional(_seriesId.text) : null,
       // The form does not edit these. Preserve them so update() cannot
       // treat "not shown" as "explicitly cleared".
       majorStudyAreaId: initial?.majorStudyAreaId,
@@ -220,6 +266,10 @@ class _AdminTestFormState extends State<AdminTestForm> {
   }
 
   Future<void> _appendFilteredQuestionIds() async {
+    if (_isLockedChapter) {
+      await _appendChapterQuestionIds();
+      return;
+    }
     final courseId = _courseId;
     if (courseId == null || courseId.isEmpty) {
       setState(() => _filterMessage = 'Select a course first.');
@@ -239,15 +289,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
         syllabusUnitId: _optional(_filterSyllabusUnit.text),
       );
       if (!mounted) return;
-      final merged = _parseQuestionIds(
-        '${_questionIds.text}\n${ids.join('\n')}',
-      );
-      setState(() {
-        _questionIds.text = merged.join('\n');
-        _questionCount.text = '${merged.isEmpty ? 0 : merged.length}';
-        _loadingFilter = false;
-        _filterMessage = 'Appended ${ids.length} question ID(s).';
-      });
+      _mergeQuestionIds(ids, emptyMessage: 'No matching questions found.');
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -255,6 +297,56 @@ class _AdminTestFormState extends State<AdminTestForm> {
         _filterMessage = 'Could not load questions: $error';
       });
     }
+  }
+
+  Future<void> _appendChapterQuestionIds() async {
+    final courseId = _courseId;
+    final paperId = _paperId;
+    final unitId = _syllabusUnitId;
+    if (courseId == null || paperId == null || unitId == null) {
+      setState(() => _filterMessage = 'Chapter location is missing.');
+      return;
+    }
+    setState(() {
+      _loadingFilter = true;
+      _filterMessage = null;
+    });
+    try {
+      final ids = await _resolvedService.findQuestionIdsForChapterTest(
+        courseId: courseId,
+        paperId: paperId,
+        partId: _partId,
+        syllabusUnitId: unitId,
+      );
+      if (!mounted) return;
+      _mergeQuestionIds(
+        ids,
+        emptyMessage: 'No published questions in this Chapter/Topic yet.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingFilter = false;
+        _filterMessage = 'Could not load questions: $error';
+      });
+    }
+  }
+
+  void _mergeQuestionIds(List<String> ids, {required String emptyMessage}) {
+    if (ids.isEmpty) {
+      setState(() {
+        _loadingFilter = false;
+        _filterMessage = emptyMessage;
+      });
+      return;
+    }
+    final merged = _parseQuestionIds('${_questionIds.text}\n${ids.join('\n')}');
+    setState(() {
+      _questionIds.text = merged.join('\n');
+      _questionCount.text = '${merged.isEmpty ? 0 : merged.length}';
+      _loadingFilter = false;
+      _filterMessage = 'Appended ${ids.length} question ID(s).';
+    });
   }
 
   String? _optional(String value) {
@@ -281,9 +373,197 @@ class _AdminTestFormState extends State<AdminTestForm> {
     if (mounted) setState(() => _saving = false);
   }
 
-  Widget _syllabusLocationFields() {
+  Widget _lockedContextCard() {
+    final courseTitle = () {
+      for (final course in widget.courses) {
+        if (course.courseId == _courseId) return course.title;
+      }
+      return _courseId ?? '';
+    }();
+    final unitName = () {
+      for (final unit in _availableUnits) {
+        if (unit.id == _syllabusUnitId) return unit.displayName;
+      }
+      return _syllabusUnitId;
+    }();
+    final lines = <String>[
+      'Category: ${_categoryLabel(_category)}',
+      if (_courseId != null) 'Course: $courseTitle',
+      if (_paperId != null) 'Paper: ${_selectedPaper?.title ?? _paperId}',
+      if (_partId != null) 'Part: ${_selectedPart?.displayName ?? _partId}',
+      if (_syllabusUnitId != null) 'Chapter / Topic: $unitName',
+      if (_seriesId.text.trim().isNotEmpty)
+        'Grand Test: ${_seriesId.text.trim()}',
+      if (_year.text.trim().isNotEmpty)
+        'Examination year: ${_year.text.trim()}',
+    ];
+    if (_isLockedChapter) {
+      lines.add(
+        '$courseTitle → ${_selectedPaper?.title ?? _paperId}'
+        '${_selectedPart == null ? '' : ' → ${_selectedPart!.displayName}'}'
+        ' → $unitName',
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Placement',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            for (final line in lines) Text(line),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _categoryMetadataFields() {
+    if (!_isSyllabusCourse) return const SizedBox.shrink();
+    return switch (_category) {
+      TestCategoryType.partTests => _paperWiseFields(),
+      TestCategoryType.mockTests => _grandTestFields(),
+      TestCategoryType.previousYear => _previousPaperFields(),
+      TestCategoryType.chapterTests ||
+      TestCategoryType.paperTests => _chapterLocationFields(),
+    };
+  }
+
+  Widget _paperDropdown({required bool requiredField}) {
+    return DropdownButtonFormField<String>(
+      initialValue: _locationPapers.any((p) => p.id == _paperId)
+          ? _paperId
+          : null,
+      decoration: const InputDecoration(
+        labelText: 'Paper',
+        border: OutlineInputBorder(),
+      ),
+      items: [
+        for (final item in _locationPapers)
+          DropdownMenuItem(value: item.id, child: Text(item.title)),
+      ],
+      onChanged: _saving
+          ? null
+          : (value) => setState(() {
+              _paperId = value;
+              _partId = null;
+              _syllabusUnitId = null;
+            }),
+      validator: (value) => requiredField && (value == null || value.isEmpty)
+          ? 'Paper is required.'
+          : null,
+    );
+  }
+
+  Widget _partDropdown({required bool requiredField}) {
     final paper = _selectedPaper;
-    final needsPart = paper?.hasPartSyllabusUnits == true;
+    final needsPart = paper?.hasCanonicalParts == true;
+    if (!needsPart) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: DropdownButtonFormField<String>(
+        initialValue: paper!.parts.any((p) => p.id == _partId) ? _partId : null,
+        decoration: const InputDecoration(
+          labelText: 'Part',
+          border: OutlineInputBorder(),
+        ),
+        items: [
+          for (final item in paper.parts)
+            DropdownMenuItem(value: item.id, child: Text(item.displayName)),
+        ],
+        onChanged: _saving
+            ? null
+            : (value) => setState(() {
+                _partId = value;
+                _syllabusUnitId = null;
+              }),
+        validator: (value) =>
+            requiredField &&
+                _paperId != null &&
+                (value == null || value.isEmpty)
+            ? 'Part is required.'
+            : null,
+      ),
+    );
+  }
+
+  Widget _paperWiseFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 16),
+        Text(
+          'Paper-wise Tests',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 8),
+        _paperDropdown(requiredField: true),
+        _partDropdown(requiredField: true),
+      ],
+    );
+  }
+
+  Widget _grandTestFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 16),
+        Text('Grand Tests', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _seriesId,
+          decoration: const InputDecoration(
+            labelText: 'Grand Test',
+            hintText: 'Grand Test 1',
+            border: OutlineInputBorder(),
+            helperText: 'Group identity shared by every paper in this set.',
+          ),
+          enabled: !_saving,
+          validator: (value) => value == null || value.trim().isEmpty
+              ? 'Grand Test group is required.'
+              : null,
+        ),
+        const SizedBox(height: 16),
+        _paperDropdown(requiredField: true),
+      ],
+    );
+  }
+
+  Widget _previousPaperFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 16),
+        Text('Previous Papers', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _year,
+          decoration: const InputDecoration(
+            labelText: 'Year',
+            hintText: '2016',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: TextInputType.number,
+          enabled: !_saving,
+          validator: (value) {
+            final year = _parseInt(value ?? '');
+            if (year == null || year < 1900 || year > 2100) {
+              return 'A valid exam year is required.';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        _paperDropdown(requiredField: true),
+      ],
+    );
+  }
+
+  Widget _chapterLocationFields() {
     final units = _availableUnits;
 
     return Column(
@@ -291,59 +571,13 @@ class _AdminTestFormState extends State<AdminTestForm> {
       children: [
         const SizedBox(height: 16),
         Text(
-          '${_courseId == 'group-ii' ? 'Group-II' : 'Group-III'} '
+          '${_syllabus.getCourseById(_courseId ?? '')?.name ?? _courseId} '
           'syllabus location',
           style: Theme.of(context).textTheme.titleSmall,
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          initialValue: _locationPapers.any((p) => p.id == _paperId)
-              ? _paperId
-              : null,
-          decoration: const InputDecoration(
-            labelText: 'Paper',
-            border: OutlineInputBorder(),
-          ),
-          items: [
-            for (final item in _locationPapers)
-              DropdownMenuItem(value: item.id, child: Text(item.title)),
-          ],
-          onChanged: _saving
-              ? null
-              : (value) => setState(() {
-                  _paperId = value;
-                  _partId = null;
-                  _syllabusUnitId = null;
-                }),
-        ),
-        if (needsPart) ...[
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: paper!.parts.any((p) => p.id == _partId)
-                ? _partId
-                : null,
-            decoration: const InputDecoration(
-              labelText: 'Part',
-              border: OutlineInputBorder(),
-            ),
-            items: [
-              for (final item in paper.parts)
-                DropdownMenuItem(value: item.id, child: Text(item.displayName)),
-            ],
-            onChanged: _saving
-                ? null
-                : (value) => setState(() {
-                    _partId = value;
-                    _syllabusUnitId = null;
-                  }),
-            validator: (value) =>
-                _paperId != null &&
-                    needsPart &&
-                    (value == null || value.isEmpty)
-                ? 'Part is required.'
-                : null,
-          ),
-        ],
+        _paperDropdown(requiredField: false),
+        _partDropdown(requiredField: true),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           initialValue: units.any((unit) => unit.id == _syllabusUnitId)
@@ -382,31 +616,69 @@ class _AdminTestFormState extends State<AdminTestForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DropdownButtonFormField<String>(
-              initialValue: _courseId,
-              decoration: const InputDecoration(
-                labelText: 'Course',
-                border: OutlineInputBorder(),
+            if (_locked)
+              _lockedContextCard()
+            else ...[
+              DropdownButtonFormField<String>(
+                initialValue: _courseId,
+                decoration: const InputDecoration(
+                  labelText: 'Course',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final course in widget.courses)
+                    DropdownMenuItem(
+                      value: course.courseId,
+                      child: Text('${course.title} (${course.courseId})'),
+                    ),
+                ],
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() {
+                        _courseId = value;
+                        _paperId = null;
+                        _partId = null;
+                        _syllabusUnitId = null;
+                      }),
+                validator: (value) => value == null || value.isEmpty
+                    ? 'Course is required.'
+                    : null,
               ),
-              items: [
-                for (final course in widget.courses)
-                  DropdownMenuItem(
-                    value: course.courseId,
-                    child: Text('${course.title} (${course.courseId})'),
-                  ),
-              ],
-              onChanged: _saving
-                  ? null
-                  : (value) => setState(() {
-                      _courseId = value;
-                      _paperId = null;
-                      _partId = null;
-                      _syllabusUnitId = null;
-                    }),
-              validator: (value) =>
-                  value == null || value.isEmpty ? 'Course is required.' : null,
-            ),
-            if (_isSyllabusCourse) _syllabusLocationFields(),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<TestCategoryType>(
+                initialValue: _category,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final category in _categories)
+                    DropdownMenuItem(
+                      value: category,
+                      child: Text(_categoryLabel(category)),
+                    ),
+                ],
+                onChanged: _saving
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          setState(() {
+                            _category = value;
+                            if (value != TestCategoryType.partTests &&
+                                value != TestCategoryType.chapterTests &&
+                                value != TestCategoryType.paperTests) {
+                              _partId = null;
+                            }
+                            if (value != TestCategoryType.chapterTests &&
+                                value != TestCategoryType.paperTests) {
+                              _syllabusUnitId = null;
+                            }
+                          });
+                        }
+                      },
+              ),
+              _categoryMetadataFields(),
+            ],
             const SizedBox(height: 16),
             TextFormField(
               controller: _title,
@@ -432,26 +704,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<TestCategoryType>(
-              initialValue: _category,
-              decoration: const InputDecoration(
-                labelText: 'Category',
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final category in _categories)
-                  DropdownMenuItem(
-                    value: category,
-                    child: Text(_categoryLabel(category)),
-                  ),
-              ],
-              onChanged: _saving
-                  ? null
-                  : (value) {
-                      if (value != null) setState(() => _category = value);
-                    },
-            ),
-            const SizedBox(height: 16),
             TextFormField(
               controller: _questionCount,
               decoration: const InputDecoration(
@@ -475,12 +727,14 @@ class _AdminTestFormState extends State<AdminTestForm> {
               key: const ValueKey('question-ids'),
               controller: _questionIds,
               maxLines: 6,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Question IDs (optional)',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 alignLabelWithHint: true,
-                helperText:
-                    'One ID per line or comma-separated. Leave empty for dynamic selection.',
+                helperText: _isLockedChapter
+                    ? 'Only questions from this Chapter/Topic are accepted. '
+                          'One ID per line or comma-separated.'
+                    : 'One ID per line or comma-separated. Leave empty for dynamic selection.',
               ),
               enabled: !_saving,
               onChanged: (value) {
@@ -492,77 +746,95 @@ class _AdminTestFormState extends State<AdminTestForm> {
               },
             ),
             const SizedBox(height: 12),
-            Text(
-              'Filter-based question selection',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                SizedBox(
-                  width: 180,
-                  child: TextField(
-                    controller: _filterPaper,
-                    decoration: const InputDecoration(
-                      labelText: 'Paper ID',
-                      border: OutlineInputBorder(),
+            if (_isLockedChapter) ...[
+              Text(
+                'Questions for this Chapter/Topic only',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                onPressed: _saving || _loadingFilter
+                    ? null
+                    : _appendChapterQuestionIds,
+                child: Text(
+                  _loadingFilter
+                      ? 'Loading…'
+                      : 'Append questions from this Chapter/Topic',
+                ),
+              ),
+            ] else ...[
+              Text(
+                'Filter-based question selection',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: 180,
+                    child: TextField(
+                      controller: _filterPaper,
+                      decoration: const InputDecoration(
+                        labelText: 'Paper ID',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: TextField(
-                    controller: _filterPart,
-                    decoration: const InputDecoration(
-                      labelText: 'Part ID',
-                      border: OutlineInputBorder(),
+                  SizedBox(
+                    width: 180,
+                    child: TextField(
+                      controller: _filterPart,
+                      decoration: const InputDecoration(
+                        labelText: 'Part ID',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: TextField(
-                    controller: _filterTopic,
-                    decoration: const InputDecoration(
-                      labelText: 'Topic ID',
-                      border: OutlineInputBorder(),
+                  SizedBox(
+                    width: 180,
+                    child: TextField(
+                      controller: _filterTopic,
+                      decoration: const InputDecoration(
+                        labelText: 'Topic ID',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: TextField(
-                    controller: _filterLesson,
-                    decoration: const InputDecoration(
-                      labelText: 'Lesson ID',
-                      border: OutlineInputBorder(),
+                  SizedBox(
+                    width: 180,
+                    child: TextField(
+                      controller: _filterLesson,
+                      decoration: const InputDecoration(
+                        labelText: 'Lesson ID',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                SizedBox(
-                  width: 220,
-                  child: TextField(
-                    controller: _filterSyllabusUnit,
-                    decoration: const InputDecoration(
-                      labelText: 'Syllabus Unit ID',
-                      border: OutlineInputBorder(),
+                  SizedBox(
+                    width: 220,
+                    child: TextField(
+                      controller: _filterSyllabusUnit,
+                      decoration: const InputDecoration(
+                        labelText: 'Syllabus Unit ID',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
-                FilledButton.tonal(
-                  onPressed: _saving || _loadingFilter
-                      ? null
-                      : _appendFilteredQuestionIds,
-                  child: Text(
-                    _loadingFilter
-                        ? 'Loading…'
-                        : 'Append matching question IDs',
+                  FilledButton.tonal(
+                    onPressed: _saving || _loadingFilter
+                        ? null
+                        : _appendFilteredQuestionIds,
+                    child: Text(
+                      _loadingFilter
+                          ? 'Loading…'
+                          : 'Append matching question IDs',
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
             if (_filterMessage != null) ...[
               const SizedBox(height: 8),
               Text(_filterMessage!),
