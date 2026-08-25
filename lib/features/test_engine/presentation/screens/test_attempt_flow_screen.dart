@@ -47,6 +47,7 @@ class TestAttemptFlowScreen extends StatefulWidget {
 
 class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
   late TestEngineController _controller;
+  late Test _test;
   late String? _serverAttemptId;
   _AttemptStep _step = _AttemptStep.instructions;
   bool _startingAttempt = false;
@@ -58,6 +59,7 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
   @override
   void initState() {
     super.initState();
+    _test = widget.test;
     _serverAttemptId = widget.serverAttemptId;
     _startRequestId = TestService.newStartRequestId();
     _controller = _buildController(_serverAttemptId);
@@ -69,7 +71,7 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
 
   TestEngineController _buildController(String? attemptId) {
     final controller = TestEngineController(
-      test: widget.test,
+      test: _test,
       service: widget.engineService,
       serverAttemptId: attemptId,
     );
@@ -93,16 +95,35 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
       _startError = null;
       setState(() {});
       try {
-        final start =
-            widget.startAttempt ??
-            (widget.engineService ?? TestService()).startServerAttempt;
+        final service = widget.engineService ?? TestService();
+        final start = widget.startAttempt ?? service.startServerAttempt;
         final started = await start(
-          testId: widget.test.id,
+          testId: _test.id,
           startRequestId: _startRequestId,
         );
         final attemptId = started['attemptId'] as String?;
         if (attemptId == null || attemptId.isEmpty) {
           throw StateError('Server did not return an attempt id.');
+        }
+        // Rebuild from the new bilingual snapshot — never reuse a post-reveal
+        // mutated Test from the previous attempt in this flow.
+        final studentQuestions =
+            (started['studentQuestions'] as List<dynamic>? ?? const [])
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList();
+        if (studentQuestions.isNotEmpty) {
+          _test = await service.createTestFromStudentSafeQuestions(
+            id: _test.id,
+            title: _test.title,
+            courseId: _test.courseId,
+            studentQuestions: studentQuestions,
+            mode: _test.mode,
+            duration: _test.duration,
+            totalMarks: _test.totalMarks,
+            negativeMarks: _test.negativeMarks,
+            instructions: _test.instructions,
+          );
         }
         if (!mounted) return;
         _controller.dispose();

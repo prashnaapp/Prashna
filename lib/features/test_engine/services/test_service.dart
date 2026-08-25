@@ -366,14 +366,42 @@ class TestService {
       final optionsRaw = raw['options'];
       var options = current.options;
       if (optionsRaw is List && optionsRaw.isNotEmpty) {
-        final parsed = <TestOption>[
-          for (final option in optionsRaw)
-            if (option is Map)
-              TestOption(
-                label: (option['label']?.toString() ?? '').trim().toUpperCase(),
-                text: (option['text']?.toString() ?? '').trim(),
-              ),
-        ].where((o) => o.label.isNotEmpty && o.text.isNotEmpty).toList();
+        final teluguFromContent = current.content?.te?.options;
+        final parsed = <TestOption>[];
+        for (var oi = 0; oi < optionsRaw.length; oi++) {
+          final option = optionsRaw[oi];
+          if (option is! Map) continue;
+          final label =
+              (option['label']?.toString() ?? '').trim().toUpperCase();
+          final optionText = (option['text']?.toString() ?? '').trim();
+          if (label.isEmpty || optionText.isEmpty) continue;
+
+          // Preserve Telugu across reveal: raw → prior option → content.te.
+          String? teluguText;
+          final fromRaw = (option['teluguText']?.toString() ?? '').trim();
+          if (fromRaw.isNotEmpty) {
+            teluguText = fromRaw;
+          } else if (oi < current.options.length) {
+            final fromCurrent = current.options[oi].teluguText?.trim();
+            if (fromCurrent != null && fromCurrent.isNotEmpty) {
+              teluguText = fromCurrent;
+            }
+          }
+          if (teluguText == null &&
+              teluguFromContent != null &&
+              oi < teluguFromContent.length) {
+            final fromContent = teluguFromContent[oi].text.trim();
+            if (fromContent.isNotEmpty) teluguText = fromContent;
+          }
+
+          parsed.add(
+            TestOption(
+              label: label,
+              text: optionText,
+              teluguText: teluguText,
+            ),
+          );
+        }
         if (parsed.length >= 2) options = parsed;
       }
       test.questions[i] = TestQuestion(
