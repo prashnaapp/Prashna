@@ -90,16 +90,9 @@ class QuestionService {
           question: originalContent.en.question,
           options: reorder(originalContent.en.options),
           explanation: originalContent.en.explanation,
+          statements: originalContent.en.statements,
         ),
-        te:
-            originalContent.te == null ||
-                originalContent.te!.options.length != order.length
-            ? null
-            : QuestionLocalizedContent(
-                question: originalContent.te!.question,
-                options: reorder(originalContent.te!.options),
-                explanation: originalContent.te!.explanation,
-              ),
+        te: _shuffledTeluguContent(originalContent.te, order),
       );
     }
 
@@ -133,6 +126,33 @@ class QuestionService {
       isActive: question.isActive,
       content: content,
       syllabus: question.syllabus,
+      itemFormat: question.itemFormat,
+      status: question.status,
+    );
+  }
+
+  QuestionLocalizedContent? _shuffledTeluguContent(
+    QuestionLocalizedContent? telugu,
+    List<int> order,
+  ) {
+    if (telugu == null) return null;
+    final hasTeluguOptions = telugu.options.any(
+      (option) => option.text.trim().isNotEmpty,
+    );
+    if (!hasTeluguOptions) {
+      return QuestionLocalizedContent(
+        question: telugu.question,
+        options: const [],
+        explanation: telugu.explanation,
+        statements: telugu.statements,
+      );
+    }
+    if (telugu.options.length != order.length) return null;
+    return QuestionLocalizedContent(
+      question: telugu.question,
+      options: [for (final index in order) telugu.options[index]],
+      explanation: telugu.explanation,
+      statements: telugu.statements,
     );
   }
 

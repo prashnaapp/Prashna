@@ -46,6 +46,14 @@ class TestQuestion {
   String? get partId => syllabus?.partId;
   String? get lessonId => syllabus?.lessonId;
 
+  /// Numbered statements from the snapshot. Empty for Standard MCQ.
+  List<String> get englishStatements => content?.en.statements ?? const [];
+
+  /// Telugu statements paired by index with [englishStatements].
+  List<String> get teluguStatements => content?.te?.statements ?? const [];
+
+  bool get hasNumberedStatements => englishStatements.isNotEmpty;
+
   String get correctAnswerText {
     for (final option in options) {
       if (option.label == correctOption) return option.text;

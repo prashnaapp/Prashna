@@ -62,7 +62,7 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
     _test = widget.test;
     _serverAttemptId = widget.serverAttemptId;
     _startRequestId = TestService.newStartRequestId();
-    _controller = _buildController(_serverAttemptId);
+    _attachController(_buildController(_serverAttemptId));
     if (widget.skipInstructions && _serverAttemptId != null) {
       _step = _AttemptStep.questions;
       unawaited(_controller.start());
@@ -81,8 +81,29 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
     return controller;
   }
 
+  void _attachController(TestEngineController controller) {
+    _controller = controller;
+    _controller.addListener(_syncResultStep);
+  }
+
+  void _replaceController(TestEngineController next) {
+    _controller.removeListener(_syncResultStep);
+    _controller.dispose();
+    _attachController(next);
+  }
+
+  void _syncResultStep() {
+    if (!mounted) return;
+    if (!_controller.submitted || _controller.result == null) return;
+    if (_step != _AttemptStep.questions && _step != _AttemptStep.review) {
+      return;
+    }
+    setState(() => _step = _AttemptStep.result);
+  }
+
   @override
   void dispose() {
+    _controller.removeListener(_syncResultStep);
     _controller.dispose();
     super.dispose();
   }
@@ -126,9 +147,8 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
           );
         }
         if (!mounted) return;
-        _controller.dispose();
         _serverAttemptId = attemptId;
-        _controller = _buildController(_serverAttemptId);
+        _replaceController(_buildController(_serverAttemptId));
         await _controller.start();
         if (!mounted) return;
         setState(() => _step = _AttemptStep.questions);
@@ -156,14 +176,14 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
     if (result != null) {
       setState(() => _step = _AttemptStep.result);
     }
+    _syncResultStep();
   }
 
   Future<void> _retry() async {
-    _controller.dispose();
     _serverAttemptId = null;
     _startError = null;
     _startRequestId = TestService.newStartRequestId();
-    _controller = _buildController(_serverAttemptId);
+    _replaceController(_buildController(_serverAttemptId));
     setState(() => _step = _AttemptStep.instructions);
   }
 

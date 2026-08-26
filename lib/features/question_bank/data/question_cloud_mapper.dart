@@ -79,6 +79,7 @@ abstract final class QuestionCloudMapper {
         legacyTopicId: topicId,
       ),
       status: parsePublicationStatus(data['status'] as String?),
+      itemFormat: parseItemFormat(data['itemFormat'] as String?),
     );
   }
 
@@ -141,10 +142,19 @@ abstract final class QuestionCloudMapper {
       errors.add('Estimated time must be greater than zero.');
     }
     final content = question.content;
-    if (content?.te != null &&
-        content!.en.options.length != content.te!.options.length) {
-      errors.add('English and Telugu option counts must match.');
+    if (content?.te != null) {
+      final teHasOptions = content!.te!.options.any(
+        (option) => option.text.trim().isNotEmpty,
+      );
+      final requireMatchingOptions =
+          question.resolvedItemFormat != QuestionItemFormat.statementMcq ||
+          teHasOptions;
+      if (requireMatchingOptions &&
+          content.en.options.length != content.te!.options.length) {
+        errors.add('English and Telugu option counts must match.');
+      }
     }
+    errors.addAll(_validateItemFormat(question));
     return errors;
   }
 
@@ -205,6 +215,10 @@ abstract final class QuestionCloudMapper {
       'isActive': question.isActive,
       'updatedAt': FieldValue.serverTimestamp(),
     };
+    final itemFormatValue = _itemFormatFirestoreValue(question.itemFormat);
+    if (itemFormatValue != null) {
+      data['itemFormat'] = itemFormatValue;
+    }
     if (forUpdate) {
       _writeOptionalSyllabusField(
         data,
@@ -265,7 +279,11 @@ abstract final class QuestionCloudMapper {
       data['isActive'] = question.status == QuestionPublicationStatus.published;
     }
     if (content != null) {
-      data['content'] = _contentToFirestore(content);
+      data['content'] = _contentToFirestore(
+        content,
+        omitEmptyTeluguOptions:
+            question.resolvedItemFormat == QuestionItemFormat.statementMcq,
+      );
     }
     if (includeCreatedAt) {
       data['createdAt'] = FieldValue.serverTimestamp();
@@ -303,6 +321,7 @@ abstract final class QuestionCloudMapper {
           QuestionOption(text: option),
       ],
       explanation: raw['explanation'] as String? ?? '',
+      statements: _readStatements(raw['statements']),
     );
   }
 
@@ -347,18 +366,37 @@ abstract final class QuestionCloudMapper {
     );
   }
 
-  static Map<String, dynamic> _contentToFirestore(QuestionContent content) {
-    Map<String, dynamic> localized(QuestionLocalizedContent value) {
+  static Map<String, dynamic> _contentToFirestore(
+    QuestionContent content, {
+    bool omitEmptyTeluguOptions = false,
+  }) {
+    Map<String, dynamic> localized(
+      QuestionLocalizedContent value, {
+      bool omitEmptyOptions = false,
+    }) {
+      final statements = [
+        for (final statement in value.statements)
+          if (statement.trim().isNotEmpty) statement.trim(),
+      ];
+      final options = [
+        for (final option in value.options) option.text.trim(),
+      ];
+      final hasOptionText = options.any((option) => option.isNotEmpty);
       return {
         'question': value.question.trim(),
-        'options': [for (final option in value.options) option.text.trim()],
+        if (!(omitEmptyOptions && !hasOptionText)) 'options': options,
         'explanation': value.explanation.trim(),
+        if (statements.isNotEmpty) 'statements': statements,
       };
     }
 
     return {
       'en': localized(content.en),
-      if (content.te != null) 'te': localized(content.te!),
+      if (content.te != null)
+        'te': localized(
+          content.te!,
+          omitEmptyOptions: omitEmptyTeluguOptions,
+        ),
     };
   }
 
@@ -432,6 +470,69 @@ abstract final class QuestionCloudMapper {
       default:
         return null;
     }
+  }
+
+  static List<String> _validateItemFormat(Question question) {
+    final errors = <String>[];
+    final format = question.resolvedItemFormat;
+    final content = question.content;
+    final enStatements = content?.en.statements ?? const <String>[];
+    final teStatements = content?.te?.statements;
+
+    if (format == QuestionItemFormat.statementMcq) {
+      if (enStatements.isEmpty) {
+        errors.add('Statement-based questions require at least one statement.');
+      }
+      if (enStatements.any((statement) => statement.trim().isEmpty)) {
+        errors.add('Statements cannot be empty.');
+      }
+      if (teStatements != null) {
+        if (teStatements.length != enStatements.length) {
+          errors.add('English and Telugu statement counts must match.');
+        }
+        if (teStatements.any((statement) => statement.trim().isEmpty)) {
+          errors.add('Telugu statements cannot be empty.');
+        }
+      }
+    } else if (enStatements.isNotEmpty ||
+        (teStatements != null && teStatements.isNotEmpty)) {
+      if (teStatements != null &&
+          teStatements.length != enStatements.length) {
+        errors.add('English and Telugu statement counts must match.');
+      }
+    }
+    return errors;
+  }
+
+  static String? _itemFormatFirestoreValue(QuestionItemFormat? format) {
+    switch (format) {
+      case QuestionItemFormat.standardMcq:
+        return 'standard_mcq';
+      case QuestionItemFormat.statementMcq:
+        return 'statement_mcq';
+      case null:
+        return null;
+    }
+  }
+
+  static QuestionItemFormat? parseItemFormat(String? raw) {
+    switch (raw?.trim()) {
+      case 'standard_mcq':
+        return QuestionItemFormat.standardMcq;
+      case 'statement_mcq':
+        return QuestionItemFormat.statementMcq;
+      default:
+        return null;
+    }
+  }
+
+  static List<String> _readStatements(dynamic raw) {
+    if (raw is! List) return const [];
+    return [
+      for (final item in raw)
+        if (item != null && item.toString().trim().isNotEmpty)
+          item.toString().trim(),
+    ];
   }
 
   static QuestionType? parseQuestionType(String? raw) {

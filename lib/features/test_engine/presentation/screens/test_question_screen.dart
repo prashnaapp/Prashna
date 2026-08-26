@@ -87,7 +87,8 @@ class TestQuestionScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     AppLinearProgress(
-                      value: controller.questionNumber /
+                      value:
+                          controller.questionNumber /
                           controller.test.totalQuestions,
                       height: 6,
                     ),
@@ -113,11 +114,18 @@ class TestQuestionScreen extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (question.hasNumberedStatements) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      _StatementBlock(question: question),
+                    ],
                     const SizedBox(height: AppSpacing.lg),
                     for (final option in question.options) ...[
                       AttemptOptionTile(
+                        key: ValueKey('attempt-option-${option.label}'),
                         label: option.label,
-                        optionText: option.teluguText == null
+                        optionText: question.hasNumberedStatements
+                            ? option.text
+                            : option.teluguText == null
                             ? option.text
                             : '${option.text}\n${option.teluguText}',
                         selected: attempt.selectedOption == option.label,
@@ -283,6 +291,46 @@ class TestQuestionScreen extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _StatementBlock extends StatelessWidget {
+  const _StatementBlock({required this.question});
+
+  final TestQuestion question;
+
+  @override
+  Widget build(BuildContext context) {
+    final english = question.englishStatements;
+    final telugu = question.teluguStatements;
+    return AppCard(
+      key: const ValueKey('statement-section'),
+      showShadow: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Statements', style: AppTextStyles.label(context)),
+          for (var i = 0; i < english.length; i++) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text('${i + 1}.', style: AppTextStyles.label(context)),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              english[i],
+              key: ValueKey('statement-en-${i + 1}'),
+              style: AppTextStyles.bodyLarge(context),
+            ),
+            if (i < telugu.length && telugu[i].trim().isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                telugu[i],
+                key: ValueKey('statement-te-${i + 1}'),
+                style: AppTextStyles.bodyMedium(context),
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 }

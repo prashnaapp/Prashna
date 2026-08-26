@@ -95,18 +95,38 @@ class AdminQuestionService {
     if (content.te?.question.trim().isEmpty != false) {
       errors.add('Telugu question is required.');
     }
+    final isStatement =
+        question.resolvedItemFormat == QuestionItemFormat.statementMcq;
     if (content.en.options.length != 4) {
       errors.add('Exactly four English options are required.');
-    }
-    if (content.te?.options.length != 4) {
-      errors.add('Exactly four Telugu options are required.');
     }
     if (content.en.options.any((option) => option.text.trim().isEmpty)) {
       errors.add('English options cannot be empty.');
     }
-    if (content.te?.options.any((option) => option.text.trim().isEmpty) !=
-        false) {
-      errors.add('Telugu options cannot be empty.');
+    if (!isStatement) {
+      if (content.te?.options.length != 4) {
+        errors.add('Exactly four Telugu options are required.');
+      }
+      if (content.te?.options.any((option) => option.text.trim().isEmpty) !=
+          false) {
+        errors.add('Telugu options cannot be empty.');
+      }
+    }
+    if (isStatement) {
+      final englishStatements = content.en.statements;
+      final teluguStatements = content.te?.statements ?? const <String>[];
+      if (englishStatements.isEmpty) {
+        errors.add('At least one statement is required.');
+      }
+      if (englishStatements.any((statement) => statement.trim().isEmpty)) {
+        errors.add('English text is required for every statement.');
+      }
+      if (teluguStatements.length != englishStatements.length) {
+        errors.add('English and Telugu statement counts must match.');
+      }
+      if (teluguStatements.any((statement) => statement.trim().isEmpty)) {
+        errors.add('Telugu text is required for every statement.');
+      }
     }
     if (content.en.explanation.trim().isEmpty) {
       errors.add('English explanation is required.');

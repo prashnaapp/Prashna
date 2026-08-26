@@ -6,17 +6,27 @@ enum QuestionType { practice, previousYear, mock }
 
 enum QuestionPublicationStatus { draft, published, archived }
 
+/// Structural exam-item format. Independent of [QuestionType] (catalog channel).
+///
+/// Missing [Question.itemFormat] on stored documents means [standardMcq].
+enum QuestionItemFormat { standardMcq, statementMcq }
+
 /// One language variant of a question's student-facing content.
 class QuestionLocalizedContent {
   const QuestionLocalizedContent({
     required this.question,
     required this.options,
     required this.explanation,
+    this.statements = const [],
   });
 
   final String question;
   final List<QuestionOption> options;
   final String explanation;
+
+  /// Optional numbered statements for [QuestionItemFormat.statementMcq].
+  /// Length is author-defined; never assumed to be 3 or 5.
+  final List<String> statements;
 }
 
 /// Bilingual content for one question record.
@@ -120,6 +130,7 @@ class Question {
     this.hint,
     this.aiExplanation,
     this.isActive = true,
+    this.itemFormat,
   });
 
   final String id;
@@ -148,6 +159,11 @@ class Question {
   final QuestionContent? content;
   final QuestionSyllabusAttribution? syllabus;
   final QuestionPublicationStatus? status;
+  /// Absent on legacy documents; treat as [QuestionItemFormat.standardMcq].
+  final QuestionItemFormat? itemFormat;
+
+  QuestionItemFormat get resolvedItemFormat =>
+      itemFormat ?? QuestionItemFormat.standardMcq;
 
   bool get isPublished =>
       status == QuestionPublicationStatus.published ||

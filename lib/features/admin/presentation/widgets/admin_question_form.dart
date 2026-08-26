@@ -46,9 +46,11 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
   late final TextEditingController _tags;
   late List<TextEditingController> _options;
   late List<TextEditingController> _teluguOptions;
+  late List<_StatementControllers> _statements;
 
   String? _courseId;
   String _correctOption = 'A';
+  QuestionItemFormat _itemFormat = QuestionItemFormat.standardMcq;
   QuestionDifficulty _difficulty = QuestionDifficulty.medium;
   QuestionType _questionType = QuestionType.practice;
   bool _isActive = true;
@@ -65,6 +67,8 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
 
   Question? get _initial => widget.initialQuestion;
   bool get _isGroupIii => _courseId == 'group-iii';
+  bool get _isStatementFormat =>
+      _canonicalMode && _itemFormat == QuestionItemFormat.statementMcq;
 
   @override
   void initState() {
@@ -132,6 +136,8 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
     while (_teluguOptions.length < _options.length) {
       _teluguOptions.add(TextEditingController());
     }
+    _itemFormat = initial?.resolvedItemFormat ?? QuestionItemFormat.standardMcq;
+    _statements = _seedStatements(initial);
     _courseId = initial?.courseId;
     _canonicalMode = initial == null || initial.content != null;
     if (_canonicalMode &&
@@ -150,6 +156,9 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
     _questionType = initial?.questionType ?? QuestionType.practice;
     _isActive = initial?.isActive ?? true;
     _status = initial?.status ?? QuestionPublicationStatus.draft;
+    if (_itemFormat == QuestionItemFormat.statementMcq) {
+      _ensureFourEnglishOptions();
+    }
   }
 
   @override
@@ -176,7 +185,76 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
     for (final option in _teluguOptions) {
       option.dispose();
     }
+    for (final statement in _statements) {
+      statement.dispose();
+    }
     super.dispose();
+  }
+
+  List<_StatementControllers> _seedStatements(Question? initial) {
+    final english = initial?.content?.en.statements ?? const <String>[];
+    final telugu = initial?.content?.te?.statements ?? const <String>[];
+    final count = english.length > telugu.length
+        ? english.length
+        : telugu.length;
+    if (count == 0) {
+      if (initial?.resolvedItemFormat == QuestionItemFormat.statementMcq) {
+        return [_StatementControllers(), _StatementControllers()];
+      }
+      return <_StatementControllers>[];
+    }
+    return [
+      for (var i = 0; i < count; i++)
+        _StatementControllers(
+          english: i < english.length ? english[i] : '',
+          telugu: i < telugu.length ? telugu[i] : '',
+        ),
+    ];
+  }
+
+  void _onItemFormatChanged(QuestionItemFormat? format) {
+    if (format == null) return;
+    setState(() {
+      _itemFormat = format;
+      if (format == QuestionItemFormat.statementMcq) {
+        _ensureFourEnglishOptions();
+        if (_statements.isEmpty) {
+          _statements.add(_StatementControllers());
+          _statements.add(_StatementControllers());
+        }
+      }
+    });
+  }
+
+  void _ensureFourEnglishOptions() {
+    while (_options.length < 4) {
+      _options.add(TextEditingController());
+      _teluguOptions.add(TextEditingController());
+    }
+    while (_options.length > 4) {
+      _options.removeLast().dispose();
+      if (_teluguOptions.isNotEmpty) {
+        _teluguOptions.removeLast().dispose();
+      }
+    }
+    while (_teluguOptions.length < _options.length) {
+      _teluguOptions.add(TextEditingController());
+    }
+    const labels = ['A', 'B', 'C', 'D'];
+    if (!labels.contains(_correctOption)) {
+      _correctOption = labels.last;
+    }
+  }
+
+  void _addStatement() {
+    setState(() => _statements.add(_StatementControllers()));
+  }
+
+  void _removeStatement(int index) {
+    if (_statements.length <= 1) return;
+    final removed = _statements.removeAt(index);
+    removed.dispose();
+    setState(() {});
   }
 
   static String _number(double value) {
@@ -246,6 +324,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
       createdAt: _initial?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
       isActive: _isActive,
+      itemFormat: _canonicalMode ? _itemFormat : _initial?.itemFormat,
       content: _canonicalMode
           ? QuestionContent(
               en: QuestionLocalizedContent(
@@ -255,14 +334,28 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                     QuestionOption(text: option.text.trim()),
                 ],
                 explanation: _explanation.text.trim(),
+                statements: _isStatementFormat
+                    ? [
+                        for (final statement in _statements)
+                          statement.english.text.trim(),
+                      ]
+                    : const [],
               ),
               te: QuestionLocalizedContent(
                 question: _teluguQuestion.text.trim(),
-                options: [
-                  for (final option in _teluguOptions)
-                    QuestionOption(text: option.text.trim()),
-                ],
+                options: _isStatementFormat
+                    ? const []
+                    : [
+                        for (final option in _teluguOptions)
+                          QuestionOption(text: option.text.trim()),
+                      ],
                 explanation: _teluguExplanation.text.trim(),
+                statements: _isStatementFormat
+                    ? [
+                        for (final statement in _statements)
+                          statement.telugu.text.trim(),
+                      ]
+                    : const [],
               ),
             )
           : null,
@@ -378,10 +471,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
             value: _partId,
             items: [
               for (final item in paper!.parts)
-                DropdownMenuItem(
-                  value: item.id,
-                  child: Text(item.displayName),
-                ),
+                DropdownMenuItem(value: item.id, child: Text(item.displayName)),
             ],
             validator: (value) => _required(value, 'Part'),
             onChanged: (value) => setState(() {
@@ -394,10 +484,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
           value: _syllabusUnitId,
           items: [
             for (final unit in units)
-              DropdownMenuItem(
-                value: unit.id,
-                child: Text(unit.displayName),
-              ),
+              DropdownMenuItem(value: unit.id, child: Text(unit.displayName)),
           ],
           validator: (value) => _required(value, 'Syllabus Unit'),
           onChanged: units.isEmpty
@@ -578,259 +665,15 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
   Widget build(BuildContext context) {
     return Form(
       key: _formKey,
-      child: ListView(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton(
-              key: const ValueKey('submit-question'),
-              onPressed: _saving ? null : _submit,
-              child: _saving
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(_initial == null ? 'Create question' : 'Save changes'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _courseId,
-            decoration: const InputDecoration(labelText: 'Course *'),
-            items: [
-              for (final course in widget.courses)
-                DropdownMenuItem(
-                  value: course.courseId,
-                  child: Text('${course.title} (${course.courseId})'),
-                ),
-            ],
-            validator: (value) =>
-                value == null || value.isEmpty ? 'Course is required.' : null,
-            onChanged: _saving
-                ? null
-                : (value) => setState(() {
-                      _courseId = value;
-                      if (_canonicalMode) {
-                        _clearSyllabusSelection(resetPaperDefault: true);
-                      }
-                    }),
-          ),
-          if (_canonicalMode) _canonicalFields(context),
-          if (_canonicalMode)
-            _field(
-              _question,
-              'English question *',
-              maxLines: 4,
-              validator: (v) => _required(v, 'English question'),
-            )
-          else
-            _field(
-              _question,
-              'Question *',
-              maxLines: 4,
-              validator: (v) => _required(v, 'Question text'),
-            ),
-          if (_canonicalMode)
-            _field(
-              _teluguQuestion,
-              'Telugu question *',
-              maxLines: 4,
-              validator: (v) => _required(v, 'Telugu question'),
-            ),
-          if (!_canonicalMode) ...[
-            _field(_paper, 'Paper ID'),
-            _field(_section, 'Section ID'),
-            _field(_topic, 'Topic ID'),
-          ],
-          const SizedBox(height: 8),
-          Text('Options *', style: Theme.of(context).textTheme.titleMedium),
-          for (var i = 0; i < _options.length; i++)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _field(
-                    _options[i],
-                    'Option ${String.fromCharCode(65 + i)}',
-                    validator: (v) =>
-                        _required(v, 'Option ${String.fromCharCode(65 + i)}'),
-                  ),
-                ),
-                if (_canonicalMode) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _field(
-                      _teluguOptions[i],
-                      'Telugu ${String.fromCharCode(65 + i)}',
-                      validator: (v) => _required(
-                        v,
-                        'Telugu option ${String.fromCharCode(65 + i)}',
-                      ),
-                    ),
-                  ),
-                ],
-                if (_options.length > 2)
-                  IconButton(
-                    tooltip: 'Remove option',
-                    onPressed: _saving ? null : () => _removeOption(i),
-                    icon: const Icon(Icons.remove_circle_outline),
-                  ),
-              ],
-            ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: _saving || _options.length >= 5 ? null : _addOption,
-              icon: const Icon(Icons.add),
-              label: const Text('Add option'),
-            ),
-          ),
-          DropdownButtonFormField<String>(
-            initialValue: _correctOption,
-            decoration: const InputDecoration(labelText: 'Correct option *'),
-            items: [
-              for (var i = 0; i < _options.length; i++)
-                DropdownMenuItem(
-                  value: String.fromCharCode(65 + i),
-                  child: Text(String.fromCharCode(65 + i)),
-                ),
-            ],
-            onChanged: _saving
-                ? null
-                : (value) => setState(() => _correctOption = value!),
-          ),
-          _field(
-            _explanation,
-            _canonicalMode ? 'English explanation *' : 'Explanation',
-            maxLines: 3,
-            validator: _canonicalMode
-                ? (v) => _required(v, 'English explanation')
-                : null,
-          ),
-          if (_canonicalMode)
-            _field(
-              _teluguExplanation,
-              'Telugu explanation *',
-              maxLines: 3,
-              validator: (v) => _required(v, 'Telugu explanation'),
-            ),
-          _field(_hint, 'Hint', maxLines: 2),
-          _field(_aiExplanation, 'AI explanation', maxLines: 3),
-          Row(
-            children: [
-              Expanded(
-                child: _enumField<QuestionDifficulty>(
-                  label: 'Difficulty',
-                  value: _difficulty,
-                  values: QuestionDifficulty.values,
-                  onChanged: (value) => setState(() => _difficulty = value!),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _enumField<QuestionType>(
-                  label: 'Question type',
-                  value: _questionType,
-                  values: QuestionType.values,
-                  onChanged: (value) => setState(() => _questionType = value!),
-                ),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: _field(
-                  _language,
-                  'Language *',
-                  validator: (v) => _required(v, 'Language'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _field(
-                  _marks,
-                  'Marks *',
-                  validator: (v) => _positiveNumber(v, 'Marks'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _field(
-                  _negativeMarks,
-                  'Negative marks',
-                  validator: (v) =>
-                      _positiveNumber(v, 'Negative marks', allowZero: true),
-                ),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: _field(
-                  _estimatedSeconds,
-                  'Estimated seconds *',
-                  validator: (v) {
-                    final parsed = int.tryParse(v?.trim() ?? '');
-                    return parsed == null || parsed <= 0
-                        ? 'Use a positive whole number.'
-                        : null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _field(
-                  _year,
-                  'Year',
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-            ],
-          ),
-          _field(_examName, 'Exam name'),
-          _field(_tags, 'Tags (comma separated)'),
-          if (_canonicalMode)
-            _enumField<QuestionPublicationStatus>(
-              label: 'Status',
-              value: _status,
-              values: QuestionPublicationStatus.values,
-              onChanged: (value) => setState(
-                () => _status = value ?? QuestionPublicationStatus.draft,
-              ),
-            ),
-          if (_canonicalMode) _preview(context),
-          if (_initial != null && !_canonicalMode)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Active'),
-              value: _isActive,
-              onChanged: _saving
-                  ? null
-                  : (value) => setState(() => _isActive = value),
-            ),
-          if (_submitError != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                _submitError!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: _saving
-                    ? null
-                    : widget.onCancel ?? () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 12),
-              FilledButton(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                key: const ValueKey('submit-question'),
                 onPressed: _saving ? null : _submit,
                 child: _saving
                     ? const SizedBox(
@@ -842,16 +685,360 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                         _initial == null ? 'Create question' : 'Save changes',
                       ),
               ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _courseId,
+              decoration: const InputDecoration(labelText: 'Course *'),
+              items: [
+                for (final course in widget.courses)
+                  DropdownMenuItem(
+                    value: course.courseId,
+                    child: Text('${course.title} (${course.courseId})'),
+                  ),
+              ],
+              validator: (value) =>
+                  value == null || value.isEmpty ? 'Course is required.' : null,
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() {
+                      _courseId = value;
+                      if (_canonicalMode) {
+                        _clearSyllabusSelection(resetPaperDefault: true);
+                      }
+                    }),
+            ),
+            if (_canonicalMode) _formatSelector(),
+            if (_canonicalMode) _canonicalFields(context),
+            if (_canonicalMode)
+              _field(
+                _question,
+                'English question *',
+                maxLines: 4,
+                validator: (v) => _required(v, 'English question'),
+              )
+            else
+              _field(
+                _question,
+                'Question *',
+                maxLines: 4,
+                validator: (v) => _required(v, 'Question text'),
+              ),
+            if (_canonicalMode)
+              _field(
+                _teluguQuestion,
+                'Telugu question *',
+                maxLines: 4,
+                validator: (v) => _required(v, 'Telugu question'),
+              ),
+            if (_isStatementFormat) ..._statementEditors(context),
+            if (!_canonicalMode) ...[
+              _field(_paper, 'Paper ID'),
+              _field(_section, 'Section ID'),
+              _field(_topic, 'Topic ID'),
             ],
+            const SizedBox(height: 8),
+            Text('Options *', style: Theme.of(context).textTheme.titleMedium),
+            for (var i = 0; i < _options.length; i++) _optionRow(i),
+            if (!_isStatementFormat)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _saving || _options.length >= 5
+                      ? null
+                      : _addOption,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add option'),
+                ),
+              ),
+            DropdownButtonFormField<String>(
+              key: const ValueKey('correct-option'),
+              initialValue: _correctOption,
+              decoration: const InputDecoration(labelText: 'Correct option *'),
+              items: [
+                for (var i = 0; i < _options.length; i++)
+                  DropdownMenuItem(
+                    value: String.fromCharCode(65 + i),
+                    child: Text(String.fromCharCode(65 + i)),
+                  ),
+              ],
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() => _correctOption = value!),
+            ),
+            _field(
+              _explanation,
+              _canonicalMode ? 'English explanation *' : 'Explanation',
+              maxLines: 3,
+              validator: _canonicalMode
+                  ? (v) => _required(v, 'English explanation')
+                  : null,
+            ),
+            if (_canonicalMode)
+              _field(
+                _teluguExplanation,
+                'Telugu explanation *',
+                maxLines: 3,
+                validator: (v) => _required(v, 'Telugu explanation'),
+              ),
+            _field(_hint, 'Hint', maxLines: 2),
+            _field(_aiExplanation, 'AI explanation', maxLines: 3),
+            Row(
+              children: [
+                Expanded(
+                  child: _enumField<QuestionDifficulty>(
+                    label: 'Difficulty',
+                    value: _difficulty,
+                    values: QuestionDifficulty.values,
+                    onChanged: (value) => setState(() => _difficulty = value!),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _enumField<QuestionType>(
+                    label: 'Question type',
+                    value: _questionType,
+                    values: QuestionType.values,
+                    onChanged: (value) =>
+                        setState(() => _questionType = value!),
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: _field(
+                    _language,
+                    'Language *',
+                    validator: (v) => _required(v, 'Language'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _field(
+                    _marks,
+                    'Marks *',
+                    validator: (v) => _positiveNumber(v, 'Marks'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _field(
+                    _negativeMarks,
+                    'Negative marks',
+                    validator: (v) =>
+                        _positiveNumber(v, 'Negative marks', allowZero: true),
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: _field(
+                    _estimatedSeconds,
+                    'Estimated seconds *',
+                    validator: (v) {
+                      final parsed = int.tryParse(v?.trim() ?? '');
+                      return parsed == null || parsed <= 0
+                          ? 'Use a positive whole number.'
+                          : null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _field(
+                    _year,
+                    'Year',
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            _field(_examName, 'Exam name'),
+            _field(_tags, 'Tags (comma separated)'),
+            if (_canonicalMode)
+              _enumField<QuestionPublicationStatus>(
+                label: 'Status',
+                value: _status,
+                values: QuestionPublicationStatus.values,
+                onChanged: (value) => setState(
+                  () => _status = value ?? QuestionPublicationStatus.draft,
+                ),
+              ),
+            if (_canonicalMode) _preview(context),
+            if (_initial != null && !_canonicalMode)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Active'),
+                value: _isActive,
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() => _isActive = value),
+              ),
+            if (_submitError != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  _submitError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _saving
+                      ? null
+                      : widget.onCancel ?? () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed: _saving ? null : _submit,
+                  child: _saving
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          _initial == null ? 'Create question' : 'Save changes',
+                        ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _formatSelector() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: DropdownButtonFormField<QuestionItemFormat>(
+        key: const ValueKey('question-format'),
+        initialValue: _itemFormat,
+        decoration: const InputDecoration(labelText: 'Question format *'),
+        items: const [
+          DropdownMenuItem(
+            value: QuestionItemFormat.standardMcq,
+            child: Text('Standard MCQ'),
+          ),
+          DropdownMenuItem(
+            value: QuestionItemFormat.statementMcq,
+            child: Text('Statement Based'),
           ),
         ],
+        onChanged: _saving ? null : _onItemFormatChanged,
       ),
+    );
+  }
+
+  List<Widget> _statementEditors(BuildContext context) {
+    return [
+      const SizedBox(height: 8),
+      Text('Statements *', style: Theme.of(context).textTheme.titleMedium),
+      for (var i = 0; i < _statements.length; i++) _statementRow(context, i),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          key: const ValueKey('add-statement'),
+          onPressed: _saving ? null : _addStatement,
+          icon: const Icon(Icons.add),
+          label: const Text('Add Statement'),
+        ),
+      ),
+    ];
+  }
+
+  Widget _statementRow(BuildContext context, int index) {
+    final number = index + 1;
+    return Card(
+      key: ValueKey('statement-row-$number'),
+      margin: const EdgeInsets.only(top: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Statement $number',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                if (_statements.length > 1)
+                  TextButton(
+                    key: ValueKey('remove-statement-$number'),
+                    onPressed: _saving ? null : () => _removeStatement(index),
+                    child: const Text('Remove'),
+                  ),
+              ],
+            ),
+            _field(
+              _statements[index].english,
+              'English',
+              key: ValueKey('statement-en-$number'),
+              maxLines: 3,
+              validator: (v) => _required(v, 'Statement $number English'),
+            ),
+            _field(
+              _statements[index].telugu,
+              'Telugu',
+              key: ValueKey('statement-te-$number'),
+              maxLines: 3,
+              validator: (v) => _required(v, 'Statement $number Telugu'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _optionRow(int index) {
+    final letter = String.fromCharCode(65 + index);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _field(
+            _options[index],
+            'Option $letter',
+            key: ValueKey('option-en-$letter'),
+            validator: (v) => _required(v, 'Option $letter'),
+          ),
+        ),
+        if (_canonicalMode && !_isStatementFormat) ...[
+          const SizedBox(width: 12),
+          Expanded(
+            child: _field(
+              _teluguOptions[index],
+              'Telugu $letter',
+              key: ValueKey('option-te-$letter'),
+              validator: (v) => _required(v, 'Telugu option $letter'),
+            ),
+          ),
+        ],
+        if (!_isStatementFormat && _options.length > 2)
+          IconButton(
+            tooltip: 'Remove option',
+            onPressed: _saving ? null : () => _removeOption(index),
+            icon: const Icon(Icons.remove_circle_outline),
+          ),
+      ],
     );
   }
 
   Widget _field(
     TextEditingController controller,
     String label, {
+    Key? key,
     int maxLines = 1,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
@@ -859,6 +1046,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: TextFormField(
+        key: key,
         controller: controller,
         enabled: !_saving,
         maxLines: maxLines,
@@ -912,13 +1100,26 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                   ? 'Telugu question'
                   : _teluguQuestion.text,
             ),
+            if (_isStatementFormat) ...[
+              const SizedBox(height: 8),
+              for (var i = 0; i < _statements.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '${i + 1}. ${_statements[i].english.text}\n'
+                    '   ${_statements[i].telugu.text}',
+                  ),
+                ),
+            ],
             const SizedBox(height: 8),
             for (var i = 0; i < _options.length && i < 4; i++)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
-                  '${letters[i]}. ${_options[i].text}\n'
-                  '   ${_teluguOptions[i].text}',
+                  _isStatementFormat
+                      ? '${letters[i]}. ${_options[i].text}'
+                      : '${letters[i]}. ${_options[i].text}\n'
+                            '   ${_teluguOptions[i].text}',
                 ),
               ),
             Text('Correct answer: $_correctOption'),
@@ -928,5 +1129,19 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
         ),
       ),
     );
+  }
+}
+
+class _StatementControllers {
+  _StatementControllers({String english = '', String telugu = ''})
+    : english = TextEditingController(text: english),
+      telugu = TextEditingController(text: telugu);
+
+  final TextEditingController english;
+  final TextEditingController telugu;
+
+  void dispose() {
+    english.dispose();
+    telugu.dispose();
   }
 }

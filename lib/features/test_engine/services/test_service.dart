@@ -337,11 +337,20 @@ class TestService {
         }
       }
     }
+    final statements = <String>[];
+    final statementsRaw = raw['statements'];
+    if (statementsRaw is List) {
+      for (final item in statementsRaw) {
+        final text = item?.toString().trim() ?? '';
+        if (text.isNotEmpty) statements.add(text);
+      }
+    }
     return QuestionLocalizedContent(
       question: question,
       options: options,
       // Attempt snapshots intentionally omit explanations until reveal.
       explanation: (raw['explanation'] as String?)?.trim() ?? '',
+      statements: statements,
     );
   }
 

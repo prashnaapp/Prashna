@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   GRADING_SNAPSHOT_COLLECTION,
   SNAPSHOT_SCHEMA_VERSION,
+  buildQuestionSnapshot,
   toStudentSafeQuestion,
 } from '../src/attempt_snapshot.js';
 import { createEntitlementService } from '../src/entitlement_service.js';
@@ -311,6 +312,106 @@ test('9: student-safe payload never includes answer key', () => {
   assert.ok(!('correctOption' in safe));
   assert.ok(!('explanation' in safe));
   assert.equal(safe.partId, 'part');
+});
+
+test('statement_mcq snapshot passes statements through and never writes undefined', () => {
+  const snapshot = buildQuestionSnapshot(
+    'stmt-q',
+    {
+      question: 'Consider the following statements.',
+      correctOption: 'C',
+      explanation: 'Both are correct.',
+      questionType: 'practice',
+      itemFormat: 'statement_mcq',
+      difficulty: 'medium',
+      marks: 1,
+      courseId: 'group-ii',
+      paperId: 'group-ii-paper-i',
+      majorStudyAreaId: 'group-ii-paper-i-area-01',
+      options: ['1 only', '2 only', 'Both 1 and 2', 'Neither 1 nor 2'],
+      content: {
+        en: {
+          question: 'Consider the following statements.',
+          statements: ['One', 'Two', 'Three', 'Four', 'Five', 'Six'],
+          options: ['1 only', '2 only', 'Both 1 and 2', 'Neither 1 nor 2'],
+          explanation: 'Both are correct.',
+        },
+        te: {
+          question: 'కింది ప్రకటనలు',
+          statements: ['ఒకటి', 'రెండు', 'మూడు', 'నాలుగు', 'ఐదు', 'ఆరు'],
+          options: ['1', '2', 'రెండూ', 'కాదు'],
+          explanation: 'రెండూ సరైనవి.',
+        },
+      },
+    },
+    0,
+    'group-ii',
+  );
+
+  assert.equal(snapshot.itemFormat, 'statement_mcq');
+  assert.equal(snapshot.questionType, 'practice');
+  assert.deepEqual(snapshot.content.en.statements, [
+    'One', 'Two', 'Three', 'Four', 'Five', 'Six',
+  ]);
+  assert.deepEqual(snapshot.content.te.statements, [
+    'ఒకటి', 'రెండు', 'మూడు', 'నాలుగు', 'ఐదు', 'ఆరు',
+  ]);
+  assert.equal(snapshot.options[0].teluguText, '1');
+  assertNoUndefinedFirestoreValues(snapshot, 'gradingSnapshot');
+
+  const safe = toStudentSafeQuestion(snapshot);
+  assert.ok(!('correctOption' in safe));
+  assert.ok(!('explanation' in safe));
+  assert.equal(safe.content.en.explanation, undefined);
+  assert.ok(!('explanation' in safe.content.en));
+  assert.deepEqual(safe.content.en.statements, snapshot.content.en.statements);
+  assert.deepEqual(safe.content.te.statements, snapshot.content.te.statements);
+  assert.equal(safe.itemFormat, 'statement_mcq');
+  assertNoUndefinedFirestoreValues(safe, 'studentSafe');
+});
+
+test('standard MCQ snapshot omits empty statements and missing itemFormat', () => {
+  const snapshot = buildQuestionSnapshot(
+    'std-q',
+    {
+      question: 'Capital of Telangana?',
+      correctOption: 'B',
+      explanation: 'Hyderabad',
+      questionType: 'practice',
+      difficulty: 'easy',
+      marks: 1,
+      courseId: 'group-ii',
+      paperId: 'group-ii-paper-i',
+      majorStudyAreaId: 'group-ii-paper-i-area-01',
+      options: ['Warangal', 'Hyderabad', 'Nizamabad', 'Karimnagar'],
+      content: {
+        en: {
+          question: 'Capital of Telangana?',
+          options: ['Warangal', 'Hyderabad', 'Nizamabad', 'Karimnagar'],
+          explanation: 'Hyderabad',
+        },
+        te: {
+          question: 'తెలంగాణ రాజధాని ఏది?',
+          options: ['వరంగల్', 'హైదరాబాద్', 'నిజామాబాద్', 'కరీంనగర్'],
+          explanation: 'హైదరాబాద్',
+        },
+      },
+    },
+    0,
+    'group-ii',
+  );
+
+  assert.equal(snapshot.itemFormat, undefined);
+  assert.ok(!('itemFormat' in snapshot));
+  assert.ok(!('statements' in snapshot.content.en));
+  assert.equal(snapshot.options[1].teluguText, 'హైదరాబాద్');
+  assertNoUndefinedFirestoreValues(snapshot, 'standardSnapshot');
+
+  const safe = toStudentSafeQuestion(snapshot);
+  assert.ok(!('itemFormat' in safe));
+  assert.ok(!('statements' in safe.content.en));
+  assert.equal(safe.options[1].teluguText, 'హైదరాబాద్');
+  assertNoUndefinedFirestoreValues(safe, 'standardSafe');
 });
 
 function assertNoUndefinedFirestoreValues(value, path = 'root') {

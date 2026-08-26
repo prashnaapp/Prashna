@@ -92,8 +92,18 @@ export function extractExplanation(data) {
   return trimString(data?.content?.en?.explanation);
 }
 
+function extractStatements(block) {
+  if (!block || !Array.isArray(block.statements)) return [];
+  const statements = [];
+  for (const item of block.statements) {
+    const text = trimString(item);
+    if (text) statements.push(text);
+  }
+  return statements;
+}
+
 /**
- * One language block: { question, options:[{text}], explanation }.
+ * One language block: { question, options:[{text}], explanation, statements? }.
  * Accepts Firestore string options or { text } objects.
  */
 function extractLocalizedContentBlock(block) {
@@ -111,8 +121,13 @@ function extractLocalizedContentBlock(block) {
       options.push({ text });
     }
   }
-  if (!question && options.length === 0 && !explanation) return null;
-  return { question, options, explanation };
+  const statements = extractStatements(block);
+  if (!question && options.length === 0 && !explanation && statements.length === 0) {
+    return null;
+  }
+  const out = { question, options, explanation };
+  if (statements.length > 0) out.statements = statements;
+  return out;
 }
 
 /**
@@ -140,6 +155,9 @@ export function buildSnapshotContent(data, {
     explanation:
       enFromContent?.explanation || trimString(englishExplanation) || '',
   };
+  if (enFromContent?.statements?.length) {
+    en.statements = enFromContent.statements;
+  }
   if (!en.question) return null;
 
   const content = { en };
@@ -159,24 +177,30 @@ function attachTeluguOptionText(options, teBlock) {
   });
 }
 
-/** Student-safe content: keep en/te question+options; never expose explanations. */
+/** Student-safe content: keep en/te question+options+statements; never expose explanations. */
 function toStudentSafeContent(content) {
   if (!content?.en?.question) return null;
-  const out = {
-    en: {
-      question: content.en.question,
-      options: (content.en.options || []).map((option) => ({
-        text: option.text,
-      })),
-    },
+  const en = {
+    question: content.en.question,
+    options: (content.en.options || []).map((option) => ({
+      text: option.text,
+    })),
   };
+  if (Array.isArray(content.en.statements) && content.en.statements.length > 0) {
+    en.statements = content.en.statements;
+  }
+  const out = { en };
   if (content.te?.question) {
-    out.te = {
+    const te = {
       question: content.te.question,
       options: (content.te.options || []).map((option) => ({
         text: option.text,
       })),
     };
+    if (Array.isArray(content.te.statements) && content.te.statements.length > 0) {
+      te.statements = content.te.statements;
+    }
+    out.te = te;
   }
   return out;
 }
@@ -294,9 +318,12 @@ export function buildQuestionSnapshot(questionId, data, position, courseId) {
     correctOption,
     explanation,
     ...(content ? { content } : {}),
-    questionType: optionalString(data?.questionType),
     marks: asNumber(data?.marks, 1),
-    difficulty: optionalString(data?.difficulty),
+    ...compactAttribution({
+      questionType: optionalString(data?.questionType),
+      itemFormat: optionalString(data?.itemFormat),
+      difficulty: optionalString(data?.difficulty),
+    }),
     ...compactAttribution(attribution),
   };
 }
@@ -320,6 +347,7 @@ export function toStudentSafeQuestion(snapshot) {
     ...(safeContent ? { content: safeContent } : {}),
     ...compactAttribution({
       questionType: snapshot.questionType,
+      itemFormat: snapshot.itemFormat,
       marks: snapshot.marks,
       difficulty: snapshot.difficulty,
       courseId: snapshot.courseId,

@@ -63,6 +63,68 @@ void main() {
     );
   }
 
+  Question statementCanonical() {
+    final now = DateTime(2026, 8, 10);
+    return Question(
+      id: 'q-statement',
+      courseId: 'group-ii',
+      paperId: 'group-ii-paper-i',
+      question: 'Consider the following statements.',
+      options: const [
+        '1 and 3 only',
+        '2 and 3 only',
+        '1 and 2 only',
+        '1, 2 and 3',
+      ],
+      correctOption: 'B',
+      explanation: 'Statements 2 and 3 are correct.',
+      difficulty: QuestionDifficulty.medium,
+      questionType: QuestionType.practice,
+      marks: 1,
+      negativeMarks: 0,
+      tags: const [],
+      estimatedTime: const Duration(seconds: 60),
+      createdAt: now,
+      updatedAt: now,
+      isActive: false,
+      status: QuestionPublicationStatus.draft,
+      itemFormat: QuestionItemFormat.statementMcq,
+      content: const QuestionContent(
+        en: QuestionLocalizedContent(
+          question: 'Consider the following statements.',
+          options: [
+            QuestionOption(text: '1 and 3 only'),
+            QuestionOption(text: '2 and 3 only'),
+            QuestionOption(text: '1 and 2 only'),
+            QuestionOption(text: '1, 2 and 3'),
+          ],
+          explanation: 'Statements 2 and 3 are correct.',
+          statements: [
+            'Inserted by the 32nd Amendment.',
+            'The tribunal is excluded from Article 226.',
+            'The President may provide equitable opportunities.',
+          ],
+        ),
+        te: QuestionLocalizedContent(
+          question: 'కింది ప్రకటనలను పరిశీలించండి.',
+          options: [],
+          explanation: 'ప్రకటనలు 2 మరియు 3 సరైనవి.',
+          statements: [
+            '32వ సవరణ ద్వారా చేర్చారు.',
+            'ట్రిబ్యునల్ అధికరణ 226 నుండి మినహాయించబడింది.',
+            'రాష్ట్రపతి సమాన అవకాశాలు కల్పించవచ్చు.',
+          ],
+        ),
+      ),
+      syllabus: const QuestionSyllabusAttribution(
+        courseId: 'group-ii',
+        paperId: 'group-ii-paper-i',
+        majorStudyAreaId: 'group-ii-paper-i-area-01',
+        contentTopicId: 'group-ii-paper-i-area-01-topic-01',
+      ),
+    );
+  }
+
   test(
     'creates a bilingual question as a draft through the repository',
     () async {
@@ -136,6 +198,95 @@ void main() {
     expect(errors, contains('Exactly four Telugu options are required.'));
   });
 
+  test('missing itemFormat still requires bilingual Telugu options', () {
+    final question = canonical().copyWithForTest(
+      content: const QuestionContent(
+        en: QuestionLocalizedContent(
+          question: 'Which city is the capital?',
+          options: [
+            QuestionOption(text: 'Warangal'),
+            QuestionOption(text: 'Hyderabad'),
+            QuestionOption(text: 'Nizamabad'),
+            QuestionOption(text: 'Karimnagar'),
+          ],
+          explanation: 'Hyderabad is the capital.',
+        ),
+        te: QuestionLocalizedContent(
+          question: 'రాజధాని నగరం ఏది?',
+          options: [],
+          explanation: 'హైదరాబాద్ రాజధాని.',
+        ),
+      ),
+    );
+
+    expect(question.itemFormat, isNull);
+    expect(question.resolvedItemFormat, QuestionItemFormat.standardMcq);
+    expect(
+      AdminQuestionService().validate(question, documentId: 'generated-id'),
+      contains('Exactly four Telugu options are required.'),
+    );
+  });
+
+  test('statement_mcq validates without Telugu options', () {
+    final question = statementCanonical();
+    final errors = AdminQuestionService().validate(
+      question,
+      documentId: question.id,
+    );
+
+    expect(errors, isEmpty);
+    expect(question.content!.te!.options, isEmpty);
+
+    final firestore = QuestionCloudMapper.toFirestore(
+      question,
+      documentId: 'q-statement',
+    );
+    final te = (firestore['content'] as Map)['te'] as Map;
+    expect(te.containsKey('options'), isFalse);
+  });
+
+  test(
+    'statement_mcq requires bilingual statements and four English options',
+    () {
+      final question = statementCanonical().copyWithForTest(
+        itemFormat: QuestionItemFormat.statementMcq,
+        content: const QuestionContent(
+          en: QuestionLocalizedContent(
+            question: 'Consider the following statements.',
+            options: [
+              QuestionOption(text: '1 only'),
+              QuestionOption(text: '2 only'),
+              QuestionOption(text: 'Both'),
+              QuestionOption(text: 'Neither'),
+            ],
+            explanation: 'Statement 1 is correct.',
+            statements: ['', 'Second'],
+          ),
+          te: QuestionLocalizedContent(
+            question: 'కింది ప్రకటనలను పరిశీలించండి.',
+            options: [],
+            explanation: 'ప్రకటన 1 సరైనది.',
+            statements: ['మొదటి'],
+          ),
+        ),
+      );
+      final errors = AdminQuestionService().validate(
+        question,
+        documentId: 'generated-id',
+      );
+
+      expect(errors, contains('English text is required for every statement.'));
+      expect(
+        errors,
+        contains('English and Telugu statement counts must match.'),
+      );
+      expect(
+        errors,
+        isNot(contains('Exactly four Telugu options are required.')),
+      );
+    },
+  );
+
   test('draft, published, and archived status controls student visibility', () {
     final draft = canonical();
     final published = canonical(status: QuestionPublicationStatus.published);
@@ -156,12 +307,18 @@ void main() {
 }
 
 extension on Question {
-  Question copyWithForTest({QuestionContent? content}) {
+  Question copyWithForTest({
+    QuestionContent? content,
+    QuestionItemFormat? itemFormat,
+  }) {
     return Question(
       id: id,
       courseId: courseId,
       paperId: paperId,
+      question: question,
+      options: options,
       correctOption: correctOption,
+      explanation: explanation,
       difficulty: difficulty,
       questionType: questionType,
       marks: marks,
@@ -174,6 +331,7 @@ extension on Question {
       syllabus: syllabus,
       status: status,
       isActive: isActive,
+      itemFormat: itemFormat ?? this.itemFormat,
     );
   }
 }

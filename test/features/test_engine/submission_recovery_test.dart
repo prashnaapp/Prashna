@@ -10,12 +10,12 @@ import 'package:telangana_prep/features/test_engine/presentation/screens/test_at
 import 'package:telangana_prep/features/test_engine/services/test_service.dart';
 
 void main() {
-  Test buildTest() {
+  Test buildTest({Duration duration = const Duration(minutes: 30)}) {
     return Test(
       id: 'test-group-ii-001',
       title: 'Group-II Practice Test 1',
       courseId: 'group-ii',
-      duration: const Duration(minutes: 30),
+      duration: duration,
       totalQuestions: 1,
       totalMarks: 1,
       negativeMarks: 0,
@@ -197,5 +197,278 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Result'), findsOneWidget);
     expect(calls, 1);
+  });
+
+  Future<void> pumpToQuestions(WidgetTester tester, {required Widget app}) async {
+    await tester.pumpWidget(app);
+    await tester.tap(find.text('Start Test'));
+    await tester.pumpAndSettle();
+    expect(find.text('Capital of Telangana?'), findsOneWidget);
+  }
+
+  Future<void> elapseTimeout(WidgetTester tester) async {
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('A: timeout submission shows Result', (tester) async {
+    var calls = 0;
+    final api = TestAttemptApi(
+      callOverride: (name, data) async {
+        expect(name, 'submitTestAttempt');
+        calls += 1;
+        return successPayload(data['attemptId'] as String);
+      },
+    );
+
+    await pumpToQuestions(
+      tester,
+      app: MaterialApp(
+        home: TestAttemptFlowScreen(
+          test: buildTest(duration: const Duration(seconds: 1)),
+          serverAttemptId: 'attempt-keep',
+          engineService: TestService(attemptApi: api),
+        ),
+      ),
+    );
+
+    await elapseTimeout(tester);
+
+    expect(find.text('Result'), findsOneWidget);
+    expect(find.text('TEST COMPLETED!'), findsOneWidget);
+    expect(find.text('Capital of Telangana?'), findsNothing);
+    expect(calls, 1);
+  });
+
+  testWidgets('B: timeout while Review shows Result', (tester) async {
+    var calls = 0;
+    final api = TestAttemptApi(
+      callOverride: (name, data) async {
+        expect(name, 'submitTestAttempt');
+        calls += 1;
+        return successPayload(data['attemptId'] as String);
+      },
+    );
+
+    await pumpToQuestions(
+      tester,
+      app: MaterialApp(
+        home: TestAttemptFlowScreen(
+          test: buildTest(duration: const Duration(seconds: 1)),
+          serverAttemptId: 'attempt-keep',
+          engineService: TestService(attemptApi: api),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    expect(find.text('Attempt Summary'), findsOneWidget);
+
+    await elapseTimeout(tester);
+
+    expect(find.text('Result'), findsOneWidget);
+    expect(find.text('Attempt Summary'), findsNothing);
+    expect(calls, 1);
+  });
+
+  testWidgets('C: timeout submission failure stays on question screen', (
+    tester,
+  ) async {
+    var calls = 0;
+    final api = TestAttemptApi(
+      callOverride: (name, data) async {
+        expect(name, 'submitTestAttempt');
+        calls += 1;
+        throw StateError('network failed');
+      },
+    );
+
+    await pumpToQuestions(
+      tester,
+      app: MaterialApp(
+        home: TestAttemptFlowScreen(
+          test: buildTest(duration: const Duration(seconds: 1)),
+          serverAttemptId: 'attempt-keep',
+          engineService: TestService(attemptApi: api),
+        ),
+      ),
+    );
+
+    await elapseTimeout(tester);
+
+    expect(find.text('Result'), findsNothing);
+    expect(find.text('Capital of Telangana?'), findsOneWidget);
+    expect(find.byKey(const ValueKey('submission-error')), findsOneWidget);
+    expect(find.byKey(const ValueKey('retry-submission')), findsOneWidget);
+    expect(calls, 1);
+  });
+
+  testWidgets('D: Retry Submission after timeout failure shows Result', (
+    tester,
+  ) async {
+    var fail = true;
+    var calls = 0;
+    final api = TestAttemptApi(
+      callOverride: (name, data) async {
+        expect(name, 'submitTestAttempt');
+        calls += 1;
+        if (fail) throw StateError('network failed');
+        return successPayload(data['attemptId'] as String);
+      },
+    );
+
+    await pumpToQuestions(
+      tester,
+      app: MaterialApp(
+        home: TestAttemptFlowScreen(
+          test: buildTest(duration: const Duration(seconds: 1)),
+          serverAttemptId: 'attempt-keep',
+          engineService: TestService(attemptApi: api),
+        ),
+      ),
+    );
+
+    await elapseTimeout(tester);
+    expect(find.byKey(const ValueKey('retry-submission')), findsOneWidget);
+
+    fail = false;
+    await tester.tap(find.byKey(const ValueKey('retry-submission')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Result'), findsOneWidget);
+    expect(calls, 2);
+  });
+
+  testWidgets('E: manual Submit still shows Result', (tester) async {
+    var calls = 0;
+    final api = TestAttemptApi(
+      callOverride: (name, data) async {
+        expect(name, 'submitTestAttempt');
+        calls += 1;
+        return successPayload(data['attemptId'] as String);
+      },
+    );
+
+    await pumpToQuestions(
+      tester,
+      app: MaterialApp(
+        home: TestAttemptFlowScreen(
+          test: buildTest(),
+          serverAttemptId: 'attempt-keep',
+          engineService: TestService(attemptApi: api),
+        ),
+      ),
+    );
+
+    final submit = find.byKey(const ValueKey('submit-attempt'));
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Result'), findsOneWidget);
+    expect(calls, 1);
+  });
+
+  testWidgets(
+    'F: timeout + manual Submit race uses one submitTestAttempt',
+    (tester) async {
+      var calls = 0;
+      final gate = Completer<void>();
+      final api = TestAttemptApi(
+        callOverride: (name, data) async {
+          expect(name, 'submitTestAttempt');
+          calls += 1;
+          await gate.future;
+          return successPayload(data['attemptId'] as String);
+        },
+      );
+
+      await pumpToQuestions(
+        tester,
+        app: MaterialApp(
+          home: TestAttemptFlowScreen(
+            test: buildTest(duration: const Duration(seconds: 1)),
+            serverAttemptId: 'attempt-keep',
+            engineService: TestService(attemptApi: api),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('submitting-indicator')), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('submit-attempt')),
+        warnIfMissed: false,
+      );
+      await tester.pump();
+      expect(calls, 1);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Result'), findsOneWidget);
+      expect(calls, 1);
+    },
+  );
+
+  testWidgets('G: timeout Result Analysis back Retry rebinds controller', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    var calls = 0;
+    final api = TestAttemptApi(
+      callOverride: (name, data) async {
+        expect(name, 'submitTestAttempt');
+        calls += 1;
+        return successPayload(data['attemptId'] as String);
+      },
+    );
+
+    await pumpToQuestions(
+      tester,
+      app: MaterialApp(
+        home: TestAttemptFlowScreen(
+          test: buildTest(duration: const Duration(seconds: 1)),
+          serverAttemptId: 'attempt-keep',
+          engineService: TestService(attemptApi: api),
+          startAttempt: ({required testId, required startRequestId}) async => {
+            'attemptId': 'attempt-retry',
+            'studentQuestions': const <Map<String, dynamic>>[],
+          },
+        ),
+      ),
+    );
+
+    await elapseTimeout(tester);
+    expect(find.text('Result'), findsOneWidget);
+    expect(calls, 1);
+
+    await tester.tap(find.text('Review Answers'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detailed Analysis'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text('Result'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Retry Test'));
+    await tester.tap(find.text('Retry Test'));
+    await tester.pumpAndSettle();
+    expect(find.text('Start Test'), findsOneWidget);
+    expect(find.text('Instructions'), findsOneWidget);
+
+    await tester.tap(find.text('Start Test'));
+    await tester.pumpAndSettle();
+    expect(find.text('Capital of Telangana?'), findsOneWidget);
+    expect(find.text('Result'), findsNothing);
   });
 }
