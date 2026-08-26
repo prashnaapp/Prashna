@@ -17,6 +17,7 @@ export const TEST_CATEGORIES = Object.freeze([
   'previousyear',
 ]);
 export const OPTION_LABELS = Object.freeze(['A', 'B', 'C', 'D', 'E']);
+export const QUESTION_ITEM_FORMATS = Object.freeze(['standard_mcq', 'statement_mcq']);
 export const MAX_QUESTION_BATCH = 500;
 export const FIELD_DELETE_SENTINEL = '_fieldDelete';
 
@@ -83,6 +84,13 @@ function asNumber(value) {
 function readStringList(value) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item ?? ''));
+}
+
+function localizedStatements(block) {
+  if (!block || typeof block !== 'object' || !Array.isArray(block.statements)) {
+    return [];
+  }
+  return block.statements.map((item) => String(item ?? '').trim()).filter(Boolean);
 }
 
 function localizedOptions(block) {
@@ -401,6 +409,21 @@ function validateQuestionSyllabus(data, { requireCanonical, existing } = {}) {
   }
 }
 
+function isStatementMcq(data) {
+  return trimToNull(data?.itemFormat) === 'statement_mcq';
+}
+
+function requireMatchingBilingualOptions(en, te) {
+  const enOptions = localizedOptions(en);
+  const teOptions = localizedOptions(te);
+  if (enOptions.length !== teOptions.length) {
+    fail('invalid-argument', 'English and Telugu option counts must match.');
+  }
+  if (teOptions.some((option) => !option.trim())) {
+    fail('invalid-argument', 'Telugu options cannot be empty.');
+  }
+}
+
 function validatePublishedBilingualContent(data) {
   const content = data.content;
   if (!content || typeof content !== 'object') {
@@ -415,15 +438,12 @@ function validatePublishedBilingualContent(data) {
     fail('invalid-argument', 'Telugu question is required.');
   }
   const enOptions = localizedOptions(en);
-  const teOptions = localizedOptions(te);
-  if (enOptions.length !== teOptions.length) {
-    fail('invalid-argument', 'English and Telugu option counts must match.');
-  }
   if (enOptions.length < 2 || enOptions.some((option) => !option.trim())) {
     fail('invalid-argument', 'English options cannot be empty.');
   }
-  if (teOptions.some((option) => !option.trim())) {
-    fail('invalid-argument', 'Telugu options cannot be empty.');
+  // Statement-based A–D are English combination labels; Telugu options optional.
+  if (!isStatementMcq(data)) {
+    requireMatchingBilingualOptions(en, te);
   }
   if (!trimToNull(en.explanation) || !trimToNull(te.explanation)) {
     fail('invalid-argument', 'English and Telugu explanations are required.');
@@ -487,8 +507,21 @@ export function validateQuestionPayload(data = {}, { documentId, existing } = {}
   }
 
   const content = data.content && typeof data.content === 'object' ? data.content : null;
-  if (content?.te && localizedOptions(content.en).length !== localizedOptions(content.te).length) {
-    fail('invalid-argument', 'English and Telugu option counts must match.');
+  const itemFormat = trimToNull(data.itemFormat);
+  if (itemFormat && !QUESTION_ITEM_FORMATS.includes(itemFormat)) {
+    fail('invalid-argument', `Invalid itemFormat "${itemFormat}".`);
+  }
+  const enStatements = localizedStatements(content?.en);
+  const teStatements = localizedStatements(content?.te);
+  if (content?.te && (enStatements.length > 0 || teStatements.length > 0)
+      && enStatements.length !== teStatements.length) {
+    fail('invalid-argument', 'English and Telugu statement counts must match.');
+  }
+  if (itemFormat === 'statement_mcq' && enStatements.length === 0) {
+    fail('invalid-argument', 'Statement-based questions require at least one statement.');
+  }
+  if (content?.te && !isStatementMcq(data)) {
+    requireMatchingBilingualOptions(content.en, content.te);
   }
 
   const isPublishedCanonical = status === 'published' && content != null;

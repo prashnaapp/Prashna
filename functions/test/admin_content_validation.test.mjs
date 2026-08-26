@@ -114,10 +114,203 @@ async function seedLegacyQuestion(db, data = legacyGroupIiQuestion()) {
   await db.collection('questions').doc(data.id).set(data);
 }
 
-test('question: valid create payload is accepted', () => {
+test('question: missing itemFormat remains valid Standard MCQ', () => {
+  const payload = validQuestion();
+  assert.equal(payload.itemFormat, undefined);
+  assert.equal(
+    validateQuestionPayload(payload, { documentId: 'q-valid-1' }).id,
+    'q-valid-1',
+  );
+});
+
+test('question: itemFormat=standard_mcq is accepted', () => {
+  assert.equal(
+    validateQuestionPayload(validQuestion({ itemFormat: 'standard_mcq' }), {
+      documentId: 'q-valid-1',
+    }).id,
+    'q-valid-1',
+  );
+});
+
+test('question: statement_mcq requires matching bilingual statement arrays of any length', () => {
+  for (const count of [1, 2, 3, 5, 6]) {
+    const en = Array.from({ length: count }, (_, i) => `Statement ${i + 1}`);
+    const te = Array.from({ length: count }, (_, i) => `ప్రకటన ${i + 1}`);
+    const payload = validQuestion({
+      itemFormat: 'statement_mcq',
+      content: {
+        en: {
+          question: 'Consider the following statements.',
+          options: ['1 only', '2 only', 'Both', 'Neither'],
+          explanation: 'Because',
+          statements: en,
+        },
+        te: {
+          question: 'కింది ప్రకటనలు',
+          options: ['1', '2', 'రెండూ', 'కాదు'],
+          explanation: 'కారణం',
+          statements: te,
+        },
+      },
+    });
+    assert.equal(
+      validateQuestionPayload(payload, { documentId: 'q-valid-1' }).id,
+      'q-valid-1',
+    );
+  }
+
+  assert.throws(
+    () => validateQuestionPayload(validQuestion({
+      itemFormat: 'statement_mcq',
+      content: {
+        en: {
+          question: 'Consider',
+          options: ['A', 'B', 'C', 'D'],
+          explanation: 'Because',
+          statements: ['One', 'Two'],
+        },
+        te: {
+          question: 'పరిశీలించండి',
+          options: ['A', 'B', 'C', 'D'],
+          explanation: 'కారణం',
+          statements: ['ఒకటి'],
+        },
+      },
+    })),
+    (err) => /statement counts must match/.test(err.message),
+  );
+});
+
+test('question: unknown itemFormat is rejected; questionType is unchanged', () => {
+  assert.throws(
+    () => validateQuestionPayload(validQuestion({ itemFormat: 'passage_mcq' })),
+    (err) => /Invalid itemFormat/.test(err.message),
+  );
+  assert.equal(
+    validateQuestionPayload(validQuestion({ questionType: 'mock' }), {
+      documentId: 'q-valid-1',
+    }).id,
+    'q-valid-1',
+  );
+});
+
+function statementMcqWithoutTeluguOptions({
+  statements = ['Article 371-D applies to Andhra Pradesh.', 'It created a local cadre.'],
+  teStatements = ['ఆర్టికల్ 371-D ఆంధ్రప్రదేశ్‌కు వర్తిస్తుంది.', 'ఇది స్థానిక కేడర్‌ను సృష్టించింది.'],
+  enOptions = ['1 only', '2 only', 'Both 1 and 2', 'Neither 1 nor 2'],
+  status = 'draft',
+  isActive = false,
+} = {}) {
+  return validQuestion({
+    status,
+    isActive,
+    itemFormat: 'statement_mcq',
+    question: 'Consider the following statements.',
+    options: enOptions,
+    correctOption: 'C',
+    explanation: 'Both statements are correct.',
+    content: {
+      en: {
+        question: 'Consider the following statements.',
+        statements,
+        options: enOptions,
+        explanation: 'Both statements are correct.',
+      },
+      te: {
+        question: 'కింది ప్రకటనలను పరిశీలించండి.',
+        statements: teStatements,
+        explanation: 'రెండు ప్రకటనలు సరైనవి.',
+      },
+    },
+  });
+}
+
+test('question: Standard MCQ with 4 EN + 4 TE options still passes', () => {
   assert.equal(
     validateQuestionPayload(validQuestion(), { documentId: 'q-valid-1' }).id,
     'q-valid-1',
+  );
+  assert.equal(
+    validateQuestionPayload(publishedQuestion(), { documentId: 'q-valid-1' }).id,
+    'q-valid-1',
+  );
+});
+
+test('question: Standard MCQ with missing Telugu options fails', () => {
+  const missingTeOptions = validQuestion({
+    content: {
+      en: {
+        question: 'What is the capital of Telangana?',
+        options: ['Hyderabad', 'Warangal', 'Nizamabad', 'Karimnagar'],
+        explanation: 'Hyderabad is the capital.',
+      },
+      te: {
+        question: 'తెలంగాణ రాజధాని ఏది?',
+        explanation: 'హైదరాబాద్ రాజధాని.',
+      },
+    },
+  });
+  assert.throws(
+    () => validateQuestionPayload(missingTeOptions, { documentId: 'q-valid-1' }),
+    (err) => /option counts must match/.test(err.message),
+  );
+  assert.throws(
+    () => validateQuestionPayload(publishedQuestion({
+      content: missingTeOptions.content,
+    }), { documentId: 'q-valid-1' }),
+    (err) => /option counts must match/.test(err.message),
+  );
+});
+
+test('question: statement_mcq may omit Telugu options while keeping bilingual stem/statements/explanation', () => {
+  const payload = statementMcqWithoutTeluguOptions();
+  assert.equal(payload.content.te.options, undefined);
+  assert.equal(
+    validateQuestionPayload(payload, { documentId: 'q-valid-1' }).id,
+    'q-valid-1',
+  );
+  assert.equal(
+    validateQuestionPayload(
+      statementMcqWithoutTeluguOptions({ status: 'published', isActive: true }),
+      { documentId: 'q-valid-1' },
+    ).id,
+    'q-valid-1',
+  );
+});
+
+test('question: statement_mcq still requires English options', () => {
+  assert.throws(
+    () => validateQuestionPayload(statementMcqWithoutTeluguOptions({
+      enOptions: ['1 only'],
+    }), { documentId: 'q-valid-1' }),
+    (err) => /2 and 5 answer options/.test(err.message),
+  );
+  const noEnglishOptions = statementMcqWithoutTeluguOptions();
+  noEnglishOptions.options = [];
+  noEnglishOptions.content.en.options = [];
+  assert.throws(
+    () => validateQuestionPayload(noEnglishOptions, { documentId: 'q-valid-1' }),
+    (err) => /2 and 5 answer options|Answer options cannot be empty/.test(err.message),
+  );
+});
+
+test('question: missing itemFormat still requires matching Telugu options', () => {
+  assert.throws(
+    () => validateQuestionPayload(validQuestion({
+      itemFormat: undefined,
+      content: {
+        en: {
+          question: 'What is the capital of Telangana?',
+          options: ['Hyderabad', 'Warangal', 'Nizamabad', 'Karimnagar'],
+          explanation: 'Hyderabad is the capital.',
+        },
+        te: {
+          question: 'తెలంగాణ రాజధాని ఏది?',
+          explanation: 'హైదరాబాద్ రాజధాని.',
+        },
+      },
+    }), { documentId: 'q-valid-1' }),
+    (err) => /option counts must match/.test(err.message),
   );
 });
 
