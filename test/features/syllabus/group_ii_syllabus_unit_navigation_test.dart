@@ -67,7 +67,9 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('Paper I'));
+    await tester.tap(
+      find.byKey(const ValueKey('syllabus-paper-group-ii-paper-i')),
+    );
     await tester.pump();
 
     expect(find.byType(SyllabusPapersScreen), findsOneWidget);

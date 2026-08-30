@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "884425833475-7jindmsgrmsv9cckrsk2d665ehfvgkgd.apps.googleusercontent.com",
+          "client_id": "884425833475-isd7on22la44fvfjnfuqikqjcjqn0c4t.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.prashna.app",
-            "certificate_hash": "7fac7a4ee250d30893f28d4f6d00aeeccc8c4902"
+            "certificate_hash": "aedf11ae573e42473331b70b8e63e90eb4ed1132"
           }
         },
         {

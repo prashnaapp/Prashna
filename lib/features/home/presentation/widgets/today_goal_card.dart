@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_spacing.dart';
 import '../../data/models/home_models.dart';
 import '../home_visual.dart';
 import 'home_decorations.dart';
@@ -15,37 +16,58 @@ class TodayGoalCard extends StatelessWidget {
       0,
       goal.targetQuestions,
     );
+    final narrow = MediaQuery.sizeOf(context).width < 370;
+    final ringSize = narrow ? 100.0 : 112.0;
 
     return HomeSurfaceCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const HomeSectionTitle('Your Preparation'),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.md),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               HomeProgressArc(
                 progress: goal.progress,
                 label: '${goal.progressPercent}%',
-                size: 116,
+                caption: "Today's Goal",
+                size: ringSize,
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: narrow ? AppSpacing.md : AppSpacing.lg),
               Expanded(
-                child: Column(
-                  children: [
-                    _StatRow(
-                      label: 'Questions Today',
-                      value: '${goal.completedQuestions}',
-                    ),
-                    const SizedBox(height: 7),
-                    _StatRow(
-                      label: 'Daily Target',
-                      value: '${goal.targetQuestions}',
-                    ),
-                    const SizedBox(height: 7),
-                    _StatRow(label: 'Remaining', value: '$remaining'),
-                  ],
+                child: SizedBox(
+                  height: ringSize,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _StatRow(
+                        icon: Icons.calendar_today_rounded,
+                        iconTint: HomeVisual.lavender,
+                        iconColor: HomeVisual.primary,
+                        label: 'Questions Today',
+                        value: '${goal.completedQuestions}',
+                        valueColor: HomeVisual.primary,
+                      ),
+                      _StatRow(
+                        icon: Icons.flag_rounded,
+                        iconTint: HomeVisual.tileTarget,
+                        iconColor: HomeVisual.accentBlue,
+                        label: 'Daily Target',
+                        value: '${goal.targetQuestions}',
+                        valueColor: HomeVisual.accentBlue,
+                      ),
+                      _StatRow(
+                        icon: Icons.checklist_rounded,
+                        iconTint: HomeVisual.tileRemaining,
+                        iconColor: HomeVisual.accentGreen,
+                        label: 'Remaining',
+                        value: '$remaining',
+                        valueColor: HomeVisual.accentGreen,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -57,18 +79,41 @@ class TodayGoalCard extends StatelessWidget {
 }
 
 class _StatRow extends StatelessWidget {
-  const _StatRow({required this.label, required this.value});
+  const _StatRow({
+    required this.icon,
+    required this.iconTint,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+    required this.valueColor,
+  });
 
+  final IconData icon;
+  final Color iconTint;
+  final Color iconColor;
   final String label;
   final String value;
+  final Color valueColor;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: iconTint,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 16, color: iconColor),
+        ),
+        const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -76,21 +121,13 @@ class _StatRow extends StatelessWidget {
             ),
           ),
         ),
-        Container(
-          constraints: const BoxConstraints(minWidth: 40),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: HomeVisual.pillFill,
-            borderRadius: BorderRadius.circular(HomeVisual.pillRadius),
-          ),
-          child: Text(
-            value,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: HomeVisual.ctaDeep,
-            ),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: valueColor,
           ),
         ),
       ],

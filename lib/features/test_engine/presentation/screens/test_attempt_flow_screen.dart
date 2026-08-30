@@ -6,6 +6,7 @@ import '../../../../core/design_system/design_system.dart';
 import '../../data/models/test_engine_models.dart';
 import '../../services/test_service.dart';
 import '../controllers/test_engine_controller.dart';
+import '../test_engine_navigation.dart';
 import 'test_analysis_screen.dart';
 import 'test_instructions_screen.dart';
 import 'test_question_screen.dart';
@@ -42,10 +43,10 @@ class TestAttemptFlowScreen extends StatefulWidget {
   startAttempt;
 
   @override
-  State<TestAttemptFlowScreen> createState() => _TestAttemptFlowScreenState();
+  TestAttemptFlowScreenState createState() => TestAttemptFlowScreenState();
 }
 
-class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
+class TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
   late TestEngineController _controller;
   late Test _test;
   late String? _serverAttemptId;
@@ -179,6 +180,11 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
     _syncResultStep();
   }
 
+  /// Result no longer exposes Retry Test. Kept for in-flow remapping tests
+  /// until a later phase removes this path.
+  @visibleForTesting
+  Future<void> retryAttempt() => _retry();
+
   Future<void> _retry() async {
     _serverAttemptId = null;
     _startError = null;
@@ -188,7 +194,12 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
   }
 
   void _goHome() {
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    Navigator.of(context).popUntil((route) {
+      if (route.isFirst) return true;
+      final name = route.settings.name;
+      return name != TestEngineNavigation.attemptRouteName &&
+          name != TestEngineNavigation.catalogInstructionsRouteName;
+    });
   }
 
   @override
@@ -238,9 +249,6 @@ class _TestAttemptFlowScreenState extends State<TestAttemptFlowScreen> {
         return TestResultScreen(
           controller: _controller,
           onViewAnalysis: () => setState(() => _step = _AttemptStep.analysis),
-          onRetry: () {
-            unawaited(_retry());
-          },
           onGoHome: _goHome,
         );
       case _AttemptStep.analysis:

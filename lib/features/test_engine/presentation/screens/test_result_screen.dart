@@ -8,13 +8,11 @@ class TestResultScreen extends StatelessWidget {
     super.key,
     required this.controller,
     required this.onViewAnalysis,
-    required this.onRetry,
     required this.onGoHome,
   });
 
   final TestEngineController controller;
   final VoidCallback onViewAnalysis;
-  final VoidCallback onRetry;
   final VoidCallback onGoHome;
 
   @override
@@ -134,8 +132,6 @@ class TestResultScreen extends StatelessWidget {
             label: 'Review Answers',
             onPressed: onViewAnalysis,
           ),
-          const SizedBox(height: AppSpacing.md),
-          AppSecondaryButton(label: 'Retry Test', onPressed: onRetry),
           const SizedBox(height: AppSpacing.md),
           TextButton(onPressed: onGoHome, child: const Text('Back to Unit')),
         ],

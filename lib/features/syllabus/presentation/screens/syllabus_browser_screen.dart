@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
+import '../../../../navigation/app_nav_metrics.dart';
 import '../../../progress/data/models/syllabus_completion.dart';
 import '../../../progress_cloud/repository/syllabus_completion_cloud_repository.dart';
 import '../../../progress_cloud/repository/unit_performance_cloud_repository.dart';
@@ -9,11 +10,9 @@ import '../../data/models/canonical_scope.dart';
 import '../../data/models/syllabus_models.dart';
 import '../../services/syllabus_service.dart';
 import '../syllabus_visual.dart';
-import '../widgets/syllabus_header_band.dart';
-import '../widgets/syllabus_paper_progress_banner.dart';
-import '../widgets/syllabus_selector_pill.dart';
+import '../widgets/syllabus_browser_header.dart';
+import '../widgets/syllabus_browser_pill.dart';
 import '../widgets/syllabus_unit_row_card.dart';
-import '../widgets/syllabus_wave_footer.dart';
 import 'syllabus_unit_tests_screen.dart';
 
 /// Single-screen course → paper → part → unit browser.
@@ -232,128 +231,119 @@ class _SyllabusBrowserScreenState extends State<SyllabusBrowserScreen> {
     final parts = _parts;
     final units = _units;
 
+    final bottomInset = AppNavMetrics.contentBottomInset(context);
+
     return Scaffold(
       backgroundColor: SyllabusVisual.page,
-      body: Column(
-        children: [
-          SyllabusHeaderBand(
-            child: _BrowserHeader(
+      body: ColoredBox(
+        color: SyllabusVisual.page,
+        child: Column(
+          children: [
+            SyllabusBrowserHeader(
               courseName: course?.name ?? 'Syllabus',
               courses: _availableCourses,
               selectedCourseId: _courseId,
               onBack: () => Navigator.maybePop(context),
               onCourseSelected: _selectCourse,
             ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                SyllabusVisual.pagePadding,
-                8,
-                SyllabusVisual.pagePadding,
-                24,
-              ),
-              physics: const BouncingScrollPhysics(),
-              children: [
-                if (papers.isNotEmpty) ...[
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (var i = 0; i < papers.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
-                          SyllabusSelectorPill(
-                            label: papers[i].title,
-                            selected: papers[i].id == paper?.id,
-                            onTap: () => _selectPaper(papers[i]),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                if (_showParts) ...[
-                  Text(
-                    'Select Part',
-                    style: AppTextStyles.titleMedium(context).copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: SyllabusVisual.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (var i = 0; i < parts.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
-                          SyllabusSelectorPill(
-                            label: _partPillLabel(i, parts[i].displayName),
-                            selected: parts[i].id == _partId,
-                            onTap: () => _selectPart(parts[i]),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                FutureBuilder<Map<String, _UnitMetrics>>(
-                  future: _metrics,
-                  builder: (context, snapshot) {
-                    final metrics = snapshot.data ?? const {};
-                    return Column(
-                      children: [
-                        for (var i = 0; i < units.length; i++) ...[
-                          if (i > 0) const SizedBox(height: 12),
-                          SyllabusUnitRowCard(
-                            unitId: units[i].id,
-                            title: units[i].displayName,
-                            index: i,
-                            questionCount: null,
-                            progress: metrics[units[i].id]?.progress ?? 0,
-                            completed: metrics[units[i].id]?.completed ?? false,
-                            onTap: () => _openUnit(units[i]),
-                          ),
-                        ],
-                      ],
-                    );
-                  },
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  SyllabusVisual.pagePadding,
+                  AppSpacing.sm,
+                  SyllabusVisual.pagePadding,
+                  bottomInset,
                 ),
-                if (paper != null) ...[
-                  const SizedBox(height: 18),
+                physics: const BouncingScrollPhysics(),
+                children: [
+                  if (papers.isNotEmpty) ...[
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < papers.length; i++) ...[
+                            if (i > 0) const SizedBox(width: AppSpacing.sm),
+                            SyllabusBrowserPill(
+                              key: ValueKey('syllabus-paper-${papers[i].id}'),
+                              label: papers[i].title,
+                              selected: papers[i].id == paper?.id,
+                              onTap: () => _selectPaper(papers[i]),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  if (_showParts) ...[
+                    Text(
+                      'Select Part',
+                      style: AppTextStyles.titleMedium(context).copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: SyllabusVisual.accent,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < parts.length; i++) ...[
+                            if (i > 0) const SizedBox(width: AppSpacing.sm),
+                            SyllabusBrowserPill(
+                              key: ValueKey('syllabus-part-${parts[i].id}'),
+                              label: _partPillLabel(i, parts[i].displayName),
+                              selected: parts[i].id == _partId,
+                              onTap: () => _selectPart(parts[i]),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  if (paper != null) ...[
+                    Text(
+                      paper.title,
+                      style: AppTextStyles.titleMedium(context).copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        color: SyllabusVisual.accent,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
                   FutureBuilder<Map<String, _UnitMetrics>>(
                     future: _metrics,
                     builder: (context, snapshot) {
                       final metrics = snapshot.data ?? const {};
-                      return SyllabusPaperProgressBanner(
-                        paperTitle: paper.title,
-                        progress: _paperProgress(units, metrics),
+                      return Column(
+                        children: [
+                          for (var i = 0; i < units.length; i++) ...[
+                            if (i > 0)
+                              const SizedBox(height: AppSpacing.xl),
+                            SyllabusUnitRowCard(
+                              unitId: units[i].id,
+                              title: units[i].displayName,
+                              index: i,
+                              progress: metrics[units[i].id]?.progress ?? 0,
+                              completed:
+                                  metrics[units[i].id]?.completed ?? false,
+                              onTap: () => _openUnit(units[i]),
+                            ),
+                          ],
+                        ],
                       );
                     },
                   ),
                 ],
-                const SizedBox(height: 8),
-                const SyllabusWaveFooter(),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
-  }
-
-  double _paperProgress(
-    List<SyllabusUnit> units,
-    Map<String, _UnitMetrics> metrics,
-  ) {
-    if (units.isEmpty) return 0;
-    var total = 0.0;
-    for (final unit in units) {
-      total += metrics[unit.id]?.progress ?? 0;
-    }
-    return (total / units.length).clamp(0.0, 1.0);
   }
 
   String _partPillLabel(int index, String displayName) {
@@ -374,91 +364,4 @@ class _UnitMetrics {
 
   final double progress;
   final bool completed;
-}
-
-class _BrowserHeader extends StatelessWidget {
-  const _BrowserHeader({
-    required this.courseName,
-    required this.courses,
-    required this.selectedCourseId,
-    required this.onBack,
-    required this.onCourseSelected,
-  });
-
-  final String courseName;
-  final List<SyllabusCourse> courses;
-  final String selectedCourseId;
-  final VoidCallback onBack;
-  final ValueChanged<SyllabusCourse> onCourseSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed: onBack,
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-              color: SyllabusVisual.headerOn,
-            ),
-          ),
-          Expanded(
-            child: PopupMenuButton<String>(
-              tooltip: 'Select course',
-              onSelected: (id) {
-                for (final course in courses) {
-                  if (course.id == id) {
-                    onCourseSelected(course);
-                    return;
-                  }
-                }
-              },
-              itemBuilder: (context) => [
-                for (final course in courses)
-                  PopupMenuItem<String>(
-                    value: course.id,
-                    child: Row(
-                      children: [
-                        Expanded(child: Text(course.name)),
-                        if (course.id == selectedCourseId)
-                          const Icon(
-                            Icons.check_rounded,
-                            size: 18,
-                            color: SyllabusVisual.accent,
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      courseName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleLarge(context).copyWith(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: SyllabusVisual.headerOn,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: SyllabusVisual.headerOn,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

@@ -47,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final expandedHero = topInset + HomeVisual.heroBodyHeight;
     final collapsedHero = topInset + HomeVisual.heroCollapsedBodyHeight;
     final collapseRange = (expandedHero - collapsedHero).clamp(1.0, 500.0);
-    final bottomInset = AppNavMetrics.bottomNavigationHeight(context) + 32;
+    final bottomInset = AppNavMetrics.contentBottomInset(context);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
@@ -57,6 +57,9 @@ class _HomeScreenState extends State<HomeScreen> {
         color: HomeVisual.page,
         child: Stack(
           children: [
+            const Positioned.fill(
+              child: ColoredBox(color: HomeVisual.page),
+            ),
             // BACK — one backdrop (gradient + decorations). No branding.
             ListenableBuilder(
               listenable: _scroll,
@@ -96,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         HomeVisual.pagePadding,
                         0,
                         HomeVisual.pagePadding,
-                        bottomInset + 8,
+                        bottomInset,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -459,10 +459,14 @@ void main() {
         await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
         await tester.pumpAndSettle();
 
-        final retry = find.text('Retry Test');
-        expect(retry, findsOneWidget);
-        await tester.ensureVisible(retry);
-        await tester.tap(retry);
+        expect(find.text('Retry Test'), findsNothing);
+        expect(find.text('Review Answers'), findsOneWidget);
+        expect(find.text('Back to Unit'), findsOneWidget);
+
+        final flowState = tester.state<TestAttemptFlowScreenState>(
+          find.byType(TestAttemptFlowScreen),
+        );
+        await flowState.retryAttempt();
         await tester.pumpAndSettle();
 
         final start = find.text('Start Test');

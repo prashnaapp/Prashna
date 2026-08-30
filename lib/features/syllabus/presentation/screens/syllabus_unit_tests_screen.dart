@@ -7,6 +7,7 @@ import '../../../progress/presentation/widgets/syllabus_completion_card.dart';
 import '../../../progress/presentation/widgets/unit_performance_card.dart';
 import '../../../progress_cloud/repository/syllabus_completion_cloud_repository.dart';
 import '../../../progress_cloud/repository/unit_performance_cloud_repository.dart';
+import '../../../test_engine/presentation/test_engine_navigation.dart';
 import '../../../tests/data/models/test_models.dart';
 import '../../../tests/presentation/screens/test_instructions_screen.dart';
 import '../../../tests/presentation/widgets/test_card.dart';
@@ -262,9 +263,8 @@ class _SyllabusUnitTestsScreenState extends State<SyllabusUnitTestsScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              TestInstructionsScreen(test: tests[i]),
+                        TestEngineNavigation.catalogInstructionsRoute(
+                          (_) => TestInstructionsScreen(test: tests[i]),
                         ),
                       );
                     },

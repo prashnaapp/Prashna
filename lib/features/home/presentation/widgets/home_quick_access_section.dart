@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_spacing.dart';
 import '../../../current_affairs/presentation/current_affairs_navigation.dart';
 import '../../../syllabus/presentation/screens/syllabus_home_screen.dart';
 import '../../../tests/presentation/screens/previous_exam_selection_screen.dart';
@@ -67,38 +68,35 @@ class HomeQuickAccessSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const HomeSectionTitle('Quick Access'),
-        const SizedBox(height: 12),
-        HomeSurfaceCard(
-          padding: const EdgeInsets.fromLTRB(8, 16, 8, 14),
-          child: narrow
-              ? Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: _QuickTile(item: tiles[0])),
-                        const SizedBox(width: 8),
-                        Expanded(child: _QuickTile(item: tiles[1])),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: _QuickTile(item: tiles[2])),
-                        const SizedBox(width: 8),
-                        Expanded(child: _QuickTile(item: tiles[3])),
-                      ],
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    for (var i = 0; i < tiles.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 4),
-                      Expanded(child: _QuickTile(item: tiles[i])),
+        const SizedBox(height: AppSpacing.md),
+        narrow
+            ? Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: _QuickTile(item: tiles[0])),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: _QuickTile(item: tiles[1])),
                     ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(child: _QuickTile(item: tiles[2])),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: _QuickTile(item: tiles[3])),
+                    ],
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  for (var i = 0; i < tiles.length; i++) ...[
+                    if (i > 0) const SizedBox(width: AppSpacing.sm),
+                    Expanded(child: _QuickTile(item: tiles[i])),
                   ],
-                ),
-        ),
+                ],
+              ),
       ],
     );
   }
@@ -128,38 +126,41 @@ class _QuickTile extends StatelessWidget {
     return Semantics(
       button: true,
       label: item.title,
-      child: InkWell(
-        onTap: item.onTap,
-        borderRadius: BorderRadius.circular(HomeVisual.tileRadius),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: item.tint,
-                  borderRadius: BorderRadius.circular(HomeVisual.tileRadius),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: item.onTap,
+          borderRadius: BorderRadius.circular(HomeVisual.tileRadius),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Column(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: item.tint,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Center(
+                    child: HomeQuickGlyphIcon(glyph: item.glyph, size: 22),
+                  ),
                 ),
-                child: Center(
-                  child: HomeQuickGlyphIcon(glyph: item.glyph, size: 26),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  item.title,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                    color: HomeVisual.ink,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                item.title,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                  color: HomeVisual.ink,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

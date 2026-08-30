@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:telangana_prep/core/design_system/design_system.dart';
 import 'package:telangana_prep/features/test_engine/data/models/test_engine_models.dart';
 import 'package:telangana_prep/features/test_engine/data/repositories/test_repository.dart';
 import 'package:telangana_prep/features/test_engine/data/test_attempt_api.dart';
@@ -149,6 +150,8 @@ void main() {
     WidgetTester tester,
     Test test, {
     TestService? service,
+    VoidCallback? onOpenReview,
+    Future<void> Function()? onSubmit,
   }) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1;
@@ -165,8 +168,8 @@ void main() {
       MaterialApp(
         home: TestQuestionScreen(
           controller: controller,
-          onOpenReview: () {},
-          onSubmit: () async {},
+          onOpenReview: onOpenReview ?? () {},
+          onSubmit: onSubmit ?? () async {},
         ),
       ),
     );
@@ -458,8 +461,14 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Retry Test'));
-      await tester.tap(find.text('Retry Test'));
+      expect(find.text('Retry Test'), findsNothing);
+      expect(find.text('Review Answers'), findsOneWidget);
+      expect(find.text('Back to Unit'), findsOneWidget);
+
+      final flowState = tester.state<TestAttemptFlowScreenState>(
+        find.byType(TestAttemptFlowScreen),
+      );
+      await flowState.retryAttempt();
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Start Test'));
       await tester.tap(find.text('Start Test'));
@@ -475,6 +484,74 @@ void main() {
         find.byKey(const ValueKey('attempt-option-A')),
       );
       expect(optionA.optionText, '1 and 3 only');
+    },
+  );
+
+  testWidgets(
+    'exam controls: compact Review/Palette on top, Previous/Submit at bottom',
+    (tester) async {
+      var openedReview = false;
+      var submitted = false;
+      final service = TestService(repository: TestRepository());
+      final test = await mapQuestions(service, [
+        statementStudentQuestion(statementCount: 6, questionId: 'q1'),
+        statementStudentQuestion(statementCount: 2, questionId: 'q2'),
+      ]);
+      final controller = await pumpAttempt(
+        tester,
+        test,
+        service: service,
+        onOpenReview: () => openedReview = true,
+        onSubmit: () async => submitted = true,
+      );
+
+      expect(find.byKey(const ValueKey('open-review')), findsOneWidget);
+      expect(find.byKey(const ValueKey('open-palette')), findsOneWidget);
+      expect(find.byKey(const ValueKey('go-next')), findsOneWidget);
+      expect(find.byKey(const ValueKey('submit-attempt')), findsOneWidget);
+      expect(find.text('Previous'), findsOneWidget);
+      expect(find.text('Submit'), findsWidgets);
+      expect(find.widgetWithText(AppPrimaryButton, 'Review'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, 'Palette'), findsNothing);
+
+      final listView = tester.widget<ListView>(find.byType(ListView));
+      expect(listView.padding, isA<EdgeInsets>());
+      expect((listView.padding! as EdgeInsets).bottom, AppSpacing.massive);
+
+      await tester.tap(find.byKey(const ValueKey('open-review')));
+      await tester.pump();
+      expect(openedReview, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('open-palette')));
+      await tester.pumpAndSettle();
+      expect(find.text('Question Palette'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Question Palette'))).pop();
+      await tester.pumpAndSettle();
+
+      expect(controller.questionNumber, 1);
+      await tester.tap(find.byKey(const ValueKey('go-next')));
+      await tester.pumpAndSettle();
+      expect(controller.questionNumber, 2);
+      await tester.tap(find.text('Previous'));
+      await tester.pumpAndSettle();
+      expect(controller.questionNumber, 1);
+
+      await tester.ensureVisible(find.byKey(const ValueKey('attempt-option-D')));
+      final optionBox = tester.getRect(
+        find.byKey(const ValueKey('attempt-option-D')),
+      );
+      final previousBox = tester.getRect(find.text('Previous'));
+      expect(optionBox.bottom, lessThanOrEqualTo(previousBox.top));
+
+      await tester.tap(find.byKey(const ValueKey('attempt-option-B')));
+      await tester.pumpAndSettle();
+      expect(controller.currentAttempt.selectedOption, 'B');
+
+      await tester.tap(find.byKey(const ValueKey('submit-attempt')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+      await tester.pumpAndSettle();
+      expect(submitted, isTrue);
     },
   );
 }

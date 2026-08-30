@@ -1,21 +1,35 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_spacing.dart';
+
 /// Home-only visual tokens. Do not import from other features.
+///
+/// Palette is aligned with the Home redesign direction while spacing/radii
+/// reuse [AppSpacing] and [AppRadius].
 abstract final class HomeVisual {
-  static const Color heroStart = Color(0xFF241A9F);
-  static const Color heroMid = Color(0xFF3926D6);
-  static const Color heroEnd = Color(0xFF6548F5);
-  static const Color ctaStart = Color(0xFF7B83EB);
-  static const Color ctaEnd = Color(0xFF8A87F9);
-  static const Color ctaDeep = Color(0xFF7356F1);
+  static const Color primary = Color(0xFF6C4DFF);
+  static const Color secondary = Color(0xFF8B5CF6);
+  static const Color lightPurple = Color(0xFFA78BFA);
+  static const Color lavender = Color(0xFFEDE9FE);
+
+  static const Color heroStart = Color(0xFF4F3BE8);
+  static const Color heroMid = Color(0xFF6C4DFF);
+  static const Color heroEnd = Color(0xFF8B5CF6);
+
+  static const Color ctaStart = primary;
+  static const Color ctaEnd = secondary;
+  static const Color ctaDeep = primary;
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color page = Color(0xFFF5F4FF);
-  static const Color ink = Color(0xFF111A3A);
-  static const Color muted = Color(0xFF68769A);
-  static const Color gaugeTrack = Color(0xFFE8E7F8);
-  static const Color accentBlue = Color(0xFF4C8DFF);
-  static const Color pillFill = Color(0xFFF3F2FA);
-  static const Color star = Color(0xFFFFE082);
+  static const Color page = Color(0xFFF6F5FF);
+  static const Color ink = Color(0xFF0F172A);
+  static const Color muted = Color(0xFF64748B);
+  static const Color gaugeTrack = Color(0xFFEDE9FE);
+  static const Color accentBlue = Color(0xFF3B82F6);
+  static const Color accentGreen = Color(0xFF22C55E);
+  static const Color pillFill = Color(0xFFF4F2FF);
+  static const Color tileTarget = Color(0xFFDBEAFE);
+  static const Color tileRemaining = Color(0xFFE8F8EF);
 
   static const Color tileChapter = Color(0xFFE8EEFF);
   static const Color tileTests = Color(0xFFDFF6FA);
@@ -23,7 +37,7 @@ abstract final class HomeVisual {
   static const Color tilePapers = Color(0xFFEDE7FA);
 
   static const LinearGradient heroGradient = LinearGradient(
-    begin: Alignment.topCenter,
+    begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [heroStart, heroMid, heroEnd],
   );
@@ -31,50 +45,62 @@ abstract final class HomeVisual {
   static const LinearGradient ctaGradient = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
-    colors: [ctaStart, ctaDeep],
+    colors: [primary, secondary],
   );
 
   static const LinearGradient gaugeGradient = LinearGradient(
-    begin: Alignment.bottomLeft,
-    end: Alignment.topRight,
-    colors: [ctaDeep, accentBlue],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [primary, secondary],
   );
 
-  static const double cardRadius = 22;
-  static const double tileRadius = 16;
-  static const double pillRadius = 999;
-  static const double overlap = 36;
-  static const double pagePadding = 20;
-  static const double sectionGap = 16;
+  static const double cardRadius = AppRadius.lg;
+  static const double tileRadius = AppRadius.md;
+  static const double pillRadius = AppRadius.pill;
+  static const double overlap = 20;
+  static const double pagePadding = AppSpacing.xl;
+  static const double sectionGap = AppSpacing.md;
 
-  /// Viewport-anchored hero fill; must cover the scrolling hero plus pull-down.
-  static const double heroBackdropHeight = 400;
+  /// Viewport-anchored hero fill; covers the compact hero plus pull-down.
+  static const double heroBackdropHeight = 220;
 
-  /// Body below the status inset for the expanded hero (~330–390 total).
-  static const double heroBodyHeight = 310;
+  /// Body below the status inset for the expanded hero.
+  static const double heroBodyHeight = 124;
 
   /// Body below the status inset for the compact pinned header (Prashna + bell).
-  /// Total collapsed height ≈ topInset + this (~75–90 on typical phones).
-  static const double heroCollapsedBodyHeight = 44;
+  static const double heroCollapsedBodyHeight = 48;
 
   static List<BoxShadow> get cardShadow => [
-    BoxShadow(
-      color: ctaDeep.withValues(alpha: 0.10),
-      blurRadius: 24,
-      offset: const Offset(0, 10),
-    ),
-    BoxShadow(
-      color: ink.withValues(alpha: 0.04),
-      blurRadius: 6,
-      offset: const Offset(0, 2),
-    ),
-  ];
+        BoxShadow(
+          color: primary.withValues(alpha: 0.07),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+        BoxShadow(
+          color: ink.withValues(alpha: 0.03),
+          blurRadius: 4,
+          offset: const Offset(0, 1),
+        ),
+      ];
+
+  static List<BoxShadow> get featuredShadow => [
+        BoxShadow(
+          color: primary.withValues(alpha: 0.14),
+          blurRadius: 22,
+          offset: const Offset(0, 10),
+        ),
+        BoxShadow(
+          color: ink.withValues(alpha: 0.04),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
+      ];
 
   static List<BoxShadow> get ctaShadow => [
-    BoxShadow(
-      color: ctaDeep.withValues(alpha: 0.28),
-      blurRadius: 14,
-      offset: const Offset(0, 7),
-    ),
-  ];
+        BoxShadow(
+          color: primary.withValues(alpha: 0.28),
+          blurRadius: 12,
+          offset: const Offset(0, 6),
+        ),
+      ];
 }

@@ -8,6 +8,7 @@ import '../../../syllabus/presentation/widgets/syllabus_paper_progress_banner.da
 import '../../../syllabus/presentation/widgets/syllabus_selector_pill.dart';
 import '../../../syllabus/presentation/widgets/syllabus_wave_footer.dart';
 import '../../../syllabus/services/syllabus_service.dart';
+import '../../../test_engine/presentation/test_engine_navigation.dart';
 import '../../data/models/test_models.dart';
 import '../../data/test_series_browser_groups.dart';
 import '../../services/test_service.dart';
@@ -112,8 +113,8 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
   void _openTest(TestModel test) {
     Navigator.push(
       context,
-      MaterialPageRoute<void>(
-        builder: (_) => TestInstructionsScreen(test: test),
+      TestEngineNavigation.catalogInstructionsRoute(
+        (_) => TestInstructionsScreen(test: test),
       ),
     );
   }

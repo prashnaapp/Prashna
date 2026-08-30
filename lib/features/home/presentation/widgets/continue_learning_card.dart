@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_sizes.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../../data/models/home_models.dart';
 import '../home_visual.dart';
 import 'home_decorations.dart';
@@ -24,11 +26,12 @@ class ContinueLearningCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!data.hasHistory) {
       return HomeSurfaceCard(
+        featured: true,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const HomeSectionTitle('Continue Learning'),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             const Text(
               'Pick a course and begin your first session.',
               style: TextStyle(
@@ -37,85 +40,105 @@ class ContinueLearningCard extends StatelessWidget {
                 height: 1.35,
               ),
             ),
-            const SizedBox(height: 18),
-            HomeCtaButton(label: 'Start Learning →', onPressed: onContinue),
+            const SizedBox(height: AppSpacing.lg),
+            HomeCtaButton(
+              label: 'Start Learning →',
+              onPressed: onContinue,
+              height: AppSizes.buttonMedium,
+            ),
           ],
         ),
       );
     }
 
     final width = MediaQuery.sizeOf(context).width;
-    final showArt = width >= 340;
+    final showArt = width >= 360;
 
     return HomeSurfaceCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      featured: true,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const HomeSectionTitle('Continue Learning'),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          const SizedBox(height: AppSpacing.sm),
+          Stack(
+            clipBehavior: Clip.none,
             children: [
-              _MetaPill(_pill(data.courseName)),
-              _MetaPill(_pill(data.paperLabel)),
-              _MetaPill(_pill(data.partLabel)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            data.chapterLabel,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: HomeVisual.ink,
-              height: 1.25,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: HomeLinearProgress(value: data.progressPercent / 100),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      _MetaPill(_pill(data.courseName)),
+                      _MetaPill(_pill(data.paperLabel)),
+                      _MetaPill(_pill(data.partLabel)),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    data.chapterLabel,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: HomeVisual.ink,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Padding(
+                    padding: EdgeInsets.only(right: showArt ? 78 : 0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: HomeLinearProgress(
+                            value: data.progressPercent / 100,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text(
+                          '${data.progressPercent.round()}%',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: HomeVisual.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Padding(
+                    padding: EdgeInsets.only(right: showArt ? 78 : 0),
+                    child: HomeCtaButton(
+                      label: 'Continue Now →',
+                      onPressed: onContinue,
+                      height: AppSizes.buttonMedium,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              Text(
-                '${data.progressPercent.round()}%',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: HomeVisual.ctaDeep,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                flex: showArt ? 7 : 10,
-                child: HomeCtaButton(
-                  label: 'Continue Now →',
-                  onPressed: onContinue,
-                ),
-              ),
-              if (showArt) ...[
-                const SizedBox(width: 4),
-                const Expanded(
-                  flex: 3,
+              if (showArt)
+                const Positioned(
+                  right: 0,
+                  bottom: 0,
                   child: IgnorePointer(
-                    child: Image(
-                      image: AssetImage(_studentAsset),
-                      height: 104,
-                      fit: BoxFit.contain,
-                      alignment: Alignment.bottomCenter,
-                      filterQuality: FilterQuality.medium,
+                    child: SizedBox(
+                      width: 86,
+                      height: 86,
+                      child: Image(
+                        image: AssetImage(_studentAsset),
+                        width: 86,
+                        height: 86,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.bottomRight,
+                        filterQuality: FilterQuality.medium,
+                      ),
                     ),
                   ),
                 ),
-              ],
             ],
           ),
         ],
@@ -132,7 +155,7 @@ class _MetaPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: HomeVisual.pillFill,
         borderRadius: BorderRadius.circular(HomeVisual.pillRadius),

@@ -6,6 +6,21 @@ import 'screens/test_attempt_flow_screen.dart';
 
 /// Entry points for launching the shared Test Attempt Engine.
 abstract final class TestEngineNavigation {
+  /// [Navigator] name for [TestAttemptRoute].
+  static const String attemptRouteName = '/test-attempt';
+
+  /// [Navigator] name for catalog [TestInstructionsScreen] (not the in-flow one).
+  static const String catalogInstructionsRouteName = '/test-instructions';
+
+  static Route<T> catalogInstructionsRoute<T extends Object?>(
+    WidgetBuilder builder,
+  ) {
+    return MaterialPageRoute<T>(
+      settings: const RouteSettings(name: catalogInstructionsRouteName),
+      builder: builder,
+    );
+  }
+
   static Future<void> openTest(
     BuildContext context, {
     required Test test,
@@ -16,6 +31,7 @@ abstract final class TestEngineNavigation {
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute(
+        settings: const RouteSettings(name: attemptRouteName),
         builder: (_) => TestAttemptRoute(
           test: test,
           serverAttemptId: serverAttemptId,

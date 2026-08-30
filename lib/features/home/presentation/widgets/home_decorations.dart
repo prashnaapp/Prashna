@@ -4,120 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../home_visual.dart';
 
-class HomeHeroStars extends StatelessWidget {
-  const HomeHeroStars({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const IgnorePointer(
-      child: CustomPaint(painter: _StarsPainter(), child: SizedBox.expand()),
-    );
-  }
-}
-
-class _StarsPainter extends CustomPainter {
-  const _StarsPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final sparkle = Paint()..color = HomeVisual.star;
-    final soft = Paint()..color = Colors.white.withValues(alpha: 0.85);
-
-    const sparkles = <(double, double, double)>[
-      (0.10, 0.18, 5.0),
-      (0.22, 0.12, 3.2),
-      (0.74, 0.16, 4.4),
-      (0.88, 0.10, 5.5),
-      (0.92, 0.32, 3.4),
-      (0.16, 0.46, 3.0),
-      (0.62, 0.22, 2.6),
-    ];
-    for (final star in sparkles) {
-      _sparkle(
-        canvas,
-        Offset(star.$1 * size.width, star.$2 * size.height),
-        star.$3,
-        sparkle,
-      );
-    }
-
-    const dots = <(double, double, double)>[
-      (0.30, 0.20, 1.3),
-      (0.48, 0.14, 1.1),
-      (0.84, 0.42, 1.4),
-      (0.08, 0.62, 1.2),
-      (0.40, 0.58, 1.0),
-      (0.70, 0.48, 1.2),
-    ];
-    for (final dot in dots) {
-      canvas.drawCircle(
-        Offset(dot.$1 * size.width, dot.$2 * size.height),
-        dot.$3,
-        soft,
-      );
-    }
-  }
-
-  void _sparkle(Canvas canvas, Offset center, double radius, Paint paint) {
-    final path = Path()
-      ..moveTo(center.dx, center.dy - radius)
-      ..quadraticBezierTo(center.dx, center.dy, center.dx + radius, center.dy)
-      ..quadraticBezierTo(center.dx, center.dy, center.dx, center.dy + radius)
-      ..quadraticBezierTo(center.dx, center.dy, center.dx - radius, center.dy)
-      ..quadraticBezierTo(center.dx, center.dy, center.dx, center.dy - radius)
-      ..close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class HomeHeroAtmosphere extends StatelessWidget {
-  const HomeHeroAtmosphere({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const IgnorePointer(
-      child: CustomPaint(
-        painter: _AtmospherePainter(),
-        child: SizedBox.expand(),
-      ),
-    );
-  }
-}
-
-class _AtmospherePainter extends CustomPainter {
-  const _AtmospherePainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(size.width * 0.28, size.height * 0.96),
-        width: size.width * 0.78,
-        height: size.height * 0.40,
-      ),
-      Paint()
-        ..color = const Color(0xFF6548F5).withValues(alpha: 0.42)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 28),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(size.width * 0.78, size.height * 0.98),
-        width: size.width * 0.58,
-        height: size.height * 0.32,
-      ),
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.12)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
 class HomeBrandMark extends StatelessWidget {
   const HomeBrandMark({super.key, this.size = 28});
 
@@ -166,130 +52,13 @@ class _BookMarkPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class HomeRocketScene extends StatelessWidget {
-  const HomeRocketScene({super.key, this.width = 176, this.height = 138});
-
-  final double width;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: CustomPaint(
-        size: Size(width, height),
-        painter: _RocketScenePainter(),
-      ),
-    );
-  }
-}
-
-class _RocketScenePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final planetCenter = Offset(size.width * 0.78, size.height * 0.26);
-    canvas.save();
-    canvas.translate(planetCenter.dx, planetCenter.dy);
-    canvas.rotate(-0.42);
-    canvas.drawOval(
-      const Rect.fromLTWH(-30, -7, 60, 14),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4.2
-        ..color = const Color(0xFFC5CBFF).withValues(alpha: 0.9),
-    );
-    canvas.restore();
-    canvas.drawCircle(
-      planetCenter,
-      15,
-      Paint()
-        ..shader = const LinearGradient(
-          colors: [Color(0xFFB4A8FF), Color(0xFF5B4CFF)],
-        ).createShader(Rect.fromCircle(center: planetCenter, radius: 15)),
-    );
-    canvas.drawCircle(
-      planetCenter.translate(-4, -3),
-      4,
-      Paint()..color = Colors.white.withValues(alpha: 0.28),
-    );
-
-    final rocketOrigin = Offset(size.width * 0.40, size.height * 0.62);
-    canvas.save();
-    canvas.translate(rocketOrigin.dx, rocketOrigin.dy);
-    canvas.rotate(-0.58);
-
-    canvas.drawOval(
-      const Rect.fromLTWH(-7, 20, 14, 22),
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFFFF176), Color(0xFFFF8A65)],
-        ).createShader(const Rect.fromLTWH(-7, 20, 14, 22)),
-    );
-
-    final smoke = Paint()..color = Colors.white.withValues(alpha: 0.28);
-    canvas.drawOval(const Rect.fromLTWH(-10, 38, 10, 8), smoke);
-    canvas.drawOval(const Rect.fromLTWH(-2, 44, 12, 9), smoke);
-    canvas.drawOval(const Rect.fromLTWH(-8, 52, 9, 7), smoke);
-
-    final body = Path()
-      ..moveTo(0, -30)
-      ..quadraticBezierTo(15, -4, 11, 18)
-      ..lineTo(-11, 18)
-      ..quadraticBezierTo(-15, -4, 0, -30)
-      ..close();
-    canvas.drawPath(
-      body,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFFFFFFF), Color(0xFFD5D8FF)],
-        ).createShader(const Rect.fromLTWH(-15, -30, 30, 50)),
-    );
-
-    final fin = Paint()..color = const Color(0xFF6C5CE7);
-    canvas.drawPath(
-      Path()
-        ..moveTo(-11, 4)
-        ..lineTo(-24, 22)
-        ..lineTo(-8, 18)
-        ..close(),
-      fin,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(11, 4)
-        ..lineTo(24, 22)
-        ..lineTo(8, 18)
-        ..close(),
-      fin,
-    );
-
-    canvas.drawCircle(
-      const Offset(0, -6),
-      5.4,
-      Paint()..color = const Color(0xFF4C8DFF),
-    );
-    canvas.drawCircle(
-      const Offset(0, -6),
-      2.6,
-      Paint()..color = Colors.white.withValues(alpha: 0.92),
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
 class HomeProgressArc extends StatelessWidget {
   const HomeProgressArc({
     super.key,
     required this.progress,
     required this.label,
-    this.caption = "Today's Goal",
-    this.size = 128,
+    this.caption = '',
+    this.size = 108,
   });
 
   final double progress;
@@ -314,23 +83,26 @@ class HomeProgressArc extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 30,
+                style: TextStyle(
+                  fontSize: caption.isEmpty ? size * 0.26 : size * 0.24,
                   fontWeight: FontWeight.w800,
                   color: HomeVisual.ink,
                   height: 1,
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                caption,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: HomeVisual.muted,
+              if (caption.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  caption,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: HomeVisual.muted,
+                    height: 1.1,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -347,23 +119,24 @@ class _ArcPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width * 0.38;
-    const start = math.pi * 0.75;
-    const sweep = math.pi * 1.5;
+    final stroke = size.width * 0.1;
+    final radius = (size.width / 2) - stroke;
+    const start = -math.pi / 2;
+    const sweep = math.pi * 2;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
     final track = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
+      ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round
       ..color = HomeVisual.gaugeTrack;
     canvas.drawArc(rect, start, sweep, false, track);
 
     final value = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
+      ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round
-      ..shader = HomeVisual.gaugeGradient.createShader(rect);
+      ..color = HomeVisual.primary;
     canvas.drawArc(rect, start, sweep * progress, false, value);
   }
 
@@ -377,26 +150,31 @@ class HomeCtaButton extends StatelessWidget {
     super.key,
     required this.label,
     required this.onPressed,
+    this.height = 48,
   });
 
   final String label;
   final VoidCallback onPressed;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(HomeVisual.tileRadius);
+
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: HomeVisual.ctaGradient,
-        borderRadius: BorderRadius.circular(HomeVisual.pillRadius),
+        borderRadius: radius,
         boxShadow: HomeVisual.ctaShadow,
       ),
       child: Material(
-        color: Colors.transparent,
+        color: HomeVisual.primary,
+        shape: RoundedRectangleBorder(borderRadius: radius),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(HomeVisual.pillRadius),
+          customBorder: RoundedRectangleBorder(borderRadius: radius),
           child: SizedBox(
-            height: 52,
+            height: height,
             width: double.infinity,
             child: Center(
               child: Text(
@@ -416,22 +194,38 @@ class HomeCtaButton extends StatelessWidget {
 }
 
 class HomeSurfaceCard extends StatelessWidget {
-  const HomeSurfaceCard({super.key, required this.child, this.padding});
+  const HomeSurfaceCard({
+    super.key,
+    required this.child,
+    this.padding,
+    this.featured = false,
+  });
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
+  final bool featured;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: padding ?? const EdgeInsets.fromLTRB(20, 18, 20, 20),
+    final radius = BorderRadius.circular(HomeVisual.cardRadius);
+
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: HomeVisual.surface,
-        borderRadius: BorderRadius.circular(HomeVisual.cardRadius),
-        boxShadow: HomeVisual.cardShadow,
+        borderRadius: radius,
+        boxShadow: featured ? HomeVisual.featuredShadow : HomeVisual.cardShadow,
       ),
-      child: Material(color: Colors.transparent, child: child),
+      child: Material(
+        color: HomeVisual.surface,
+        shape: RoundedRectangleBorder(borderRadius: radius),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: double.infinity,
+          child: Padding(
+            padding: padding ?? const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: child,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -447,8 +241,9 @@ class HomeSectionTitle extends StatelessWidget {
       title,
       style: const TextStyle(
         fontSize: 18,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w700,
         color: HomeVisual.ink,
+        height: 1.2,
       ),
     );
   }
@@ -464,7 +259,7 @@ class HomeLinearProgress extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(HomeVisual.pillRadius),
       child: SizedBox(
-        height: 8,
+        height: 7,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -472,9 +267,7 @@ class HomeLinearProgress extends StatelessWidget {
             FractionallySizedBox(
               widthFactor: value.clamp(0.0, 1.0),
               alignment: Alignment.centerLeft,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(gradient: HomeVisual.ctaGradient),
-              ),
+              child: const ColoredBox(color: HomeVisual.primary),
             ),
           ],
         ),

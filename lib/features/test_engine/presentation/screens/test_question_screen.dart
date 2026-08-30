@@ -32,7 +32,14 @@ class TestQuestionScreen extends StatelessWidget {
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
-            title: Text(controller.test.title),
+            toolbarHeight: 52,
+            titleSpacing: AppSpacing.sm,
+            title: Text(
+              controller.test.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.titleMedium(context),
+            ),
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: AppSpacing.md),
@@ -47,73 +54,129 @@ class TestQuestionScreen extends StatelessWidget {
           ),
           body: Column(
             children: [
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.xs,
+                  AppSpacing.lg,
+                  AppSpacing.xs,
+                ),
+                child: Column(
                   children: [
                     Row(
                       children: [
                         Text(
                           'Question ${controller.questionNumber} / ${controller.test.totalQuestions}',
-                          style: AppTextStyles.label(context),
+                          style: AppTextStyles.label(context).copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         const Spacer(),
                         if (controller.bookmarksEnabled)
                           IconButton(
                             tooltip: 'Bookmark',
+                            visualDensity: VisualDensity.compact,
+                            style: IconButton.styleFrom(
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              minimumSize: const Size(40, 40),
+                              padding: const EdgeInsets.all(AppSpacing.xs),
+                            ),
                             onPressed: controller.toggleBookmark,
                             icon: Icon(
                               attempt.bookmarked
                                   ? Icons.star_rounded
                                   : Icons.star_border_rounded,
+                              size: AppSizes.iconLg,
                               color: attempt.bookmarked
                                   ? AppColors.accentWarm
-                                  : AppColors.textSecondary,
+                                  : AppColors.textTertiary,
                             ),
                           ),
                         IconButton(
                           tooltip: 'Mark for review',
+                          visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            minimumSize: const Size(40, 40),
+                            padding: const EdgeInsets.all(AppSpacing.xs),
+                          ),
                           onPressed: controller.toggleMarkForReview,
                           icon: Icon(
                             attempt.markedForReview
                                 ? Icons.flag
                                 : Icons.flag_outlined,
+                            size: AppSizes.iconLg,
                             color: attempt.markedForReview
                                 ? AppColors.primaryStrong
-                                : AppColors.textSecondary,
+                                : AppColors.textTertiary,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.xs),
                     AppLinearProgress(
                       value:
                           controller.questionNumber /
                           controller.test.totalQuestions,
-                      height: 6,
+                      height: 4,
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    AppCard(
-                      showShadow: false,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            question.text,
-                            style: AppTextStyles.bodyLarge(
-                              context,
-                            ).copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          if (question.teluguText != null) ...[
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              question.teluguText!,
-                              style: AppTextStyles.bodyMedium(context),
-                            ),
-                          ],
-                        ],
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      children: [
+                        _CompactExamAction(
+                          key: const ValueKey('open-review'),
+                          icon: Icons.outlined_flag,
+                          label: 'Review',
+                          onPressed: controller.isSubmitting
+                              ? null
+                              : onOpenReview,
+                        ),
+                        _CompactExamAction(
+                          key: const ValueKey('open-palette'),
+                          icon: Icons.grid_view_rounded,
+                          label: 'Palette',
+                          onPressed: controller.isSubmitting
+                              ? null
+                              : () => _showPalette(context),
+                        ),
+                        const Spacer(),
+                        _CompactExamAction(
+                          key: const ValueKey('go-next'),
+                          icon: Icons.arrow_forward,
+                          label: 'Next',
+                          onPressed: controller.isSubmitting || controller.isLast
+                              ? null
+                              : controller.goNext,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.massive,
+                  ),
+                  children: [
+                    Text(
+                      question.text,
+                      style: AppTextStyles.titleMedium(context).copyWith(
+                        height: 1.4,
                       ),
                     ),
+                    if (question.teluguText != null) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        question.teluguText!,
+                        style: AppTextStyles.bodyMedium(context).copyWith(
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
                     if (question.hasNumberedStatements) ...[
                       const SizedBox(height: AppSpacing.lg),
                       _StatementBlock(question: question),
@@ -133,87 +196,92 @@ class TestQuestionScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                     ],
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: AppSpacing.xs),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton(
                         onPressed: attempt.selectedOption == null
                             ? null
                             : controller.clearResponse,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: AppColors.textSecondary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                          ),
+                        ),
                         child: const Text('Clear Response'),
                       ),
                     ),
                   ],
                 ),
               ),
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.sm,
-                    AppSpacing.lg,
-                    AppSpacing.lg,
+              DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border(
+                    top: BorderSide(color: AppColors.divider),
                   ),
-                  child: Column(
-                    children: [
-                      SubmissionStatusPanel(
-                        controller: controller,
-                        onRetry: onSubmit,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: AppSecondaryButton(
-                              label: 'Previous',
-                              onPressed: controller.isFirst
-                                  ? null
-                                  : controller.goPrevious,
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                    ),
+                    child: Column(
+                      children: [
+                        SubmissionStatusPanel(
+                          controller: controller,
+                          onRetry: onSubmit,
+                        ),
+                        if (controller.submissionPhase ==
+                                TestSubmissionPhase.submitting ||
+                            controller.submissionPhase ==
+                                TestSubmissionPhase.submissionFailed)
+                          const SizedBox(height: AppSpacing.sm),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AppSecondaryButton(
+                                label: 'Previous',
+                                onPressed: controller.isFirst
+                                    ? null
+                                    : controller.goPrevious,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: AppPrimaryButton(
-                              label: controller.isLast ? 'Review' : 'Next',
-                              onPressed: controller.isLast
-                                  ? onOpenReview
-                                  : controller.goNext,
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: OutlinedButton(
+                                key: const ValueKey('submit-attempt'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(
+                                    AppSizes.buttonLarge,
+                                  ),
+                                ),
+                                onPressed:
+                                    controller.isSubmitting ||
+                                        controller.submissionPhase ==
+                                            TestSubmissionPhase.submissionFailed
+                                    ? null
+                                    : () async {
+                                        final ok = await _confirmSubmit(
+                                          context,
+                                        );
+                                        if (ok && context.mounted) {
+                                          await onSubmit();
+                                        }
+                                      },
+                                child: const Text('Submit'),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () => _showPalette(context),
-                              icon: const Icon(Icons.grid_view_rounded),
-                              label: const Text('Palette'),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: OutlinedButton(
-                              key: const ValueKey('submit-attempt'),
-                              onPressed:
-                                  controller.isSubmitting ||
-                                      controller.submissionPhase ==
-                                          TestSubmissionPhase.submissionFailed
-                                  ? null
-                                  : () async {
-                                      final ok = await _confirmSubmit(context);
-                                      if (ok && context.mounted) {
-                                        await onSubmit();
-                                      }
-                                    },
-                              child: const Text('Submit'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -295,6 +363,41 @@ class TestQuestionScreen extends StatelessWidget {
   }
 }
 
+class _CompactExamAction extends StatelessWidget {
+  const _CompactExamAction({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        minimumSize: const Size(0, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: AppColors.textSecondary,
+      ),
+      icon: Icon(icon, size: AppSizes.iconSm),
+      label: Text(
+        label,
+        style: AppTextStyles.caption(context).copyWith(
+          color: AppColors.textSecondary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 class _StatementBlock extends StatelessWidget {
   const _StatementBlock({required this.question});
 
@@ -304,32 +407,78 @@ class _StatementBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final english = question.englishStatements;
     final telugu = question.teluguStatements;
-    return AppCard(
+    return Column(
       key: const ValueKey('statement-section'),
-      showShadow: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Statements', style: AppTextStyles.label(context)),
-          for (var i = 0; i < english.length; i++) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text('${i + 1}.', style: AppTextStyles.label(context)),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              english[i],
-              key: ValueKey('statement-en-${i + 1}'),
-              style: AppTextStyles.bodyLarge(context),
-            ),
-            if (i < telugu.length && telugu[i].trim().isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                telugu[i],
-                key: ValueKey('statement-te-${i + 1}'),
-                style: AppTextStyles.bodyMedium(context),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Statements',
+          style: AppTextStyles.caption(context).copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (var i = 0; i < english.length; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _StatementIndexBadge(index: i + 1),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      english[i],
+                      key: ValueKey('statement-en-${i + 1}'),
+                      style: AppTextStyles.bodyLarge(context).copyWith(
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (i < telugu.length && telugu[i].trim().isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        telugu[i],
+                        key: ValueKey('statement-te-${i + 1}'),
+                        style: AppTextStyles.bodyMedium(context),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
-          ],
+          ),
         ],
+      ],
+    );
+  }
+}
+
+class _StatementIndexBadge extends StatelessWidget {
+  const _StatementIndexBadge({required this.index});
+
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: AppSpacing.xxl,
+      height: AppSpacing.xxl,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.lavender,
+        borderRadius: AppRadius.smAll,
+      ),
+      child: Text(
+        index.toString().padLeft(2, '0'),
+        style: AppTextStyles.caption(context).copyWith(
+          color: AppColors.primaryStrong,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

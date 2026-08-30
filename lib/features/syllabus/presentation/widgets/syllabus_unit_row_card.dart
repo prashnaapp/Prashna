@@ -4,8 +4,7 @@ import '../../../../core/design_system/design_system.dart';
 import '../syllabus_visual.dart';
 import 'syllabus_unit_visual.dart';
 
-enum SyllabusUnitCardState { idle, active, completed }
-
+/// Compact syllabus subject/unit card for the Syllabus Browser.
 class SyllabusUnitRowCard extends StatelessWidget {
   const SyllabusUnitRowCard({
     super.key,
@@ -13,7 +12,6 @@ class SyllabusUnitRowCard extends StatelessWidget {
     required this.title,
     required this.index,
     required this.onTap,
-    this.questionCount,
     this.progress = 0,
     this.completed = false,
   });
@@ -22,107 +20,85 @@ class SyllabusUnitRowCard extends StatelessWidget {
   final String title;
   final int index;
   final VoidCallback onTap;
-  final int? questionCount;
   final double progress;
   final bool completed;
 
-  SyllabusUnitCardState get _state {
+  bool get _hasProgress {
     final value = progress.clamp(0.0, 1.0);
-    if (completed || value >= 1.0) return SyllabusUnitCardState.completed;
-    if (value > 0) return SyllabusUnitCardState.active;
-    return SyllabusUnitCardState.idle;
+    return completed || value > 0;
   }
 
   @override
   Widget build(BuildContext context) {
-    final percent = (progress.clamp(0.0, 1.0) * 100).round();
+    final value = progress.clamp(0.0, 1.0);
+    final percent = (value * 100).round();
     final visual = SyllabusUnitVisualCatalog.resolve(
       unitId: unitId,
       displayName: title,
       index: index,
     );
-    final state = _state;
-    final highlighted = state != SyllabusUnitCardState.idle;
-    final fillColor = switch (state) {
-      SyllabusUnitCardState.completed => SyllabusVisual.completedFill,
-      SyllabusUnitCardState.active => SyllabusVisual.activeFill,
-      SyllabusUnitCardState.idle => SyllabusVisual.surface,
-    };
-    final borderColor = switch (state) {
-      SyllabusUnitCardState.completed => SyllabusVisual.completedOutline,
-      SyllabusUnitCardState.active => SyllabusVisual.activeOutline,
-      SyllabusUnitCardState.idle => null,
-    };
-    final barColor = switch (state) {
-      SyllabusUnitCardState.completed => AppColors.success,
-      SyllabusUnitCardState.active => SyllabusVisual.activeOutline,
-      SyllabusUnitCardState.idle => SyllabusVisual.accent,
-    };
+    final shownTitle = visual.cardTitle ?? title;
+    final radius = BorderRadius.circular(AppRadius.md);
+    final barColor = SyllabusVisual.accent;
+    final percentColor = _hasProgress
+        ? SyllabusVisual.accent
+        : SyllabusVisual.muted;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(SyllabusVisual.cardRadius),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: fillColor,
-            borderRadius: BorderRadius.circular(SyllabusVisual.cardRadius),
-            border: borderColor == null
-                ? null
-                : Border.all(color: borderColor, width: 1.5),
-            boxShadow: highlighted
-                ? AppShadows.colored(
-                    borderColor ?? SyllabusVisual.completedOutline,
-                  )
-                : SyllabusVisual.cardShadow,
-          ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: _hasProgress
+            ? SyllabusVisual.clickableCardShadow
+            : SyllabusVisual.cardShadow,
+      ),
+      child: Material(
+        color: SyllabusVisual.surface,
+        shape: RoundedRectangleBorder(borderRadius: radius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: RoundedRectangleBorder(borderRadius: radius),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 16, 12, 16),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.sm,
+              AppSpacing.md,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     color: visual.background,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.smAll,
                   ),
-                  child: Icon(visual.icon, color: visual.foreground, size: 32),
+                  child: Icon(visual.icon, color: visual.foreground, size: 22),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        shownTitle,
+                        maxLines: 3,
+                        overflow: TextOverflow.clip,
                         style: AppTextStyles.titleMedium(context).copyWith(
                           fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: SyllabusVisual.ink,
                           height: 1.25,
                         ),
                       ),
-                      const SizedBox(height: 5),
-                      Text(
-                        questionCount == null
-                            ? 'Questions'
-                            : '$questionCount Questions',
-                        style: AppTextStyles.caption(context).copyWith(
-                          color: SyllabusVisual.muted,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: AppSpacing.sm),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(99),
                         child: LinearProgressIndicator(
-                          value: progress.clamp(0.0, 1.0),
-                          minHeight: 7,
+                          value: value,
+                          minHeight: 5,
                           backgroundColor: const Color(0xFFE8E7F8),
                           color: barColor,
                         ),
@@ -130,35 +106,23 @@ class SyllabusUnitRowCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: AppSpacing.sm),
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       '$percent%',
                       style: AppTextStyles.label(context).copyWith(
-                        color: barColor,
+                        color: percentColor,
                         fontWeight: FontWeight.w800,
-                        fontSize: 14,
+                        fontSize: 13,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    if (state == SyllabusUnitCardState.completed)
-                      const CircleAvatar(
-                        radius: 13,
-                        backgroundColor: AppColors.success,
-                        child: Icon(
-                          Icons.check_rounded,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                      )
-                    else
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        color: SyllabusVisual.faint,
-                        size: 26,
-                      ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: SyllabusVisual.accent,
+                      size: 22,
+                    ),
                   ],
                 ),
               ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_spacing.dart';
 import '../../services/home_greeting_helper.dart';
 import '../../services/home_service.dart';
 
@@ -17,19 +18,23 @@ class WelcomeSection extends StatelessWidget {
       children: [
         Text(
           '$greeting, $name 👋',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 26,
+            fontSize: 22,
             fontWeight: FontWeight.w800,
-            height: 1.2,
+            height: 1.25,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: AppSpacing.sm),
         Text(
           "Let's achieve your dream job!",
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.86),
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
             height: 1.3,
           ),

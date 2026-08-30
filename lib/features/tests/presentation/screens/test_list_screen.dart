@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart' hide TestCard;
+import '../../../test_engine/presentation/test_engine_navigation.dart';
 import '../../data/models/test_models.dart';
 import '../../services/test_service.dart';
 import '../widgets/test_card.dart';
@@ -85,8 +86,8 @@ class _TestListScreenState extends State<TestListScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => TestInstructionsScreen(test: tests[i]),
+                      TestEngineNavigation.catalogInstructionsRoute(
+                        (_) => TestInstructionsScreen(test: tests[i]),
                       ),
                     );
                   },
