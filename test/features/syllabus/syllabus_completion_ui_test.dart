@@ -104,7 +104,9 @@ void main() {
   });
 
   group('SyllabusUnitTestsScreen completion', () {
-    testWidgets('21/23: Group-III uses shared completion card', (tester) async {
+    testWidgets('H2.3: completion card is not shown; tests remain', (
+      tester,
+    ) async {
       final store = InMemorySyllabusCompletionDocumentStore();
       final completionRepo = SyllabusCompletionCloudRepository(
         store: store,
@@ -131,18 +133,20 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Unit Completion'), findsOneWidget);
-      expect(find.text('Completion: Not Started'), findsOneWidget);
-      expect(find.text('Unit Performance'), findsOneWidget);
+      expect(find.text('Unit Completion'), findsNothing);
+      expect(find.text('Completion: Not Started'), findsNothing);
+      expect(find.text('Mark as In Progress'), findsNothing);
+      expect(find.byType(SyllabusCompletionCard), findsNothing);
+      expect(find.text('Performance'), findsOneWidget);
       expect(find.text('Unit Test'), findsOneWidget);
-
-      await tester.tap(find.text('Mark as In Progress'));
-      await tester.pumpAndSettle();
-      expect(find.text('Completion: In Progress'), findsOneWidget);
-      expect(find.text('Unit Test'), findsOneWidget);
+      expect(
+        store.lastScopeKey,
+        'v1|group-iii|group-iii-paper-ii|group-iii-paper-ii-part-i|'
+        'group-iii-paper-ii-part-i-unit-02',
+      );
     });
 
-    testWidgets('21/23: Group-II Paper-I uses same completion component', (
+    testWidgets('21/23: Group-II Paper-I still loads completion by scopeKey', (
       tester,
     ) async {
       final store = InMemorySyllabusCompletionDocumentStore();
@@ -169,15 +173,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(SyllabusCompletionCard), findsOneWidget);
-      expect(find.text('Completion: Not Started'), findsOneWidget);
+      expect(find.byType(SyllabusCompletionCard), findsNothing);
+      expect(find.text('Mark as In Progress'), findsNothing);
       expect(
         store.lastScopeKey,
         'v1|group-ii|group-ii-paper-i||group-ii-paper-i-area-01',
       );
     });
 
-    testWidgets('22: completion read failure shows retry; tests remain', (
+    testWidgets('22: completion read failure is hidden; tests remain', (
       tester,
     ) async {
       final completionRepo = SyllabusCompletionCloudRepository(
@@ -207,8 +211,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Unable to load unit completion.'), findsOneWidget);
-      expect(find.text('Retry'), findsWidgets);
+      expect(find.text('Unable to load unit completion.'), findsNothing);
       expect(find.text('Unit Test'), findsOneWidget);
     });
 
@@ -241,7 +244,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('No attempts yet'), findsOneWidget);
-      expect(find.text('Completion: Not Started'), findsOneWidget);
+      expect(find.text('Mark as Completed'), findsNothing);
+      expect(find.text('Completion: Completed'), findsNothing);
+      expect(find.text('0%'), findsNothing);
     });
   });
 }

@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/design_system/design_system.dart' hide TestCard;
+import '../../../../core/design_system/design_system.dart';
 import '../../../progress/data/models/syllabus_completion.dart';
 import '../../../progress/data/models/unit_performance.dart';
-import '../../../progress/presentation/widgets/syllabus_completion_card.dart';
-import '../../../progress/presentation/widgets/unit_performance_card.dart';
 import '../../../progress_cloud/repository/syllabus_completion_cloud_repository.dart';
 import '../../../progress_cloud/repository/unit_performance_cloud_repository.dart';
 import '../../../test_engine/presentation/test_engine_navigation.dart';
 import '../../../tests/data/models/test_models.dart';
 import '../../../tests/presentation/screens/test_instructions_screen.dart';
-import '../../../tests/presentation/widgets/test_card.dart';
 import '../../../tests/presentation/widgets/tests_scroll_body.dart';
 import '../../../tests/services/test_service.dart';
 import '../../data/models/canonical_scope.dart';
 import '../../services/syllabus_service.dart';
+import '../syllabus_visual.dart';
+import '../widgets/syllabus_unit_visual.dart';
+import '../widgets/unit_detail_backdrop.dart';
+import '../widgets/unit_detail_performance_card.dart';
+import '../widgets/unit_detail_surface.dart';
+import '../widgets/unit_detail_test_card.dart';
 
 /// Final syllabus-unit leaf: completion, performance, and published tests.
 class SyllabusUnitTestsScreen extends StatefulWidget {
@@ -47,8 +50,6 @@ class _SyllabusUnitTestsScreenState extends State<SyllabusUnitTestsScreen> {
   late Future<UnitPerformance?> _performanceFuture;
   late Future<SyllabusCompletion?> _completionFuture;
   CanonicalScope? _scope;
-  bool _completionMutating = false;
-  String? _completionMutationError;
 
   @override
   void initState() {
@@ -99,54 +100,16 @@ class _SyllabusUnitTestsScreenState extends State<SyllabusUnitTestsScreen> {
     setState(() => _performanceFuture = _loadPerformance());
   }
 
-  void _retryCompletion() {
-    setState(() {
-      _completionMutationError = null;
-      _completionFuture = _loadCompletion();
-    });
-  }
-
-  Future<void> _mutateCompletion(
-    Future<SyllabusCompletion> Function(
-      SyllabusCompletionCloudRepository,
-      CanonicalScope,
-    )
-    action,
-  ) async {
-    final scope = _scope;
-    if (scope == null || _completionMutating) return;
-
-    setState(() {
-      _completionMutating = true;
-      _completionMutationError = null;
-    });
-
-    try {
-      final repository =
-          widget.syllabusCompletionRepository ??
-          SyllabusCompletionCloudRepository();
-      final updated = await action(repository, scope);
-      if (!mounted) return;
-      setState(() {
-        _completionFuture = Future.value(updated);
-        _completionMutating = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _completionMutating = false;
-        _completionMutationError = 'Unable to update completion.';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final course = SyllabusService.instance.getCourseById(widget.courseId);
-    final paper = SyllabusService.instance.getPaper(
-      courseId: widget.courseId,
-      paperId: widget.paperId,
+  void _openTest(TestModel test) {
+    Navigator.push(
+      context,
+      TestEngineNavigation.catalogInstructionsRoute(
+        (_) => TestInstructionsScreen(test: test),
+      ),
     );
+  }
+
+  String get _unitTitle {
     final unit = widget.partId == null
         ? SyllabusService.instance.getPaperSyllabusUnit(
             courseId: widget.courseId,
@@ -159,159 +122,157 @@ class _SyllabusUnitTestsScreenState extends State<SyllabusUnitTestsScreen> {
             partId: widget.partId!,
             unitId: widget.unitId,
           );
-    final part = widget.partId == null
-        ? null
-        : SyllabusService.instance.getPart(
-            courseId: widget.courseId,
-            paperId: widget.paperId,
-            partId: widget.partId!,
-          );
+    final canonical = unit?.displayName ?? 'Tests';
+    final visual = SyllabusUnitVisualCatalog.resolve(
+      unitId: widget.unitId,
+      displayName: canonical,
+      index: 0,
+    );
+    return visual.cardTitle ?? canonical;
+  }
 
-    final breadcrumb = [
+  String get _contextLine {
+    final course = SyllabusService.instance.getCourseById(widget.courseId);
+    final paper = SyllabusService.instance.getPaper(
+      courseId: widget.courseId,
+      paperId: widget.paperId,
+    );
+    return [
       course?.name,
       paper?.title,
-      if (part != null) part.displayName,
-      unit?.displayName,
     ].whereType<String>().where((value) => value.isNotEmpty).join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canPop = ModalRoute.of(context)?.canPop ?? false;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: Text(unit?.displayName ?? 'Tests')),
-      body: FutureBuilder<List<TestModel>>(
-        future: _testsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return TestsScrollBody(
-              bottomInset: false,
-              children: [
-                _UnitHero(
-                  title: unit?.displayName ?? 'Syllabus Unit',
-                  breadcrumb: breadcrumb,
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                _buildCompletionSection(),
-                const SizedBox(height: AppSpacing.xxl),
-                _buildPerformanceSection(),
-                const SizedBox(height: AppSpacing.xxl),
-                Text(
-                  'Tests in this Unit',
-                  style: AppTextStyles.titleMedium(context),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                const Center(child: AppCircularProgress()),
-              ],
-            );
-          }
-          if (snapshot.hasError) {
-            return TestsScrollBody(
-              bottomInset: false,
-              children: [
-                _UnitHero(
-                  title: unit?.displayName ?? 'Syllabus Unit',
-                  breadcrumb: breadcrumb,
-                ),
-                const SizedBox(height: AppSpacing.xxl),
-                _buildCompletionSection(),
-                const SizedBox(height: AppSpacing.xxl),
-                _buildPerformanceSection(),
-                const SizedBox(height: AppSpacing.xxl),
-                Text(
-                  'Tests in this Unit',
-                  style: AppTextStyles.titleMedium(context),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _MessageBody(
-                  title: 'Unable to load tests',
-                  message: 'Please check your connection and try again.',
-                  actionLabel: 'Retry',
-                  onAction: _retryTests,
-                ),
-              ],
-            );
-          }
-
-          final tests = snapshot.data ?? const <TestModel>[];
-          return TestsScrollBody(
-            bottomInset: false,
-            children: [
-              _UnitHero(
-                title: unit?.displayName ?? 'Syllabus Unit',
-                breadcrumb: breadcrumb,
+      backgroundColor: SyllabusVisual.page,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: SyllabusVisual.ink,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        toolbarHeight: 72,
+        automaticallyImplyLeading: false,
+        leadingWidth: canPop ? 56 : 0,
+        leading: canPop ? const _UnitDetailBackButton() : null,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _unitTitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.titleMedium(context).copyWith(
+                color: SyllabusVisual.ink,
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+                height: 1.15,
+                letterSpacing: -0.2,
               ),
-              const SizedBox(height: AppSpacing.xxl),
-              _buildCompletionSection(),
-              const SizedBox(height: AppSpacing.xxl),
-              _buildPerformanceSection(),
-              const SizedBox(height: AppSpacing.xxl),
+            ),
+            if (_contextLine.isNotEmpty) ...[
+              const SizedBox(height: 4),
               Text(
-                'Tests in this Unit',
-                style: AppTextStyles.titleMedium(context),
+                _contextLine,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption(context).copyWith(
+                  color: SyllabusVisual.accent.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              if (tests.isEmpty)
-                const _MessageBody(
-                  title: 'No tests available',
-                  message:
-                      'There are no published tests in this syllabus unit yet.',
-                )
-              else
-                for (var i = 0; i < tests.length; i++) ...[
-                  if (i > 0) const SizedBox(height: AppSpacing.md),
-                  TestCard(
-                    test: tests[i],
-                    accentColor: AppColors.accentAt(i),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        TestEngineNavigation.catalogInstructionsRoute(
-                          (_) => TestInstructionsScreen(test: tests[i]),
-                        ),
-                      );
-                    },
-                  ),
-                ],
             ],
-          );
-        },
+          ],
+        ),
+      ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: UnitDetailBackdrop()),
+          FutureBuilder<List<TestModel>>(
+            future: _testsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return _scrollBody(
+                  testsChild: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                    child: Center(child: AppCircularProgress()),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return _scrollBody(
+                  testsChild: _MessageCard(
+                    title: 'Unable to load tests',
+                    message: 'Please check your connection and try again.',
+                    actionLabel: 'Retry',
+                    onAction: _retryTests,
+                  ),
+                );
+              }
+
+              final tests = snapshot.data ?? const <TestModel>[];
+              if (tests.isEmpty) {
+                return _scrollBody(
+                  testsChild: const _MessageCard(
+                    title: 'No tests available',
+                    message:
+                        'There are no published tests in this syllabus unit yet.',
+                  ),
+                );
+              }
+
+              return _scrollBody(
+                testsChild: Column(
+                  children: [
+                    for (var i = 0; i < tests.length; i++) ...[
+                      if (i > 0) const SizedBox(height: AppSpacing.md),
+                      UnitDetailTestCard(
+                        test: tests[i],
+                        onOpen: () => _openTest(tests[i]),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildCompletionSection() {
-    if (_scope == null) {
-      return const SizedBox.shrink();
-    }
-
-    return FutureBuilder<SyllabusCompletion?>(
-      future: _completionFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const SyllabusCompletionCard(isLoading: true);
-        }
-        if (snapshot.hasError) {
-          final error = snapshot.error;
-          final signedOut =
-              error is StateError &&
-              error.message.contains('no authenticated user');
-          return SyllabusCompletionCard(
-            errorMessage: signedOut
-                ? 'Sign in to manage unit completion.'
-                : 'Unable to load unit completion.',
-            onRetry: signedOut ? null : _retryCompletion,
-          );
-        }
-        return SyllabusCompletionCard(
-          completion: snapshot.data,
-          isMutating: _completionMutating,
-          mutationErrorMessage: _completionMutationError,
-          onMarkInProgress: () =>
-              _mutateCompletion((repo, scope) => repo.setInProgress(scope)),
-          onMarkCompleted: () =>
-              _mutateCompletion((repo, scope) => repo.setCompleted(scope)),
-          onReset: () =>
-              _mutateCompletion((repo, scope) => repo.resetToNotStarted(scope)),
-        );
-      },
+  Widget _scrollBody({required Widget testsChild}) {
+    return TestsScrollBody(
+      bottomInset: false,
+      padding: const EdgeInsets.fromLTRB(
+        SyllabusVisual.pagePadding,
+        AppSpacing.sm,
+        SyllabusVisual.pagePadding,
+        AppSpacing.xxl,
+      ),
+      children: [
+        FutureBuilder<SyllabusCompletion?>(
+          future: _completionFuture,
+          builder: (_, _) => const SizedBox.shrink(),
+        ),
+        _buildPerformanceSection(),
+        if (_scope != null) const SizedBox(height: AppSpacing.xl),
+        Text(
+          'Tests in this Unit',
+          style: AppTextStyles.titleMedium(context).copyWith(
+            color: SyllabusVisual.ink,
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        testsChild,
+      ],
     );
   }
 
@@ -324,28 +285,63 @@ class _SyllabusUnitTestsScreenState extends State<SyllabusUnitTestsScreen> {
       future: _performanceFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const UnitPerformanceCard(isLoading: true);
+          return const UnitDetailPerformanceCard(isLoading: true);
         }
         if (snapshot.hasError) {
           final error = snapshot.error;
           final signedOut =
               error is StateError &&
               error.message.contains('no authenticated user');
-          return UnitPerformanceCard(
+          return UnitDetailPerformanceCard(
             errorMessage: signedOut
                 ? 'Sign in to view unit performance.'
                 : 'Unable to load unit performance.',
             onRetry: signedOut ? null : _retryPerformance,
           );
         }
-        return UnitPerformanceCard(performance: snapshot.data);
+        return UnitDetailPerformanceCard(performance: snapshot.data);
       },
     );
   }
 }
 
-class _MessageBody extends StatelessWidget {
-  const _MessageBody({
+class _UnitDetailBackButton extends StatelessWidget {
+  const _UnitDetailBackButton();
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = BorderRadius.all(Radius.circular(12));
+    return Center(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: [
+            BoxShadow(
+              color: SyllabusVisual.accent.withValues(alpha: 0.10),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Material(
+          color: SyllabusVisual.surface,
+          shape: const RoundedRectangleBorder(borderRadius: radius),
+          clipBehavior: Clip.antiAlias,
+          child: const SizedBox(
+            width: 40,
+            height: 40,
+            child: BackButton(
+              color: SyllabusVisual.accent,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageCard extends StatelessWidget {
+  const _MessageCard({
     required this.title,
     required this.message,
     this.actionLabel,
@@ -359,35 +355,42 @@ class _MessageBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
-      child: EmptyState(
-        title: title,
-        message: message,
-        actionLabel: actionLabel,
-        onAction: onAction,
+    return UnitDetailSurface(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.lg,
       ),
-    );
-  }
-}
-
-class _UnitHero extends StatelessWidget {
-  const _UnitHero({required this.title, required this.breadcrumb});
-
-  final String title;
-  final String breadcrumb;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      backgroundColor: AppColors.lavender.withValues(alpha: 0.65),
-      showBorder: false,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: AppTextStyles.headline(context)),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.titleMedium(context).copyWith(
+              color: SyllabusVisual.ink,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xs),
-          Text(breadcrumb, style: AppTextStyles.bodyMedium(context)),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption(context).copyWith(
+              color: SyllabusVisual.muted,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                foregroundColor: SyllabusVisual.accent,
+                minimumSize: const Size(AppSizes.minTouch, AppSizes.minTouch),
+              ),
+              child: Text(actionLabel!),
+            ),
+          ],
         ],
       ),
     );

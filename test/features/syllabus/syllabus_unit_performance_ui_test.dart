@@ -7,6 +7,7 @@ import 'package:telangana_prep/features/progress/presentation/widgets/unit_perfo
 import 'package:telangana_prep/features/progress_cloud/repository/syllabus_completion_cloud_repository.dart';
 import 'package:telangana_prep/features/progress_cloud/repository/unit_performance_cloud_repository.dart';
 import 'package:telangana_prep/features/syllabus/presentation/screens/syllabus_unit_tests_screen.dart';
+import 'package:telangana_prep/features/syllabus/presentation/widgets/unit_detail_performance_card.dart';
 import 'package:telangana_prep/features/tests/data/models/test_models.dart';
 import 'package:telangana_prep/features/tests/repository/test_cloud_repository.dart';
 import 'package:telangana_prep/features/tests/services/test_service.dart';
@@ -173,8 +174,8 @@ void main() {
         await tester.pump();
 
         expect(find.text('Unit Test t-1'), findsOneWidget);
-        expect(find.text('Unit Performance'), findsOneWidget);
-        expect(find.byType(UnitPerformanceCard), findsOneWidget);
+        expect(find.text('Performance'), findsOneWidget);
+        expect(find.byType(UnitDetailPerformanceCard), findsOneWidget);
 
         gate.completeError(Exception('network down'));
         await tester.pumpAndSettle();
@@ -252,7 +253,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Tests Attempted'), findsOneWidget);
+      expect(find.text('Tests'), findsOneWidget);
+      expect(find.text('Best Score'), findsOneWidget);
       expect(find.text('No tests available'), findsOneWidget);
       expect(find.text('No attempts yet'), findsNothing);
     });
