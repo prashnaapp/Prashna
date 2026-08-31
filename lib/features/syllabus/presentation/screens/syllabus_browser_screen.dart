@@ -10,8 +10,10 @@ import '../../data/models/canonical_scope.dart';
 import '../../data/models/syllabus_models.dart';
 import '../../services/syllabus_service.dart';
 import '../syllabus_visual.dart';
+import '../syllabus_browser_sequence.dart';
 import '../widgets/syllabus_browser_header.dart';
 import '../widgets/syllabus_browser_pill.dart';
+import '../widgets/syllabus_swipe_surface.dart';
 import '../widgets/syllabus_unit_row_card.dart';
 import 'syllabus_unit_tests_screen.dart';
 
@@ -41,6 +43,8 @@ class _SyllabusBrowserScreenState extends State<SyllabusBrowserScreen> {
   String? _paperId;
   String? _partId;
   Future<Map<String, _UnitMetrics>> _metrics = Future.value(const {});
+  final ScrollController _scrollController = ScrollController();
+  int _slideDirection = 0;
 
   @override
   void initState() {
@@ -50,6 +54,12 @@ class _SyllabusBrowserScreenState extends State<SyllabusBrowserScreen> {
       paperId: widget.initialPaperId,
       partId: widget.initialPartId,
     );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   SyllabusCourse? get _course =>
@@ -187,12 +197,20 @@ class _SyllabusBrowserScreenState extends State<SyllabusBrowserScreen> {
 
   void _selectPaper(SyllabusPaper paper) {
     if (_paperId == paper.id) return;
-    setState(() => _applySelection(paperId: paper.id));
+    setState(() {
+      _slideDirection = 0;
+      _applySelection(paperId: paper.id);
+    });
+    _scrollToTop();
   }
 
   void _selectPart(SyllabusPart part) {
     if (_partId == part.id) return;
-    setState(() => _applySelection(paperId: _paperId, partId: part.id));
+    setState(() {
+      _slideDirection = 0;
+      _applySelection(paperId: _paperId, partId: part.id);
+    });
+    _scrollToTop();
   }
 
   Future<void> _selectCourse(SyllabusCourse course) async {
@@ -203,10 +221,37 @@ class _SyllabusBrowserScreenState extends State<SyllabusBrowserScreen> {
       onAllowed: () {
         setState(() {
           _courseId = course.id;
+          _slideDirection = 0;
           _applySelection();
         });
+        _scrollToTop();
       },
     );
+  }
+
+  void _scrollToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.jumpTo(0);
+    });
+  }
+
+  void _moveBy(int delta) {
+    final stops = SyllabusBrowserSequence.fromPapers(_papers);
+    if (stops.isEmpty) return;
+    final index = SyllabusBrowserSequence.indexOf(
+      stops,
+      paperId: _paperId,
+      partId: _partId,
+    );
+    final next = index + delta;
+    if (next < 0 || next >= stops.length) return;
+    final stop = stops[next];
+    setState(() {
+      _slideDirection = delta;
+      _applySelection(paperId: stop.paperId, partId: stop.partId);
+    });
+    _scrollToTop();
   }
 
   void _openUnit(SyllabusUnit unit) {
@@ -248,6 +293,7 @@ class _SyllabusBrowserScreenState extends State<SyllabusBrowserScreen> {
             ),
             Expanded(
               child: ListView(
+                controller: _scrollController,
                 padding: EdgeInsets.fromLTRB(
                   SyllabusVisual.pagePadding,
                   AppSpacing.sm,
@@ -303,39 +349,86 @@ class _SyllabusBrowserScreenState extends State<SyllabusBrowserScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                   ],
-                  if (paper != null) ...[
-                    Text(
-                      paper.title,
-                      style: AppTextStyles.titleMedium(context).copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                        color: SyllabusVisual.accent,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                  ],
-                  FutureBuilder<Map<String, _UnitMetrics>>(
-                    future: _metrics,
-                    builder: (context, snapshot) {
-                      final metrics = snapshot.data ?? const {};
-                      return Column(
-                        children: [
-                          for (var i = 0; i < units.length; i++) ...[
-                            if (i > 0)
-                              const SizedBox(height: AppSpacing.xl),
-                            SyllabusUnitRowCard(
-                              unitId: units[i].id,
-                              title: units[i].displayName,
-                              index: i,
-                              progress: metrics[units[i].id]?.progress ?? 0,
-                              completed:
-                                  metrics[units[i].id]?.completed ?? false,
-                              onTap: () => _openUnit(units[i]),
+                  SyllabusSwipeSurface(
+                    key: const ValueKey('syllabus-swipe-surface'),
+                    onSwipeForward: () => _moveBy(1),
+                    onSwipeBack: () => _moveBy(-1),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: (currentChild, previousChildren) {
+                        return Stack(
+                          alignment: Alignment.topCenter,
+                          children: [
+                            ...previousChildren,
+                            ?currentChild,
+                          ],
+                        );
+                      },
+                      transitionBuilder: (child, animation) {
+                        final dir = _slideDirection.toDouble();
+                        final begin =
+                            animation.status == AnimationStatus.reverse
+                            ? Offset(-dir, 0)
+                            : Offset(dir, 0);
+                        return ClipRect(
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: begin,
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: KeyedSubtree(
+                        key: ValueKey('${_paperId ?? ''}|${_partId ?? ''}'),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (paper != null) ...[
+                              Text(
+                                paper.title,
+                                style: AppTextStyles.titleMedium(context)
+                                    .copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16,
+                                      color: SyllabusVisual.accent,
+                                    ),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                            ],
+                            FutureBuilder<Map<String, _UnitMetrics>>(
+                              future: _metrics,
+                              builder: (context, snapshot) {
+                                final metrics = snapshot.data ?? const {};
+                                return Column(
+                                  children: [
+                                    for (var i = 0; i < units.length; i++) ...[
+                                      if (i > 0)
+                                        const SizedBox(height: AppSpacing.xl),
+                                      SyllabusUnitRowCard(
+                                        unitId: units[i].id,
+                                        title: units[i].displayName,
+                                        index: i,
+                                        progress:
+                                            metrics[units[i].id]?.progress ??
+                                            0,
+                                        completed:
+                                            metrics[units[i].id]?.completed ??
+                                            false,
+                                        onTap: () => _openUnit(units[i]),
+                                      ),
+                                    ],
+                                  ],
+                                );
+                              },
                             ),
                           ],
-                        ],
-                      );
-                    },
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
