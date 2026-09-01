@@ -25,7 +25,8 @@ Map<String, dynamic> _bilingualStudentQuestion({
       <String, dynamic>{
         'label': 'B',
         'text': 'Ministry of Home Affairs',
-        if (includeOptionTeluguText) 'teluguText': 'హోం వ్యవహారాల మంత్రిత్వ శాఖ',
+        if (includeOptionTeluguText)
+          'teluguText': 'హోం వ్యవహారాల మంత్రిత్వ శాఖ',
       },
       <String, dynamic>{
         'label': 'C',
@@ -150,10 +151,7 @@ void main() {
               'label': 'A',
               'text': 'Ministry of Urban Development',
             },
-            <String, dynamic>{
-              'label': 'B',
-              'text': 'Ministry of Home Affairs',
-            },
+            <String, dynamic>{'label': 'B', 'text': 'Ministry of Home Affairs'},
             <String, dynamic>{'label': 'C', 'text': 'Ministry of Defence'},
             <String, dynamic>{
               'label': 'D',
@@ -337,154 +335,148 @@ void main() {
       },
     );
 
-    testWidgets(
-      'Retry Test remaps bilingual options from a new start snapshot',
-      (tester) async {
-        await tester.binding.setSurfaceSize(const Size(800, 1400));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
+    testWidgets('Retry Test remaps bilingual options from a new start snapshot', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-        var startCalls = 0;
-        final api = TestAttemptApi(
-          callOverride: (name, data) async {
-            if (name == 'startTestAttempt') {
-              startCalls += 1;
-              final studentQuestions = [
-                _bilingualStudentQuestion(questionId: 'ndrf-q'),
-              ];
-              // Distinct Telugu so we prove rebuild, not reuse of mutated test.
-              (studentQuestions.single['options'] as List)[0]['teluguText'] =
-                  'కొత్త పట్టణాభివృద్ధి మంత్రిత్వ శాఖ';
-              return <String, dynamic>{
-                'attemptId': 'attempt-$startCalls',
-                'testId': 'home-test',
-                'courseId': 'group-ii',
-                'questionIds': ['ndrf-q'],
-                'studentQuestions': studentQuestions,
-                'totalMarks': 1,
-                'negativeMarks': 0,
-                'totalQuestions': 1,
-                'durationSeconds': 600,
-                'duplicate': false,
-              };
-            }
-            if (name == 'submitTestAttempt') {
-              return <String, dynamic>{
-                'attemptId': data['attemptId'],
-                'duplicate': false,
-                'totalQuestions': 1,
-                'attempted': 0,
-                'correct': 0,
-                'wrong': 0,
-                'skipped': 1,
-                'score': 0.0,
-                'accuracy': 0.0,
-                'percentage': 0.0,
-                'passed': false,
-                'authority': 'server_verified',
-                'questionSnapshots': [
-                  <String, dynamic>{
-                    'questionId': 'ndrf-q',
-                    'text':
-                        'National Disaster Response Force (NDRF) is a specialized disaster response force under which ministry?',
-                    'correctOption': 'B',
-                    'explanation': 'Ministry of Home Affairs',
-                    'options': [
-                      <String, dynamic>{
-                        'label': 'A',
-                        'text': 'Ministry of Urban Development',
-                      },
-                      <String, dynamic>{
-                        'label': 'B',
-                        'text': 'Ministry of Home Affairs',
-                      },
-                      <String, dynamic>{
-                        'label': 'C',
-                        'text': 'Ministry of Defence',
-                      },
-                      <String, dynamic>{
-                        'label': 'D',
-                        'text':
-                            'Ministry of Environment, Forest and Climate Change',
-                      },
-                    ],
-                  },
-                ],
-              };
-            }
-            throw StateError('Unexpected callable $name');
-          },
-        );
-        final service = TestService(attemptApi: api);
-        final initial = await service.createTestFromStudentSafeQuestions(
-          id: 'home-test',
-          title: 'Home',
-          courseId: 'group-ii',
-          studentQuestions: [_bilingualStudentQuestion(questionId: 'ndrf-q')],
-          duration: const Duration(minutes: 10),
-          totalMarks: 1,
-          negativeMarks: 0,
-        );
+      var startCalls = 0;
+      final api = TestAttemptApi(
+        callOverride: (name, data) async {
+          if (name == 'startTestAttempt') {
+            startCalls += 1;
+            final studentQuestions = [
+              _bilingualStudentQuestion(questionId: 'ndrf-q'),
+            ];
+            // Distinct Telugu so we prove rebuild, not reuse of mutated test.
+            (studentQuestions.single['options'] as List)[0]['teluguText'] =
+                'కొత్త పట్టణాభివృద్ధి మంత్రిత్వ శాఖ';
+            return <String, dynamic>{
+              'attemptId': 'attempt-$startCalls',
+              'testId': 'home-test',
+              'courseId': 'group-ii',
+              'questionIds': ['ndrf-q'],
+              'studentQuestions': studentQuestions,
+              'totalMarks': 1,
+              'negativeMarks': 0,
+              'totalQuestions': 1,
+              'durationSeconds': 600,
+              'duplicate': false,
+            };
+          }
+          if (name == 'submitTestAttempt') {
+            return <String, dynamic>{
+              'attemptId': data['attemptId'],
+              'duplicate': false,
+              'totalQuestions': 1,
+              'attempted': 0,
+              'correct': 0,
+              'wrong': 0,
+              'skipped': 1,
+              'score': 0.0,
+              'accuracy': 0.0,
+              'percentage': 0.0,
+              'passed': false,
+              'authority': 'server_verified',
+              'questionSnapshots': [
+                <String, dynamic>{
+                  'questionId': 'ndrf-q',
+                  'text':
+                      'National Disaster Response Force (NDRF) is a specialized disaster response force under which ministry?',
+                  'correctOption': 'B',
+                  'explanation': 'Ministry of Home Affairs',
+                  'options': [
+                    <String, dynamic>{
+                      'label': 'A',
+                      'text': 'Ministry of Urban Development',
+                    },
+                    <String, dynamic>{
+                      'label': 'B',
+                      'text': 'Ministry of Home Affairs',
+                    },
+                    <String, dynamic>{
+                      'label': 'C',
+                      'text': 'Ministry of Defence',
+                    },
+                    <String, dynamic>{
+                      'label': 'D',
+                      'text':
+                          'Ministry of Environment, Forest and Climate Change',
+                    },
+                  ],
+                },
+              ],
+            };
+          }
+          throw StateError('Unexpected callable $name');
+        },
+      );
+      final service = TestService(attemptApi: api);
+      final initial = await service.createTestFromStudentSafeQuestions(
+        id: 'home-test',
+        title: 'Home',
+        courseId: 'group-ii',
+        studentQuestions: [_bilingualStudentQuestion(questionId: 'ndrf-q')],
+        duration: const Duration(minutes: 10),
+        totalMarks: 1,
+        negativeMarks: 0,
+      );
 
-        await tester.pumpWidget(
-          MaterialApp(
-            home: TestAttemptFlowScreen(
-              test: initial,
-              serverAttemptId: 'attempt-seed',
-              skipInstructions: true,
-              engineService: service,
-              startAttempt: ({
-                required String testId,
-                required String startRequestId,
-              }) {
-                return service.startServerAttempt(
-                  testId: testId,
-                  startRequestId: startRequestId,
-                );
-              },
-            ),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TestAttemptFlowScreen(
+            test: initial,
+            serverAttemptId: 'attempt-seed',
+            skipInstructions: true,
+            engineService: service,
+            startAttempt:
+                ({required String testId, required String startRequestId}) {
+                  return service.startServerAttempt(
+                    testId: testId,
+                    startRequestId: startRequestId,
+                  );
+                },
           ),
-        );
-        await tester.pumpAndSettle();
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        expect(
-          find.textContaining('పట్టణాభివృద్ధి'),
-          findsWidgets,
-        );
-        expect(find.textContaining('కొత్త పట్టణాభివృద్ధి'), findsNothing);
+      expect(find.textContaining('పట్టణాభివృద్ధి'), findsWidgets);
+      expect(find.textContaining('కొత్త పట్టణాభివృద్ధి'), findsNothing);
 
-        final submit = find.byKey(const ValueKey('submit-attempt'));
-        await tester.ensureVisible(submit);
-        await tester.tap(submit);
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
-        await tester.pumpAndSettle();
+      final submit = find.byKey(const ValueKey('submit-attempt'));
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-submit')));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Retry Test'), findsNothing);
-        expect(find.text('Review Answers'), findsOneWidget);
-        expect(find.text('Back to Unit'), findsOneWidget);
+      expect(find.text('Retry Test'), findsNothing);
+      expect(find.text('Review Answers'), findsOneWidget);
+      expect(find.text('Back to Unit'), findsOneWidget);
 
-        final flowState = tester.state<TestAttemptFlowScreenState>(
-          find.byType(TestAttemptFlowScreen),
-        );
-        await flowState.retryAttempt();
-        await tester.pumpAndSettle();
+      final flowState = tester.state<TestAttemptFlowScreenState>(
+        find.byType(TestAttemptFlowScreen),
+      );
+      await flowState.retryAttempt();
+      await tester.pumpAndSettle();
 
-        final start = find.text('Start Test');
-        expect(start, findsOneWidget);
-        await tester.ensureVisible(start);
-        await tester.tap(start);
-        await tester.pumpAndSettle();
+      final start = find.text('Start Test');
+      expect(start, findsOneWidget);
+      await tester.ensureVisible(start);
+      await tester.tap(start);
+      await tester.pumpAndSettle();
 
-        expect(startCalls, 1);
-        expect(
-          find.textContaining('నేషనల్ డిజాస్టర్ రెస్పాన్స్ ఫోర్స్'),
-          findsOneWidget,
-        );
-        expect(
-          find.textContaining('కొత్త పట్టణాభివృద్ధి మంత్రిత్వ శాఖ'),
-          findsOneWidget,
-        );
-      },
-    );
+      expect(startCalls, 1);
+      expect(
+        find.textContaining('నేషనల్ డిజాస్టర్ రెస్పాన్స్ ఫోర్స్'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('కొత్త పట్టణాభివృద్ధి మంత్రిత్వ శాఖ'),
+        findsOneWidget,
+      );
+    });
   });
 }

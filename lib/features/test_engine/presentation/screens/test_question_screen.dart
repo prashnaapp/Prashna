@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
+import '../../../syllabus/presentation/syllabus_visual.dart';
+import '../../data/models/test_engine_models.dart';
 import '../controllers/test_engine_controller.dart';
+import '../test_engine_presentation.dart';
 import '../widgets/attempt_option_tile.dart';
 import '../widgets/attempt_timer_badge.dart';
 import '../widgets/question_palette.dart';
 import '../widgets/submission_status_panel.dart';
-import '../../data/models/test_engine_models.dart';
 
 class TestQuestionScreen extends StatelessWidget {
   const TestQuestionScreen({
@@ -30,19 +32,28 @@ class TestQuestionScreen extends StatelessWidget {
         final urgent = controller.remaining.inMinutes < 2;
 
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: SyllabusVisual.page,
           appBar: AppBar(
-            toolbarHeight: 52,
+            backgroundColor: SyllabusVisual.page,
+            foregroundColor: SyllabusVisual.ink,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            toolbarHeight: 56,
             titleSpacing: AppSpacing.sm,
+            centerTitle: false,
             title: Text(
               controller.test.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.titleMedium(context),
+              style: AppTextStyles.titleMedium(context).copyWith(
+                color: SyllabusVisual.ink,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
             ),
             actions: [
               Padding(
-                padding: const EdgeInsets.only(right: AppSpacing.md),
+                padding: const EdgeInsets.only(right: AppSpacing.lg),
                 child: Center(
                   child: AttemptTimerBadge(
                     label: controller.formatRemaining(),
@@ -56,22 +67,27 @@ class TestQuestionScreen extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
+                  SyllabusVisual.pagePadding,
                   AppSpacing.xs,
-                  AppSpacing.lg,
-                  AppSpacing.xs,
+                  SyllabusVisual.pagePadding,
+                  AppSpacing.sm,
                 ),
                 child: Column(
                   children: [
                     Row(
                       children: [
-                        Text(
-                          'Question ${controller.questionNumber} / ${controller.test.totalQuestions}',
-                          style: AppTextStyles.label(context).copyWith(
-                            color: AppColors.textSecondary,
+                        Expanded(
+                          child: Text(
+                            TestEnginePresentation.questionProgressLabel(
+                              questionNumber: controller.questionNumber,
+                              totalQuestions: controller.test.totalQuestions,
+                            ),
+                            style: AppTextStyles.label(context).copyWith(
+                              color: AppColors.primaryStrong,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                        const Spacer(),
                         if (controller.bookmarksEnabled)
                           IconButton(
                             tooltip: 'Bookmark',
@@ -113,14 +129,16 @@ class TestQuestionScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.xs),
+                    const SizedBox(height: AppSpacing.sm),
                     AppLinearProgress(
                       value:
                           controller.questionNumber /
                           controller.test.totalQuestions,
-                      height: 4,
+                      height: 6,
+                      color: AppColors.primaryStrong,
+                      backgroundColor: AppColors.lavender,
                     ),
-                    const SizedBox(height: AppSpacing.xs),
+                    const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
                         _CompactExamAction(
@@ -142,9 +160,11 @@ class TestQuestionScreen extends StatelessWidget {
                         const Spacer(),
                         _CompactExamAction(
                           key: const ValueKey('go-next'),
-                          icon: Icons.arrow_forward,
+                          icon: Icons.arrow_forward_rounded,
                           label: 'Next',
-                          onPressed: controller.isSubmitting || controller.isLast
+                          iconTrailing: true,
+                          onPressed:
+                              controller.isSubmitting || controller.isLast
                               ? null
                               : controller.goNext,
                         ),
@@ -154,82 +174,95 @@ class TestQuestionScreen extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: ListView(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
+                    SyllabusVisual.pagePadding,
                     AppSpacing.sm,
-                    AppSpacing.lg,
+                    SyllabusVisual.pagePadding,
                     AppSpacing.massive,
                   ),
-                  children: [
-                    Text(
-                      question.text,
-                      style: AppTextStyles.titleMedium(context).copyWith(
-                        height: 1.4,
-                      ),
-                    ),
-                    if (question.teluguText != null) ...[
-                      const SizedBox(height: AppSpacing.xs),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        question.teluguText!,
-                        style: AppTextStyles.bodyMedium(context).copyWith(
+                        question.text,
+                        style: AppTextStyles.titleMedium(context).copyWith(
+                          color: SyllabusVisual.ink,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
                           height: 1.45,
                         ),
                       ),
-                    ],
-                    if (question.hasNumberedStatements) ...[
-                      const SizedBox(height: AppSpacing.lg),
-                      _StatementBlock(question: question),
-                    ],
-                    const SizedBox(height: AppSpacing.lg),
-                    for (final option in question.options) ...[
-                      AttemptOptionTile(
-                        key: ValueKey('attempt-option-${option.label}'),
-                        label: option.label,
-                        optionText: question.hasNumberedStatements
-                            ? option.text
-                            : option.teluguText == null
-                            ? option.text
-                            : '${option.text}\n${option.teluguText}',
-                        selected: attempt.selectedOption == option.label,
-                        onTap: () => controller.selectOption(option.label),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                    ],
-                    const SizedBox(height: AppSpacing.xs),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        onPressed: attempt.selectedOption == null
-                            ? null
-                            : controller.clearResponse,
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          foregroundColor: AppColors.textSecondary,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
+                      if (question.teluguText != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          question.teluguText!,
+                          style: AppTextStyles.bodyMedium(context).copyWith(
+                            color: SyllabusVisual.muted,
+                            height: 1.5,
+                            fontSize: 14,
                           ),
                         ),
-                        child: const Text('Clear Response'),
+                      ],
+                      if (question.hasNumberedStatements) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        _StatementBlock(question: question),
+                      ],
+                      const SizedBox(height: AppSpacing.xl),
+                      for (final option in question.options) ...[
+                        AttemptOptionTile(
+                          key: ValueKey('attempt-option-${option.label}'),
+                          label: option.label,
+                          optionText: question.hasNumberedStatements
+                              ? option.text
+                              : option.teluguText == null
+                              ? option.text
+                              : '${option.text}\n${option.teluguText}',
+                          selected: attempt.selectedOption == option.label,
+                          onTap: () => controller.selectOption(option.label),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+                      const SizedBox(height: AppSpacing.xs),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: attempt.selectedOption == null
+                              ? null
+                              : controller.clearResponse,
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            foregroundColor: SyllabusVisual.muted,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                            ),
+                          ),
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: const Text('Clear Response'),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               DecoratedBox(
-                decoration: const BoxDecoration(
-                  color: AppColors.surface,
-                  border: Border(
-                    top: BorderSide(color: AppColors.divider),
-                  ),
+                decoration: BoxDecoration(
+                  color: SyllabusVisual.page,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.textPrimary.withValues(alpha: 0.04),
+                      blurRadius: 12,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
                 ),
                 child: SafeArea(
                   top: false,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
+                      SyllabusVisual.pagePadding,
                       AppSpacing.md,
-                      AppSpacing.lg,
+                      SyllabusVisual.pagePadding,
                       AppSpacing.md,
                     ),
                     child: Column(
@@ -248,6 +281,7 @@ class TestQuestionScreen extends StatelessWidget {
                             Expanded(
                               child: AppSecondaryButton(
                                 label: 'Previous',
+                                icon: Icons.arrow_back_rounded,
                                 onPressed: controller.isFirst
                                     ? null
                                     : controller.goPrevious,
@@ -255,13 +289,10 @@ class TestQuestionScreen extends StatelessWidget {
                             ),
                             const SizedBox(width: AppSpacing.md),
                             Expanded(
-                              child: OutlinedButton(
+                              child: AppPrimaryButton(
                                 key: const ValueKey('submit-attempt'),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(
-                                    AppSizes.buttonLarge,
-                                  ),
-                                ),
+                                label: 'Submit',
+                                icon: Icons.arrow_forward_rounded,
                                 onPressed:
                                     controller.isSubmitting ||
                                         controller.submissionPhase ==
@@ -275,7 +306,6 @@ class TestQuestionScreen extends StatelessWidget {
                                           await onSubmit();
                                         }
                                       },
-                                child: const Text('Submit'),
                               ),
                             ),
                           ],
@@ -306,6 +336,7 @@ class TestQuestionScreen extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            key: const ValueKey('confirm-submit'),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Submit'),
           ),
@@ -319,7 +350,7 @@ class TestQuestionScreen extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: SyllabusVisual.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -329,9 +360,9 @@ class TestQuestionScreen extends StatelessWidget {
           builder: (context, _) {
             return Padding(
               padding: EdgeInsets.fromLTRB(
+                SyllabusVisual.pagePadding,
                 AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
+                SyllabusVisual.pagePadding,
                 MediaQuery.paddingOf(context).bottom + AppSpacing.lg,
               ),
               child: Column(
@@ -340,7 +371,11 @@ class TestQuestionScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Question Palette',
-                    style: AppTextStyles.headline(context),
+                    style: AppTextStyles.headline(context).copyWith(
+                      color: SyllabusVisual.ink,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   const QuestionStatusLegend(),
@@ -369,30 +404,38 @@ class _CompactExamAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.iconTrailing = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onPressed;
+  final bool iconTrailing;
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
+    final iconWidget = Icon(icon, size: AppSizes.iconSm);
+    final labelWidget = Text(
+      label,
+      style: AppTextStyles.caption(
+        context,
+      ).copyWith(color: SyllabusVisual.muted, fontWeight: FontWeight.w600),
+    );
+
+    return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
         visualDensity: VisualDensity.compact,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-        minimumSize: const Size(0, 36),
+        minimumSize: const Size(0, 40),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        foregroundColor: AppColors.textSecondary,
+        foregroundColor: SyllabusVisual.muted,
       ),
-      icon: Icon(icon, size: AppSizes.iconSm),
-      label: Text(
-        label,
-        style: AppTextStyles.caption(context).copyWith(
-          color: AppColors.textSecondary,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: iconTrailing
+            ? [labelWidget, const SizedBox(width: AppSpacing.xs), iconWidget]
+            : [iconWidget, const SizedBox(width: AppSpacing.xs), labelWidget],
       ),
     );
   }
@@ -414,7 +457,7 @@ class _StatementBlock extends StatelessWidget {
         Text(
           'Statements',
           style: AppTextStyles.caption(context).copyWith(
-            color: AppColors.textSecondary,
+            color: SyllabusVisual.muted,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.4,
           ),
@@ -435,6 +478,7 @@ class _StatementBlock extends StatelessWidget {
                       english[i],
                       key: ValueKey('statement-en-${i + 1}'),
                       style: AppTextStyles.bodyLarge(context).copyWith(
+                        color: SyllabusVisual.ink,
                         fontWeight: FontWeight.w600,
                         height: 1.4,
                       ),
@@ -444,7 +488,9 @@ class _StatementBlock extends StatelessWidget {
                       Text(
                         telugu[i],
                         key: ValueKey('statement-te-${i + 1}'),
-                        style: AppTextStyles.bodyMedium(context),
+                        style: AppTextStyles.bodyMedium(
+                          context,
+                        ).copyWith(color: SyllabusVisual.muted, height: 1.45),
                       ),
                     ],
                   ],
@@ -475,10 +521,9 @@ class _StatementIndexBadge extends StatelessWidget {
       ),
       child: Text(
         index.toString().padLeft(2, '0'),
-        style: AppTextStyles.caption(context).copyWith(
-          color: AppColors.primaryStrong,
-          fontWeight: FontWeight.w700,
-        ),
+        style: AppTextStyles.caption(
+          context,
+        ).copyWith(color: AppColors.primaryStrong, fontWeight: FontWeight.w700),
       ),
     );
   }

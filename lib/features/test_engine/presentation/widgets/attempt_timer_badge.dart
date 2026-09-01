@@ -14,25 +14,38 @@ class AttemptTimerBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = urgent ? AppColors.error : AppColors.primary;
+    final Color color;
+    final Color background;
+    if (urgent) {
+      color = AppColors.error;
+      background = AppColors.errorSurface;
+    } else {
+      color = AppColors.primaryStrong;
+      background = AppColors.lavender;
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
+        vertical: 6,
       ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        color: background,
+        borderRadius: AppRadius.pillAll,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.timer_outlined, size: 16, color: color),
+          Icon(Icons.timer_outlined, size: 15, color: color),
           const SizedBox(width: AppSpacing.xs),
           Text(
             label,
-            style: AppTextStyles.label(context).copyWith(color: color),
+            style: AppTextStyles.label(context).copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+              letterSpacing: 0.2,
+            ),
           ),
         ],
       ),

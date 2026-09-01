@@ -138,115 +138,31 @@ void main() {
     await tester.ensureVisible(submit);
     await tester.tap(submit);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+    await tester.tap(find.byKey(const ValueKey('confirm-submit')));
     await tester.pumpAndSettle();
   }
 
-  testWidgets('Result keeps Review Answers and Back to Unit, hides Retry Test', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    final service = engineService();
-    final test = await engineTest(service);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: TestAttemptFlowScreen(
-          test: test,
-          serverAttemptId: 'attempt-result-ui',
-          skipInstructions: true,
-          engineService: service,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await submitFromExam(tester);
-
-    expect(find.text('Result'), findsOneWidget);
-    expect(find.text('Retry Test'), findsNothing);
-    expect(find.text('Review Answers'), findsOneWidget);
-    expect(find.text('Back to Unit'), findsOneWidget);
-
-    await tester.tap(find.text('Review Answers'));
-    await tester.pumpAndSettle();
-    expect(find.text('Detailed Analysis'), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.arrow_back));
-    await tester.pumpAndSettle();
-    expect(find.text('Result'), findsOneWidget);
-    expect(find.text('Detailed Analysis'), findsNothing);
-  });
-
   testWidgets(
-    'Back to Unit returns to the existing SyllabusUnitTestsScreen',
+    'Result keeps Review Answers and Back to Unit, hides Retry Test',
     (tester) async {
       tester.view.physicalSize = const Size(1200, 2400);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final navigatorKey = GlobalKey<NavigatorState>();
-      final engine = engineService();
-
+      final service = engineService();
+      final test = await engineTest(service);
       await tester.pumpWidget(
         MaterialApp(
-          navigatorKey: navigatorKey,
-          home: const Scaffold(
-            key: ValueKey('app-shell'),
-            body: Center(child: Text('Chapters landing')),
-          ),
-        ),
-      );
-
-      navigatorKey.currentState!.push(
-        MaterialPageRoute<void>(
-          builder: (_) => SyllabusUnitTestsScreen(
-            courseId: 'group-ii',
-            paperId: 'group-ii-paper-ii',
-            partId: 'group-ii-paper-ii-part-01',
-            unitId: kakatiyaTopicId,
-            testService: catalogService(),
-            unitPerformanceRepository: UnitPerformanceCloudRepository(
-              store: InMemoryUnitPerformanceDocumentStore(),
-              currentUid: () => 'student-a',
-            ),
-            syllabusCompletionRepository: SyllabusCompletionCloudRepository(
-              store: InMemorySyllabusCompletionDocumentStore(),
-              currentUid: () => 'student-a',
-            ),
+          home: TestAttemptFlowScreen(
+            test: test,
+            serverAttemptId: 'attempt-result-ui',
+            skipInstructions: true,
+            engineService: service,
           ),
         ),
       );
       await tester.pumpAndSettle();
-
-      expect(find.byType(SyllabusUnitTestsScreen), findsOneWidget);
-      expect(find.text('Tests in this Unit'), findsOneWidget);
-      expect(find.text(unitTestTitle), findsOneWidget);
-      expect(find.text('Chapters landing'), findsNothing);
-
-      navigatorKey.currentState!.push(
-        TestEngineNavigation.catalogInstructionsRoute(
-          (_) => TestInstructionsScreen(
-            test: catalogTest(),
-            startAttempt: ({required testId, required startRequestId}) async {
-              return startPayload('attempt-unit-nav');
-            },
-            engineService: engine,
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Test Instructions'), findsOneWidget);
-
-      final start = find.byKey(const ValueKey('start-test'));
-      await tester.ensureVisible(start);
-      await tester.tap(start);
-      await tester.pumpAndSettle();
-
-      expect(find.text('Capital of Telangana?'), findsOneWidget);
       await submitFromExam(tester);
 
       expect(find.text('Result'), findsOneWidget);
@@ -257,24 +173,108 @@ void main() {
       await tester.tap(find.text('Review Answers'));
       await tester.pumpAndSettle();
       expect(find.text('Detailed Analysis'), findsOneWidget);
+
       await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pumpAndSettle();
       expect(find.text('Result'), findsOneWidget);
-
-      await tester.tap(find.text('Back to Unit'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(SyllabusUnitTestsScreen), findsOneWidget);
-      expect(find.text('Tests in this Unit'), findsOneWidget);
-      expect(find.text(unitTestTitle), findsOneWidget);
-      expect(find.text('Ancient and Medieval Telangana'), findsWidgets);
-      expect(find.text('Result'), findsNothing);
-      expect(find.text('Test Instructions'), findsNothing);
-      expect(find.text('Chapters landing'), findsNothing);
-      expect(find.byType(MainNavigationScreen), findsNothing);
-      expect(find.byType(SyllabusHomeScreen), findsNothing);
+      expect(find.text('Detailed Analysis'), findsNothing);
     },
   );
+
+  testWidgets('Back to Unit returns to the existing SyllabusUnitTestsScreen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final engine = engineService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(
+          key: ValueKey('app-shell'),
+          body: Center(child: Text('Chapters landing')),
+        ),
+      ),
+    );
+
+    navigatorKey.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => SyllabusUnitTestsScreen(
+          courseId: 'group-ii',
+          paperId: 'group-ii-paper-ii',
+          partId: 'group-ii-paper-ii-part-01',
+          unitId: kakatiyaTopicId,
+          testService: catalogService(),
+          unitPerformanceRepository: UnitPerformanceCloudRepository(
+            store: InMemoryUnitPerformanceDocumentStore(),
+            currentUid: () => 'student-a',
+          ),
+          syllabusCompletionRepository: SyllabusCompletionCloudRepository(
+            store: InMemorySyllabusCompletionDocumentStore(),
+            currentUid: () => 'student-a',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SyllabusUnitTestsScreen), findsOneWidget);
+    expect(find.text('Tests in this Unit'), findsOneWidget);
+    expect(find.text(unitTestTitle), findsOneWidget);
+    expect(find.text('Chapters landing'), findsNothing);
+
+    navigatorKey.currentState!.push(
+      TestEngineNavigation.catalogInstructionsRoute(
+        (_) => TestInstructionsScreen(
+          test: catalogTest(),
+          startAttempt: ({required testId, required startRequestId}) async {
+            return startPayload('attempt-unit-nav');
+          },
+          engineService: engine,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Test Instructions'), findsOneWidget);
+
+    final start = find.byKey(const ValueKey('start-test'));
+    await tester.ensureVisible(start);
+    await tester.tap(start);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Capital of Telangana?'), findsOneWidget);
+    await submitFromExam(tester);
+
+    expect(find.text('Result'), findsOneWidget);
+    expect(find.text('Retry Test'), findsNothing);
+    expect(find.text('Review Answers'), findsOneWidget);
+    expect(find.text('Back to Unit'), findsOneWidget);
+
+    await tester.tap(find.text('Review Answers'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detailed Analysis'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text('Result'), findsOneWidget);
+
+    await tester.tap(find.text('Back to Unit'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SyllabusUnitTestsScreen), findsOneWidget);
+    expect(find.text('Tests in this Unit'), findsOneWidget);
+    expect(find.text(unitTestTitle), findsOneWidget);
+    expect(find.text('Ancient and Medieval Telangana'), findsWidgets);
+    expect(find.text('Result'), findsNothing);
+    expect(find.text('Test Instructions'), findsNothing);
+    expect(find.text('Chapters landing'), findsNothing);
+    expect(find.byType(MainNavigationScreen), findsNothing);
+    expect(find.byType(SyllabusHomeScreen), findsNothing);
+  });
 
   testWidgets(
     'Back to Unit pops only the named attempt when there is no catalog instructions route',
@@ -291,9 +291,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           navigatorKey: navigatorKey,
-          home: const Scaffold(
-            body: Center(child: Text('Chapters landing')),
-          ),
+          home: const Scaffold(body: Center(child: Text('Chapters landing'))),
         ),
       );
 

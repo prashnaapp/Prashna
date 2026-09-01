@@ -130,7 +130,7 @@ void main() {
       await tester.ensureVisible(submit);
       await tester.tap(submit);
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+      await tester.tap(find.byKey(const ValueKey('confirm-submit')));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('submission-error')), findsOneWidget);
@@ -184,7 +184,7 @@ void main() {
     await tester.ensureVisible(submit);
     await tester.tap(submit);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+    await tester.tap(find.byKey(const ValueKey('confirm-submit')));
     await tester.pump();
     await tester.pump();
 
@@ -199,7 +199,10 @@ void main() {
     expect(calls, 1);
   });
 
-  Future<void> pumpToQuestions(WidgetTester tester, {required Widget app}) async {
+  Future<void> pumpToQuestions(
+    WidgetTester tester, {
+    required Widget app,
+  }) async {
     await tester.pumpWidget(app);
     await tester.tap(find.text('Start Test'));
     await tester.pumpAndSettle();
@@ -365,56 +368,55 @@ void main() {
     await tester.ensureVisible(submit);
     await tester.tap(submit);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+    await tester.tap(find.byKey(const ValueKey('confirm-submit')));
     await tester.pumpAndSettle();
 
     expect(find.text('Result'), findsOneWidget);
     expect(calls, 1);
   });
 
-  testWidgets(
-    'F: timeout + manual Submit race uses one submitTestAttempt',
-    (tester) async {
-      var calls = 0;
-      final gate = Completer<void>();
-      final api = TestAttemptApi(
-        callOverride: (name, data) async {
-          expect(name, 'submitTestAttempt');
-          calls += 1;
-          await gate.future;
-          return successPayload(data['attemptId'] as String);
-        },
-      );
+  testWidgets('F: timeout + manual Submit race uses one submitTestAttempt', (
+    tester,
+  ) async {
+    var calls = 0;
+    final gate = Completer<void>();
+    final api = TestAttemptApi(
+      callOverride: (name, data) async {
+        expect(name, 'submitTestAttempt');
+        calls += 1;
+        await gate.future;
+        return successPayload(data['attemptId'] as String);
+      },
+    );
 
-      await pumpToQuestions(
-        tester,
-        app: MaterialApp(
-          home: TestAttemptFlowScreen(
-            test: buildTest(duration: const Duration(seconds: 1)),
-            serverAttemptId: 'attempt-keep',
-            engineService: TestService(attemptApi: api),
-          ),
+    await pumpToQuestions(
+      tester,
+      app: MaterialApp(
+        home: TestAttemptFlowScreen(
+          test: buildTest(duration: const Duration(seconds: 1)),
+          serverAttemptId: 'attempt-keep',
+          engineService: TestService(attemptApi: api),
         ),
-      );
+      ),
+    );
 
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump();
-      expect(find.byKey(const ValueKey('submitting-indicator')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('submitting-indicator')), findsOneWidget);
 
-      await tester.tap(
-        find.byKey(const ValueKey('submit-attempt')),
-        warnIfMissed: false,
-      );
-      await tester.pump();
-      expect(calls, 1);
+    await tester.tap(
+      find.byKey(const ValueKey('submit-attempt')),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+    expect(calls, 1);
 
-      gate.complete();
-      await tester.pumpAndSettle();
+    gate.complete();
+    await tester.pumpAndSettle();
 
-      expect(find.text('Result'), findsOneWidget);
-      expect(calls, 1);
-    },
-  );
+    expect(find.text('Result'), findsOneWidget);
+    expect(calls, 1);
+  });
 
   testWidgets('G: timeout Result Analysis back Retry rebinds controller', (
     tester,

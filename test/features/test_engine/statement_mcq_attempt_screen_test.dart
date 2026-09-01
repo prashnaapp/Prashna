@@ -458,7 +458,7 @@ void main() {
       await tester.ensureVisible(submit);
       await tester.tap(submit);
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+      await tester.tap(find.byKey(const ValueKey('confirm-submit')));
       await tester.pumpAndSettle();
 
       expect(find.text('Retry Test'), findsNothing);
@@ -514,9 +514,11 @@ void main() {
       expect(find.widgetWithText(AppPrimaryButton, 'Review'), findsNothing);
       expect(find.widgetWithText(OutlinedButton, 'Palette'), findsNothing);
 
-      final listView = tester.widget<ListView>(find.byType(ListView));
-      expect(listView.padding, isA<EdgeInsets>());
-      expect((listView.padding! as EdgeInsets).bottom, AppSpacing.massive);
+      final scrollView = tester.widget<SingleChildScrollView>(
+        find.byType(SingleChildScrollView),
+      );
+      expect(scrollView.padding, isA<EdgeInsets>());
+      expect((scrollView.padding! as EdgeInsets).bottom, AppSpacing.massive);
 
       await tester.tap(find.byKey(const ValueKey('open-review')));
       await tester.pump();
@@ -536,7 +538,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(controller.questionNumber, 1);
 
-      await tester.ensureVisible(find.byKey(const ValueKey('attempt-option-D')));
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('attempt-option-D')),
+      );
       final optionBox = tester.getRect(
         find.byKey(const ValueKey('attempt-option-D')),
       );
@@ -549,7 +553,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('submit-attempt')));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+      await tester.tap(find.byKey(const ValueKey('confirm-submit')));
       await tester.pumpAndSettle();
       expect(submitted, isTrue);
     },
