@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 
+/// Bottom-navigation tabs.
+///
+/// Declaration order MUST match [AppNavItems.all] — that list is the
+/// source of truth for UI indices. Prefer [AppNavItems.indexOf] when
+/// mapping a tab to a bottom-nav / IndexedStack index.
 enum AppTab {
   home,
   chapters,
-  progress,
   testSeries,
+  progress,
   profile,
 }
 
@@ -55,4 +60,11 @@ abstract final class AppNavItems {
       semanticLabel: 'Profile tab',
     ),
   ];
+
+  /// Index of [tab] in the bottom-navigation / IndexedStack order.
+  static int indexOf(AppTab tab) {
+    final index = all.indexWhere((item) => item.tab == tab);
+    assert(index >= 0, 'Unknown AppTab: $tab');
+    return index;
+  }
 }

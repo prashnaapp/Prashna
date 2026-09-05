@@ -17,11 +17,19 @@ import '../widgets/revision_center_card.dart';
 /// The hero is fixed and the sheet scrolls beneath its wave, so the header
 /// stays legible while the sections below can exceed one screen.
 class TrackerHomeScreen extends StatefulWidget {
-  const TrackerHomeScreen({super.key, this.isActive = true});
+  const TrackerHomeScreen({
+    super.key,
+    this.isActive = true,
+    @visibleForTesting this.debugLoadSummary,
+  });
 
   /// When the Progress tab becomes selected in the shell [IndexedStack],
   /// Attempt Analytics re-fetches submitted `test_attempts`.
   final bool isActive;
+
+  /// Test seam for activation/refresh lifecycle only.
+  @visibleForTesting
+  final Future<ProgressSummary> Function()? debugLoadSummary;
 
   @override
   State<TrackerHomeScreen> createState() => _TrackerHomeScreenState();
@@ -31,11 +39,17 @@ class _TrackerHomeScreenState extends State<TrackerHomeScreen>
     with WidgetsBindingObserver {
   late Future<ProgressSummary> _summaryFuture;
 
+  Future<ProgressSummary> _loadSummary() {
+    final loader = widget.debugLoadSummary;
+    if (loader != null) return loader();
+    return ProgressService.instance.generateSummary();
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _summaryFuture = ProgressService.instance.generateSummary();
+    _summaryFuture = _loadSummary();
   }
 
   @override
@@ -62,7 +76,7 @@ class _TrackerHomeScreenState extends State<TrackerHomeScreen>
   void _refreshSummary() {
     if (!mounted) return;
     setState(() {
-      _summaryFuture = ProgressService.instance.generateSummary();
+      _summaryFuture = _loadSummary();
     });
   }
 

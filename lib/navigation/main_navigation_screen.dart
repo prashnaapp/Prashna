@@ -28,7 +28,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialTab.index.clamp(
+    // AppNavItems.all is the source of truth for tab → IndexedStack index.
+    _currentIndex = AppNavItems.indexOf(widget.initialTab).clamp(
       0,
       AppNavItems.all.length - 1,
     );
@@ -45,11 +46,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final progressIndex = AppNavItems.indexOf(AppTab.progress);
     final pages = <Widget>[
       const HomeScreen(),
       const ChaptersScreen(),
       const TestsScreen(),
-      StudyTrackerScreen(isActive: _currentIndex == AppTab.progress.index),
+      StudyTrackerScreen(isActive: _currentIndex == progressIndex),
       const ProfileScreen(),
     ];
 
