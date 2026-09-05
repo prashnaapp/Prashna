@@ -93,6 +93,17 @@ abstract final class TestSeriesBrowserGroups {
     ];
   }
 
+  /// Published tests for one examination year, in deterministic catalog order.
+  static List<TestModel> forYear({
+    required List<TestModel> tests,
+    required int year,
+  }) {
+    return _sorted([
+      for (final test in tests)
+        if (test.year == year) test,
+    ]);
+  }
+
   /// Some canonical courses spell paper titles as "Paper-I". Pills read as
   /// "Paper I" across every course.
   static String _paperLabel(String title) =>

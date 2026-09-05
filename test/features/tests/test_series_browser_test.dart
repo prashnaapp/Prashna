@@ -401,7 +401,7 @@ void main() {
       expect(find.text('Paper II'), findsNothing);
     });
 
-    testWidgets('previous papers change cards when a year tab is selected', (
+    testWidgets('previous papers use fixed years Start cards and clean chrome', (
       tester,
     ) async {
       final service = catalog([
@@ -438,13 +438,47 @@ void main() {
       expect(find.text('Previous Papers'), findsOneWidget);
       expect(find.text('2016'), findsOneWidget);
       expect(find.text('2024'), findsOneWidget);
+      expect(find.text('2018'), findsNothing);
       expect(find.text('2016 Paper I'), findsOneWidget);
       expect(find.text('2024 Paper I'), findsNothing);
+      expect(find.text('Start'), findsOneWidget);
+      expect(find.byType(SyllabusHeaderBand), findsNothing);
+      expect(find.byType(SyllabusWaveFooter), findsNothing);
+      expect(find.byType(SyllabusPaperProgressBanner), findsNothing);
+      expect(find.byIcon(Icons.notifications_none_rounded), findsNothing);
 
       await tester.tap(find.text('2024'));
       await tester.pumpAndSettle();
       expect(find.text('2024 Paper I'), findsOneWidget);
       expect(find.text('2016 Paper I'), findsNothing);
+
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TestInstructionsScreen), findsOneWidget);
+    });
+
+    testWidgets('previous papers empty catalog keeps fixed year pills', (
+      tester,
+    ) async {
+      await pumpIgnoringFonts(
+        tester,
+        MaterialApp(
+          home: TestSeriesBrowserScreen(
+            examId: 'group-iii',
+            mode: TestSeriesBrowserMode.previousPapers,
+            testService: catalog(const []),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('2018'), findsOneWidget);
+      expect(find.text('2024'), findsOneWidget);
+      expect(find.text('2016'), findsNothing);
+      expect(
+        find.text('There are no published previous papers for 2018 yet.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('paper-wise layout has no overflow at 360/390/430', (

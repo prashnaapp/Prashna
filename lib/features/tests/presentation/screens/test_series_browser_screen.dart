@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../syllabus/data/models/syllabus_models.dart';
@@ -11,9 +10,11 @@ import '../../../syllabus/presentation/widgets/syllabus_wave_footer.dart';
 import '../../../syllabus/services/syllabus_service.dart';
 import '../../../test_engine/presentation/test_engine_navigation.dart';
 import '../../data/models/test_models.dart';
+import '../../data/previous_paper_years.dart';
 import '../../data/test_series_browser_groups.dart';
 import '../../services/test_service.dart';
 import '../widgets/test_series_row_card.dart';
+import '../widgets/tests_plain_header.dart';
 import 'test_instructions_screen.dart';
 
 /// Chapters-style Test Series browser: pills on top, cards underneath.
@@ -55,6 +56,12 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
     super.initState();
     _examId = widget.examId;
     _testsFuture = _loadTests();
+    if (_isPreviousPapers) {
+      final year = PreviousPaperYears.initialYear(_examId);
+      if (year != null) {
+        _selectedTabId = PreviousPaperYears.tabId(year);
+      }
+    }
   }
 
   TestCategoryType get _category {
@@ -89,6 +96,14 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
         TestSeriesBrowserMode.previousPapers => 'Previous Papers',
       };
 
+  bool get _isPaperWise => widget.mode == TestSeriesBrowserMode.paperWise;
+
+  bool get _isPreviousPapers =>
+      widget.mode == TestSeriesBrowserMode.previousPapers;
+
+  /// Paper-wise and Previous Papers use the approved clean Test Series chrome.
+  bool get _usesCleanChrome => _isPaperWise || _isPreviousPapers;
+
   List<TestSeriesTab> _tabsFor(List<TestModel> tests) {
     return switch (widget.mode) {
       TestSeriesBrowserMode.paperWise => TestSeriesBrowserGroups.paperWise(
@@ -98,8 +113,14 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
       TestSeriesBrowserMode.grandTests => TestSeriesBrowserGroups.grandTests(
         tests,
       ),
-      TestSeriesBrowserMode.previousPapers =>
-        TestSeriesBrowserGroups.previousPapers(tests),
+      TestSeriesBrowserMode.previousPapers => [
+        for (final year in PreviousPaperYears.forExam(_examId))
+          TestSeriesTab(
+            id: PreviousPaperYears.tabId(year),
+            label: '$year',
+            tests: TestSeriesBrowserGroups.forYear(tests: tests, year: year),
+          ),
+      ],
     };
   }
 
@@ -120,16 +141,14 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
     );
   }
 
-  bool get _isPaperWise => widget.mode == TestSeriesBrowserMode.paperWise;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: SyllabusVisual.page,
       body: Column(
         children: [
-          if (_isPaperWise)
-            _PaperWiseHeader(
+          if (_usesCleanChrome)
+            TestsPlainHeader(
               title: _title,
               onBack: () => Navigator.maybePop(context),
             )
@@ -192,12 +211,15 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
                       const SizedBox(height: 14),
                     ],
                     if (cards.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 48),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 48),
                         child: _MessageBody(
                           title: 'No tests available',
-                          message:
-                              'There are no published tests in this category yet.',
+                          message: _isPreviousPapers && selected != null
+                              ? 'There are no published previous papers for '
+                                    '${selected.label} yet.'
+                              : 'There are no published tests in this '
+                                    'category yet.',
                         ),
                       )
                     else
@@ -208,12 +230,12 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
                           questionCount: cards[i].questionCount,
                           marks: cards[i].marks,
                           progress: 0,
-                          showProgress: !_isPaperWise,
-                          showStart: _isPaperWise,
+                          showProgress: !_usesCleanChrome,
+                          showStart: _usesCleanChrome,
                           onTap: () => _openTest(cards[i]),
                         ),
                       ],
-                    if (!_isPaperWise &&
+                    if (!_usesCleanChrome &&
                         selected != null &&
                         cards.isNotEmpty) ...[
                       const SizedBox(height: 18),
@@ -222,7 +244,7 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
                         progress: 0,
                       ),
                     ],
-                    if (!_isPaperWise) ...[
+                    if (!_usesCleanChrome) ...[
                       const SizedBox(height: 8),
                       const SyllabusWaveFooter(),
                     ],
@@ -232,65 +254,6 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PaperWiseHeader extends StatelessWidget {
-  const _PaperWiseHeader({required this.title, required this.onBack});
-
-  final String title;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
-        statusBarColor: Colors.transparent,
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            SyllabusVisual.pagePadding,
-            8,
-            SyllabusVisual.pagePadding,
-            8,
-          ),
-          child: Row(
-            children: [
-              Material(
-                color: SyllabusVisual.surface,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: AppRadius.smAll,
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: IconButton(
-                  tooltip: 'Back',
-                  onPressed: onBack,
-                  icon: const Icon(
-                    Icons.arrow_back_rounded,
-                    color: SyllabusVisual.accent,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.titleLarge(context).copyWith(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: SyllabusVisual.ink,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
