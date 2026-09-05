@@ -10,18 +10,23 @@ class RevisionCenterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => RevisionNavigation.openRevisionCenter(context),
-        borderRadius: BorderRadius.circular(ProgressVisual.cardRadius),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(ProgressVisual.cardRadius),
-            border: ProgressVisual.cardBorder,
-            boxShadow: ProgressVisual.cardShadow,
-          ),
+    final radius = BorderRadius.circular(ProgressVisual.cardRadius);
+    // Shadow lives on the rounded DecoratedBox. Material is transparent so
+    // InkWell cannot paint a square backing behind the white surface.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: radius,
+        border: ProgressVisual.cardBorder,
+        boxShadow: ProgressVisual.cardShadow,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => RevisionNavigation.openRevisionCenter(context),
+          borderRadius: radius,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(

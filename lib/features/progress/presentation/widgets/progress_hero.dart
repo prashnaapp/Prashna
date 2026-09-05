@@ -53,11 +53,6 @@ class ProgressHero extends StatelessWidget {
                 child: const _ProgressBoardArt(),
               ),
               Positioned(
-                top: topInset + 8,
-                right: 16,
-                child: const _NotificationBell(),
-              ),
-              Positioned(
                 top: topInset + 34,
                 left: SyllabusVisual.pagePadding,
                 right: artWidth + 12,
@@ -107,45 +102,6 @@ class ProgressHero extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        shape: BoxShape.circle,
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          const Icon(
-            Icons.notifications_none_rounded,
-            color: Colors.white,
-            size: 22,
-          ),
-          Positioned(
-            top: 6,
-            right: 7,
-            child: Container(
-              width: 7,
-              height: 7,
-              decoration: const BoxDecoration(
-                color: Color(0xFFE53935),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

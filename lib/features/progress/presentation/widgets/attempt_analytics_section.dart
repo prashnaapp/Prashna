@@ -33,7 +33,18 @@ class AttemptAnalyticsSection extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                AnalyticsStatGrid(summary: summary),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: ProgressVisual.cardShade,
+                    borderRadius: BorderRadius.circular(
+                      ProgressVisual.cardRadius,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: AnalyticsStatGrid(summary: summary, columns: 2),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 _ViewFullAnalyticsButton(
                   onTap: () async {
@@ -64,46 +75,52 @@ class _ViewFullAnalyticsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+    // Rounded DecoratedBox owns surface + shadow; transparent Material avoids
+    // a square backing behind the pill.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
         borderRadius: AppRadius.pillAll,
-        child: Ink(
-          height: _height,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: AppRadius.pillAll,
-            border: Border.all(
-              color: ProgressVisual.accent.withValues(alpha: 0.38),
-              width: 1.3,
+        border: Border.all(
+          color: ProgressVisual.accent.withValues(alpha: 0.38),
+          width: 1.3,
+        ),
+        boxShadow: ProgressVisual.statShadow,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: AppRadius.pillAll,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadius.pillAll,
+          child: SizedBox(
+            height: _height,
+            child: Stack(
+              children: [
+                Center(
+                  child: Text(
+                    'View Full Analytics',
+                    style: AppTextStyles.label(context).copyWith(
+                      color: ProgressVisual.accent,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: ProgressVisual.accent.withValues(alpha: 0.7),
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            boxShadow: ProgressVisual.statShadow,
-          ),
-          child: Stack(
-            children: [
-              Center(
-                child: Text(
-                  'View Full Analytics',
-                  style: AppTextStyles.label(context).copyWith(
-                    color: ProgressVisual.accent,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    color: ProgressVisual.accent.withValues(alpha: 0.7),
-                    size: 24,
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ),

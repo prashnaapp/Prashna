@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../navigation/tab_scroll_view.dart';
 import '../../../syllabus/presentation/widgets/landing_sheet.dart';
 import '../../data/models/attempt_analytics_models.dart';
-import '../../data/models/progress_models.dart';
 import '../../services/progress_service.dart';
 import '../progress_visual.dart';
 import '../widgets/attempt_analytics_section.dart';
-import '../widgets/course_progress_section.dart';
 import '../widgets/progress_hero.dart';
 import '../widgets/revision_center_card.dart';
 
@@ -82,11 +80,6 @@ class _TrackerHomeScreenState extends State<TrackerHomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final available = ProgressService.instance
-        .getExamSummaries()
-        .where((item) => item.isEnabled)
-        .toList();
-
     return Scaffold(
       backgroundColor: ProgressVisual.page,
       body: LayoutBuilder(
@@ -112,7 +105,6 @@ class _TrackerHomeScreenState extends State<TrackerHomeScreen>
                   expand: true,
                   padding: EdgeInsets.zero,
                   child: _ProgressBody(
-                    available: available,
                     summaryFuture: _summaryFuture,
                     onAnalyticsClosed: _refreshSummary,
                   ),
@@ -128,12 +120,10 @@ class _TrackerHomeScreenState extends State<TrackerHomeScreen>
 
 class _ProgressBody extends StatelessWidget {
   const _ProgressBody({
-    required this.available,
     required this.summaryFuture,
     required this.onAnalyticsClosed,
   });
 
-  final List<ExamProgressSummary> available;
   final Future<ProgressSummary> summaryFuture;
   final VoidCallback onAnalyticsClosed;
 
@@ -158,10 +148,6 @@ class _ProgressBody extends StatelessWidget {
           summaryFuture: summaryFuture,
           onAnalyticsClosed: onAnalyticsClosed,
         ),
-        if (available.isNotEmpty) ...[
-          const SizedBox(height: _sectionGap),
-          CourseProgressSection(available: available),
-        ],
       ],
     );
   }

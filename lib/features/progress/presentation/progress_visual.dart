@@ -18,36 +18,33 @@ abstract final class ProgressVisual {
   /// Tint every Progress shadow shares, matching the Available cards.
   static const Color shadowTint = Color(0xFF4A3AB0);
 
+  /// Very soft fill sitting between page lavender and white card surfaces.
+  static Color get cardShade => shadowTint.withValues(alpha: 0.035);
+
   static const double pagePadding = SyllabusVisual.pagePadding;
   static const double cardRadius = 20;
   static const double statRadius = 16;
 
-  /// Feature cards (Revision Center, course rows): clear but soft lift.
+  /// Feature cards (Revision Center): clear but soft rounded lift.
   static List<BoxShadow> get cardShadow => [
     BoxShadow(
-      color: shadowTint.withValues(alpha: 0.10),
-      blurRadius: 22,
-      spreadRadius: 1,
-    ),
-    BoxShadow(
-      color: shadowTint.withValues(alpha: 0.14),
+      color: shadowTint.withValues(alpha: 0.07),
       blurRadius: 18,
-      offset: const Offset(0, 8),
-    ),
-  ];
-
-  /// Statistic tiles and the analytics button: quieter, so the dense grid
-  /// does not read as six heavy feature cards.
-  static List<BoxShadow> get statShadow => [
-    BoxShadow(
-      color: shadowTint.withValues(alpha: 0.08),
-      blurRadius: 14,
       offset: const Offset(0, 6),
     ),
   ];
 
+  /// Statistic tiles and the analytics button: quieter rounded lift.
+  static List<BoxShadow> get statShadow => [
+    BoxShadow(
+      color: shadowTint.withValues(alpha: 0.06),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
   static Border get cardBorder =>
-      Border.all(color: shadowTint.withValues(alpha: 0.07));
+      Border.all(color: shadowTint.withValues(alpha: 0.06));
 
   static TextStyle sectionTitle(BuildContext context) =>
       AppTextStyles.titleMedium(context).copyWith(

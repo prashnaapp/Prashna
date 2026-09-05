@@ -4,22 +4,30 @@ import '../../../../core/design_system/design_system.dart';
 import '../../data/models/attempt_analytics_models.dart';
 import '../progress_visual.dart';
 
-/// Compact three-column statistic tiles.
+/// Statistic tiles for Attempt Analytics.
 ///
 /// Values, formatting, and accent colours are unchanged — presentation only.
+/// [columns] defaults to 3 (Full Analytics); Progress landing uses 2.
 class AnalyticsStatGrid extends StatelessWidget {
-  const AnalyticsStatGrid({super.key, required this.summary});
+  const AnalyticsStatGrid({
+    super.key,
+    required this.summary,
+    this.columns = 3,
+  });
 
   final ProgressSummary summary;
 
-  static const int _columns = 3;
+  /// Cross-axis count. Progress dashboard uses 2 (→ 3 rows).
+  final int columns;
+
   static const double _gap = 10;
 
-  /// Fixed so all six tiles are exactly equal, regardless of value length.
-  static const double _tileHeight = 70;
+  /// Equal tile height for every metric, independent of value length.
+  static const double tileHeight = 74;
 
   @override
   Widget build(BuildContext context) {
+    assert(columns > 0);
     final tiles = [
       _Stat(
         'Tests',
@@ -62,16 +70,16 @@ class AnalyticsStatGrid extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (var i = 0; i < tiles.length; i += _columns) ...[
+        for (var i = 0; i < tiles.length; i += columns) ...[
           if (i > 0) const SizedBox(height: _gap),
           Row(
             children: [
-              for (var c = 0; c < _columns; c++) ...[
+              for (var c = 0; c < columns; c++) ...[
                 if (c > 0) const SizedBox(width: _gap),
                 Expanded(
                   child: i + c < tiles.length
                       ? _StatTile(stat: tiles[i + c])
-                      : const SizedBox(height: _tileHeight),
+                      : const SizedBox(height: tileHeight),
                 ),
               ],
             ],
@@ -96,65 +104,68 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: AnalyticsStatGrid._tileHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    final radius = BorderRadius.circular(ProgressVisual.statRadius);
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(ProgressVisual.statRadius),
+        borderRadius: radius,
         border: ProgressVisual.cardBorder,
         boxShadow: ProgressVisual.statShadow,
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Long values (e.g. "100.0%") scale down rather than overflow on
-          // narrow phones, keeping all three columns identical.
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Row(
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: stat.color.withValues(alpha: 0.13),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(stat.icon, size: 15, color: stat.color),
+      child: SizedBox(
+        height: AnalyticsStatGrid.tileHeight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: stat.color.withValues(alpha: 0.13),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(stat.icon, size: 15, color: stat.color),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      stat.value,
+                      style: AppTextStyles.titleLarge(context).copyWith(
+                        color: stat.color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 19,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 7),
-                Text(
-                  stat.value,
-                  style: AppTextStyles.titleLarge(context).copyWith(
-                    color: stat.color,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 19,
-                    height: 1.1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              stat.label,
-              maxLines: 1,
-              style: AppTextStyles.bodyMedium(context).copyWith(
-                color: ProgressVisual.muted,
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5,
-                height: 1.2,
               ),
-            ),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  stat.label,
+                  maxLines: 1,
+                  style: AppTextStyles.bodyMedium(context).copyWith(
+                    color: ProgressVisual.muted,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
