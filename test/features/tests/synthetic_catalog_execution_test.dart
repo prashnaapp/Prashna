@@ -5,6 +5,7 @@ import 'package:telangana_prep/features/tests/data/tests_dummy_data.dart';
 import 'package:telangana_prep/features/tests/presentation/mock_test_navigation.dart';
 import 'package:telangana_prep/features/tests/presentation/paper_wise_navigation.dart';
 import 'package:telangana_prep/features/tests/presentation/previous_papers_navigation.dart';
+import 'package:telangana_prep/features/tests/presentation/screens/grand_tests_screen.dart';
 import 'package:telangana_prep/features/tests/presentation/screens/test_list_screen.dart';
 import 'package:telangana_prep/features/tests/presentation/screens/test_series_browser_screen.dart';
 import 'package:telangana_prep/features/tests/presentation/test_quiz_navigation.dart';
@@ -281,9 +282,14 @@ void main() {
     );
     await tester.tap(find.text('open-category'));
     await tester.pumpAndSettle();
-    expect(find.byType(TestSeriesBrowserScreen), findsOneWidget);
+    expect(find.byType(GrandTestsScreen), findsOneWidget);
+    expect(find.byType(TestSeriesBrowserScreen), findsNothing);
     expect(find.byType(TestListScreen), findsNothing);
-    expect(find.text('No tests available'), findsOneWidget);
+    expect(find.text('No tests available'), findsNothing);
+    expect(find.text('Grand Test - I'), findsOneWidget);
+    expect(find.text('Grand Test - II'), findsOneWidget);
+    expect(find.text('Grand Test - III'), findsOneWidget);
+    expect(find.text('Old Grand Tests'), findsOneWidget);
     expect(find.text('Mock Test 1'), findsNothing);
   });
 

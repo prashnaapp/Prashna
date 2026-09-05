@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../course_enrollment/model/course.dart';
 import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
+import '../../../tests/data/grand_test_series.dart';
 import '../../../tests/data/models/test_models.dart';
 import '../../data/admin_test_scope.dart';
 import '../../services/admin_test_service.dart';
@@ -52,7 +53,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
   late final TextEditingController _filterLesson;
   late final TextEditingController _filterSyllabusUnit;
   late final TextEditingController _year;
-  late final TextEditingController _seriesId;
+  String? _seriesId;
 
   String? _courseId;
   String? _paperId;
@@ -155,9 +156,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
           ? (widget.scope?.year == null ? '' : '${widget.scope!.year}')
           : '${initial!.year}',
     );
-    _seriesId = TextEditingController(
-      text: initial?.seriesId ?? widget.scope?.seriesId ?? '',
-    );
+    _seriesId = _optionalString(initial?.seriesId ?? widget.scope?.seriesId);
     _courseId =
         initial?.examId ??
         widget.scope?.courseId ??
@@ -189,7 +188,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
     _filterLesson.dispose();
     _filterSyllabusUnit.dispose();
     _year.dispose();
-    _seriesId.dispose();
     super.dispose();
   }
 
@@ -254,7 +252,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
           ? _syllabusUnitId
           : null,
       year: isPrevious ? _parseInt(_year.text) : null,
-      seriesId: isGrand ? _optional(_seriesId.text) : null,
+      seriesId: isGrand ? _seriesId : null,
       // The form does not edit these. Preserve them so update() cannot
       // treat "not shown" as "explicitly cleared".
       majorStudyAreaId: initial?.majorStudyAreaId,
@@ -349,9 +347,11 @@ class _AdminTestFormState extends State<AdminTestForm> {
     });
   }
 
-  String? _optional(String value) {
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
+  String? _optional(String value) => _optionalString(value);
+
+  String? _optionalString(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
   Future<void> _submit() async {
@@ -392,8 +392,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
       if (_paperId != null) 'Paper: ${_selectedPaper?.title ?? _paperId}',
       if (_partId != null) 'Part: ${_selectedPart?.displayName ?? _partId}',
       if (_syllabusUnitId != null) 'Chapter / Topic: $unitName',
-      if (_seriesId.text.trim().isNotEmpty)
-        'Grand Test: ${_seriesId.text.trim()}',
+      if (_seriesId != null) 'Grand Test: $_seriesId',
       if (_year.text.trim().isNotEmpty)
         'Examination year: ${_year.text.trim()}',
     ];
@@ -508,21 +507,29 @@ class _AdminTestFormState extends State<AdminTestForm> {
   }
 
   Widget _grandTestFields() {
+    final options = GrandTestSeries.selectorValues(existing: _seriesId);
+    final selected = options.contains(_seriesId) ? _seriesId : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 16),
         Text('Grand Tests', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: _seriesId,
+        DropdownButtonFormField<String>(
+          key: const ValueKey('grand-test-series'),
+          initialValue: selected,
           decoration: const InputDecoration(
             labelText: 'Grand Test',
-            hintText: 'Grand Test 1',
             border: OutlineInputBorder(),
             helperText: 'Group identity shared by every paper in this set.',
           ),
-          enabled: !_saving,
+          items: [
+            for (final id in options)
+              DropdownMenuItem<String>(value: id, child: Text(id)),
+          ],
+          onChanged: _saving
+              ? null
+              : (value) => setState(() => _seriesId = value),
           validator: (value) => value == null || value.trim().isEmpty
               ? 'Grand Test group is required.'
               : null,

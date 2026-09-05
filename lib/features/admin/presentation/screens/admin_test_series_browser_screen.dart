@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../course_enrollment/model/course.dart';
 import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
+import '../../../tests/data/grand_test_series.dart';
 import '../../../tests/data/models/test_models.dart';
 import '../../admin_routes.dart';
 import '../../data/admin_test_hierarchy.dart';
@@ -116,37 +117,6 @@ class _AdminTestSeriesBrowserScreenState
       context,
     ).pushNamed(AdminRoutes.testCreate, arguments: scope);
     if (mounted) await _load();
-  }
-
-  Future<void> _addSeries() async {
-    final controller = TextEditingController();
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Grand Test group'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Grand Test',
-            hintText: 'Grand Test 1',
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (value == null || value.isEmpty) return;
-    _open(mode: AdminTestSeriesMode.grandTests, seriesId: value);
   }
 
   Future<void> _addYear() async {
@@ -341,41 +311,34 @@ class _AdminTestSeriesBrowserScreenState
 
   Widget _grandTests(SyllabusCourse course) {
     if (widget.seriesId == null) {
-      final ids = AdminTestHierarchy.seriesIds(
+      // Fixed approved containers first. Legacy seriesIds from catalog remain
+      // visible so existing production values are not hidden or rewritten.
+      final catalogIds = AdminTestHierarchy.seriesIds(
         tests: _tests,
         courseId: course.id,
       );
+      final legacy = [
+        for (final id in catalogIds)
+          if (!GrandTestSeries.isApproved(id)) id,
+      ];
+      final ids = [...GrandTestSeries.ids, ...legacy];
       return ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
-              onPressed: _addSeries,
-              icon: const Icon(Icons.add),
-              label: const Text('+ Grand Test group'),
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (ids.isEmpty)
-            const Text(
-              'No Grand Test groups yet. Create a group, then add one test per paper.',
-            )
-          else
-            for (final id in ids) ...[
-              Card(
-                child: ListTile(
-                  title: Text(id),
-                  subtitle: const Text('Paper → Actual test'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _open(
-                    mode: AdminTestSeriesMode.grandTests,
-                    seriesId: id,
-                  ),
+          for (final id in ids) ...[
+            Card(
+              child: ListTile(
+                title: Text(id),
+                subtitle: const Text('Paper → Actual test'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _open(
+                  mode: AdminTestSeriesMode.grandTests,
+                  seriesId: id,
                 ),
               ),
-              const SizedBox(height: 8),
-            ],
+            ),
+            const SizedBox(height: 8),
+          ],
         ],
       );
     }

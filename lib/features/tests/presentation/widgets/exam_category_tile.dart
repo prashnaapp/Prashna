@@ -8,106 +8,86 @@ class ExamCategoryTile extends StatelessWidget {
   const ExamCategoryTile({
     super.key,
     required this.title,
-    required this.subtitle,
     required this.icon,
     required this.accent,
     required this.height,
     required this.onTap,
+    this.surface,
   });
 
   final String title;
-  final String subtitle;
   final IconData icon;
   final Color accent;
   final double height;
   final VoidCallback onTap;
 
+  /// Subtle pastel fill. Defaults to a light blend of [accent] on white.
+  final Color? surface;
+
   static const Color _titleColor = Color(0xFF130F2B);
-  static const Color _shadowTint = Color(0xFF4A3AB0);
-  static const double _radius = 22;
 
   @override
   Widget build(BuildContext context) {
-    final circle = (height * 0.58).clamp(48.0, 64.0);
-    final iconSize = (circle * 0.48).clamp(24.0, 30.0);
+    final circle = (height * 0.58).clamp(44.0, 56.0);
+    final iconSize = (circle * 0.48).clamp(20.0, 26.0);
+    final fill =
+        surface ?? Color.alphaBlend(accent.withValues(alpha: 0.08), Colors.white);
+    final pastel = accent.withValues(alpha: 0.16);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(_radius),
-        child: Ink(
-          height: height,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(_radius),
-            border: Border.all(color: _shadowTint.withValues(alpha: 0.07)),
-            boxShadow: [
-              BoxShadow(
-                color: _shadowTint.withValues(alpha: 0.15),
-                blurRadius: 26,
-                spreadRadius: 2,
-              ),
-              BoxShadow(
-                color: _shadowTint.withValues(alpha: 0.22),
-                blurRadius: 30,
-                offset: const Offset(0, 14),
-              ),
-            ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: AppRadius.xlAll,
+        boxShadow: SyllabusVisual.clickableCardShadow,
+      ),
+      child: Material(
+        color: fill,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.xlAll),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const RoundedRectangleBorder(
+            borderRadius: AppRadius.xlAll,
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: circle,
-                  height: circle,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.14),
-                      shape: BoxShape.circle,
+          child: SizedBox(
+            height: height,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: circle,
+                    height: circle,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: pastel,
+                        borderRadius: AppRadius.smAll,
+                      ),
+                      child: Center(
+                        child: Icon(icon, color: accent, size: iconSize),
+                      ),
                     ),
-                    child: Icon(icon, color: accent, size: iconSize),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleMedium(context).copyWith(
-                          color: _titleColor,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 17,
-                          height: 1.15,
-                        ),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleMedium(context).copyWith(
+                        color: _titleColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                        height: 1.15,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodyMedium(context).copyWith(
-                          color: SyllabusVisual.muted,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13.5,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: SyllabusVisual.accent.withValues(alpha: 0.55),
-                  size: 26,
-                ),
-              ],
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: SyllabusVisual.accent.withValues(alpha: 0.55),
+                    size: 26,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

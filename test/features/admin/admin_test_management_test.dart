@@ -6,6 +6,7 @@ import 'package:telangana_prep/features/admin/presentation/screens/admin_test_li
 import 'package:telangana_prep/features/admin/presentation/widgets/admin_test_form.dart';
 import 'package:telangana_prep/features/admin/services/admin_test_service.dart';
 import 'package:telangana_prep/features/course_enrollment/model/course.dart';
+import 'package:telangana_prep/features/tests/data/grand_test_series.dart';
 import 'package:telangana_prep/features/tests/data/models/test_models.dart';
 import 'package:telangana_prep/features/tests/repository/test_cloud_repository.dart';
 
@@ -304,6 +305,112 @@ void main() {
     expect(submitted!.year, 2016);
     expect(submitted!.paperId, 'group-ii-paper-i');
     expect(submitted!.seriesId, isNull);
+  });
+
+  testWidgets('Grand Tests selector lists the four approved seriesIds', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      formApp(
+        const TestModel(
+          id: '',
+          examId: 'group-ii',
+          category: TestCategoryType.mockTests,
+          title: 'Paper I Grand Test',
+          questionCount: 10,
+          marks: 10,
+          durationMinutes: 30,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+        ),
+        (_) async {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Grand Test 1'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('grand-test-series')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(GrandTestSeries.grandTestI).hitTestable(), findsWidgets);
+    expect(find.text(GrandTestSeries.grandTestII).hitTestable(), findsWidgets);
+    expect(find.text(GrandTestSeries.grandTestIII).hitTestable(), findsWidgets);
+    expect(find.text(GrandTestSeries.oldGrandTests).hitTestable(), findsWidgets);
+    expect(find.text('Grand Test 1'), findsNothing);
+    expect(find.text('Grand Test-I'), findsNothing);
+  });
+
+  testWidgets('Grand Tests selector writes seriesId and keeps paperId', (
+    tester,
+  ) async {
+    TestModel? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      formApp(
+        const TestModel(
+          id: '',
+          examId: 'group-ii',
+          category: TestCategoryType.mockTests,
+          title: 'Paper I Grand Test',
+          questionCount: 10,
+          marks: 10,
+          durationMinutes: 30,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-i',
+        ),
+        (model) async => submitted = model,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('grand-test-series')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(GrandTestSeries.grandTestI).last);
+    await tester.pumpAndSettle();
+
+    await tapSubmit(tester);
+
+    expect(submitted, isNotNull);
+    expect(submitted!.category, TestCategoryType.mockTests);
+    expect(submitted!.seriesId, GrandTestSeries.grandTestI);
+    expect(submitted!.paperId, 'group-ii-paper-i');
+  });
+
+  testWidgets('editing a legacy seriesId does not rewrite it on save', (
+    tester,
+  ) async {
+    TestModel? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      formApp(
+        const TestModel(
+          id: 'legacy-gt',
+          examId: 'group-ii',
+          category: TestCategoryType.mockTests,
+          title: 'Legacy Grand Test',
+          questionCount: 10,
+          marks: 10,
+          durationMinutes: 30,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          paperId: 'group-ii-paper-i',
+          seriesId: 'Grand Test 1',
+        ),
+        (model) async => submitted = model,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Grand Test 1'), findsOneWidget);
+    await tapSubmit(tester);
+    expect(submitted, isNotNull);
+    expect(submitted!.seriesId, 'Grand Test 1');
+    expect(submitted!.paperId, 'group-ii-paper-i');
   });
 }
 

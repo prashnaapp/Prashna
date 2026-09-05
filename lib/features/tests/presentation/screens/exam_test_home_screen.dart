@@ -124,9 +124,9 @@ class _CategoryBody extends StatelessWidget {
                 if (i > 0) const SizedBox(height: _cardGap),
                 ExamCategoryTile(
                   title: _displayTitle(categories[i]),
-                  subtitle: categories[i].subtitle,
                   icon: _iconFor(categories[i].type),
                   accent: _accentFor(categories[i].type),
+                  surface: _surfaceFor(categories[i].type),
                   height: cardH,
                   onTap: () => openTestCategory(
                     context: context,
@@ -159,6 +159,24 @@ class _CategoryBody extends StatelessWidget {
       TestCategoryType.mockTests => AppColors.accentTeal,
       TestCategoryType.previousYear => AppColors.accentWarm,
       _ => SyllabusVisual.accent,
+    };
+  }
+
+  Color _surfaceFor(TestCategoryType type) {
+    return switch (type) {
+      TestCategoryType.partTests => Color.alphaBlend(
+        SyllabusVisual.tileBlue.withValues(alpha: 0.55),
+        Colors.white,
+      ),
+      TestCategoryType.mockTests => Color.alphaBlend(
+        SyllabusVisual.tileTeal.withValues(alpha: 0.55),
+        Colors.white,
+      ),
+      TestCategoryType.previousYear => Color.alphaBlend(
+        SyllabusVisual.tileAmber.withValues(alpha: 0.55),
+        Colors.white,
+      ),
+      _ => Colors.white,
     };
   }
 

@@ -30,7 +30,7 @@ void main() {
     while (tester.takeException() != null) {}
   }
 
-  testWidgets('ExamCategoryHero shows title, subtitle, back, and bell', (
+  testWidgets('ExamCategoryHero shows title and back without subtitle or bell', (
     tester,
   ) async {
     var popped = false;
@@ -48,9 +48,10 @@ void main() {
     );
 
     expect(find.text('Group-II'), findsOneWidget);
-    expect(find.text('Choose a category to begin.'), findsOneWidget);
+    expect(find.text('Choose a category to begin.'), findsNothing);
     expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.notifications_none_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.notifications_none_rounded), findsNothing);
+    expect(find.byType(CustomPaint), findsWidgets);
 
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
     expect(popped, isTrue);
@@ -64,7 +65,6 @@ void main() {
         home: Scaffold(
           body: ExamCategoryTile(
             title: 'Paper-wise Tests',
-            subtitle: 'View available tests',
             icon: Icons.description_rounded,
             accent: const Color(0xFF4C8DFF),
             height: 108,
@@ -75,7 +75,7 @@ void main() {
     );
 
     expect(find.text('Paper-wise Tests'), findsOneWidget);
-    expect(find.text('View available tests'), findsOneWidget);
+    expect(find.text('View available tests'), findsNothing);
     expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
     await tester.tap(find.byType(ExamCategoryTile));
     expect(taps, 1);
@@ -88,6 +88,7 @@ void main() {
       const Size(360, 740),
       const Size(390, 844),
       const Size(412, 915),
+      const Size(430, 932),
     ]) {
       final view = tester.view;
       view.physicalSize = size;
@@ -121,13 +122,35 @@ void main() {
         reason: '$size ${overflow?.exceptionAsString()}',
       );
       expect(find.text('Group-II'), findsOneWidget);
-      expect(find.text('Choose a category to begin.'), findsOneWidget);
+      expect(find.text('Choose a category to begin.'), findsNothing);
+      expect(find.text('View available tests'), findsNothing);
+      expect(find.byIcon(Icons.notifications_none_rounded), findsNothing);
+      expect(find.byType(ExamCategoryHero), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
       expect(find.text('Paper-wise Tests'), findsOneWidget);
       expect(find.text('Grand Tests'), findsOneWidget);
       expect(find.text('Previous Papers'), findsOneWidget);
       expect(find.text('Chapter Tests'), findsNothing);
       expect(find.text('Mock Tests'), findsNothing);
       expect(find.byType(ExamCategoryTile), findsNWidgets(3));
+
+      final tileMaterials = tester
+          .widgetList<Material>(
+            find.descendant(
+              of: find.byType(ExamCategoryTile),
+              matching: find.byType(Material),
+            ),
+          )
+          .toList();
+      expect(tileMaterials, isNotEmpty);
+      expect(
+        tileMaterials.every(
+          (material) =>
+              material.clipBehavior == Clip.antiAlias &&
+              material.shape is RoundedRectangleBorder,
+        ),
+        isTrue,
+      );
 
       final tiles = find.byType(ExamCategoryTile).evaluate().toList();
       final first = tester.getSize(find.byType(ExamCategoryTile).first);
@@ -166,6 +189,9 @@ void main() {
     while (tester.takeException() != null) {}
 
     expect(find.text('Group-III'), findsOneWidget);
+    expect(find.text('Choose a category to begin.'), findsNothing);
+    expect(find.text('View available tests'), findsNothing);
+    expect(find.byIcon(Icons.notifications_none_rounded), findsNothing);
     expect(find.text('Paper-wise Tests'), findsOneWidget);
     expect(find.text('Grand Tests'), findsOneWidget);
     expect(find.text('Previous Papers'), findsOneWidget);

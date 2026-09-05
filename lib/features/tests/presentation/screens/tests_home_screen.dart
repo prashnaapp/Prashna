@@ -10,7 +10,6 @@ import '../../../syllabus/presentation/widgets/syllabus_course_card.dart';
 import '../../data/models/test_models.dart';
 import '../../services/test_service.dart';
 import '../widgets/tests_hero.dart';
-import '../widgets/tests_tip_banner.dart';
 import 'exam_test_home_screen.dart';
 
 /// Test Series tab — same compact proportions as Chapters.
@@ -38,8 +37,8 @@ class TestsHomeScreen extends StatelessWidget {
           final h = constraints.maxHeight;
           final contentHeight = (h - bottomInset).clamp(0.0, h);
           // Slightly taller than the old 0.228 share: the sheet's wave now
-          // rides further up the hero, and the title + two-line subtitle must
-          // stay clear of it at full size instead of scaling down.
+          // rides further up the hero, and the title must stay clear of it
+          // at full size instead of scaling down.
           final heroHeight = (contentHeight * 0.25).clamp(200.0, 250.0);
 
           return Stack(
@@ -97,16 +96,11 @@ class _LandingBody extends StatelessWidget {
   final List<TestExamSummary> available;
 
   /// Viewport height above the bottom navigation — the basis the shared card
-  /// metrics are anchored to, so this tab's cards match the Chapters tab.
+  /// width is anchored to, so this tab's cards match the Chapters tab.
   final double contentHeight;
   final ValueChanged<TestExamSummary> onOpenExam;
 
-  // Deliberate, fixed spacing — every value below is accounted for in the
-  // budget math so no unclaimed gap can appear before the bottom nav.
-  static const double _sectionTitleH = 22;
-  static const double _tipToAvailable = 12;
   static const double _availableToCards = 14;
-  static const double _bottomBreathBase = 16;
 
   // Darker, more prominent tones for the Available (Group-II/III) cards.
   static const Color _darkPurple = Color(0xFF4A3AB0);
@@ -117,88 +111,55 @@ class _LandingBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bodyH = constraints.maxHeight;
         final contentWidth =
             constraints.maxWidth - (2 * SyllabusVisual.pagePadding);
-
-        final chromeBeforeCards =
-            LandingSheet.topPad +
-            TestsTipBanner.layoutHeight +
-            _tipToAvailable +
-            (available.isNotEmpty ? _sectionTitleH + _availableToCards : 0);
-
-        final cardArea = (bodyH - chromeBeforeCards - _bottomBreathBase).clamp(
-          0.0,
-          bodyH,
-        );
 
         final card = AvailableCardMetrics.forViewport(
           contentWidth: contentWidth,
           contentHeight: contentHeight,
-          maxHeight: cardArea,
+          maxHeight: constraints.maxHeight,
         );
-        final leftover = (cardArea - card.height).clamp(0.0, cardArea);
-        final bottomBreath = _bottomBreathBase + leftover;
 
         return LandingSheet(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const TestsTipBanner(),
-              const SizedBox(height: _tipToAvailable),
               if (available.isNotEmpty) ...[
-                SizedBox(
-                  height: _sectionTitleH,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Available',
-                      style: AppTextStyles.titleMedium(context).copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: SyllabusVisual.ink,
-                        fontSize: 17,
-                      ),
-                    ),
+                Text(
+                  'Available',
+                  style: AppTextStyles.titleMedium(context).copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: SyllabusVisual.ink,
+                    fontSize: 17,
                   ),
                 ),
                 const SizedBox(height: _availableToCards),
-                SizedBox(
-                  height: card.height,
-                  child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var i = 0; i < available.length; i++) ...[
-                          if (i > 0)
-                            const SizedBox(width: AvailableCardMetrics.gap),
-                          SizedBox(
-                            width: card.width,
-                            child: SyllabusCourseCard(
-                              title: available[i].title,
-                              subtitle:
-                                  '${available[i].maxMarks.toStringAsFixed(0)} Marks • ${available[i].paperCount} Papers',
-                              height: card.height,
-                              circleSize: card.circleSize,
-                              iconSize: card.iconSize,
-                              titleFontSize: card.titleFontSize,
-                              subtitleFontSize: card.subtitleFontSize,
-                              centerContent: true,
-                              titleColor: _availableTitle,
-                              boundaryTint: _darkPurple,
-                              elevatedShadow: true,
-                              accent: _accentFor(available[i].examId),
-                              icon: _iconFor(available[i].examId),
-                              onTap: () => onOpenExam(available[i]),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < available.length; i++) ...[
+                      if (i > 0)
+                        const SizedBox(width: AvailableCardMetrics.gap),
+                      SizedBox(
+                        width: card.width,
+                        child: SyllabusCourseCard(
+                          title: available[i].title,
+                          marks: available[i].maxMarks.round(),
+                          papers: available[i].paperCount,
+                          circleSize: card.circleSize,
+                          iconSize: card.iconSize,
+                          titleFontSize: card.titleFontSize,
+                          metaFontSize: card.subtitleFontSize,
+                          titleColor: _availableTitle,
+                          accent: _accentFor(available[i].examId),
+                          icon: _iconFor(available[i].examId),
+                          onTap: () => onOpenExam(available[i]),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
-              SizedBox(height: bottomBreath),
             ],
           ),
         );

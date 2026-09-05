@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/models/test_models.dart';
 import '../data/test_series_browser_groups.dart';
 import '../services/test_service.dart';
+import 'screens/grand_tests_screen.dart';
 import 'screens/paper_wise_part_list_screen.dart';
 import 'screens/test_list_screen.dart';
 import 'screens/test_series_browser_screen.dart';
@@ -27,18 +28,23 @@ void openTestCategory({
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => mode == null
-          ? TestListScreen(
-              examId: examId,
-              category: category.type,
-              title: category.title,
-              testService: testService,
-            )
-          : TestSeriesBrowserScreen(
-              examId: examId,
-              mode: mode,
-              testService: testService,
-            ),
+      builder: (_) {
+        if (category.type == TestCategoryType.mockTests) {
+          return GrandTestsScreen(examId: examId, testService: testService);
+        }
+        return mode == null
+            ? TestListScreen(
+                examId: examId,
+                category: category.type,
+                title: category.title,
+                testService: testService,
+              )
+            : TestSeriesBrowserScreen(
+                examId: examId,
+                mode: mode,
+                testService: testService,
+              );
+      },
     ),
   );
 }

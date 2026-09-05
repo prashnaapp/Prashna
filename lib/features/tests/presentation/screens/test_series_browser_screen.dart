@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../syllabus/data/models/syllabus_models.dart';
@@ -119,18 +120,26 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
     );
   }
 
+  bool get _isPaperWise => widget.mode == TestSeriesBrowserMode.paperWise;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: SyllabusVisual.page,
       body: Column(
         children: [
-          SyllabusHeaderBand(
-            child: _BrowserHeader(
+          if (_isPaperWise)
+            _PaperWiseHeader(
               title: _title,
               onBack: () => Navigator.maybePop(context),
+            )
+          else
+            SyllabusHeaderBand(
+              child: _BrowserHeader(
+                title: _title,
+                onBack: () => Navigator.maybePop(context),
+              ),
             ),
-          ),
           Expanded(
             child: FutureBuilder<List<TestModel>>(
               future: _testsFuture,
@@ -199,24 +208,89 @@ class _TestSeriesBrowserScreenState extends State<TestSeriesBrowserScreen> {
                           questionCount: cards[i].questionCount,
                           marks: cards[i].marks,
                           progress: 0,
+                          showProgress: !_isPaperWise,
+                          showStart: _isPaperWise,
                           onTap: () => _openTest(cards[i]),
                         ),
                       ],
-                    if (selected != null && cards.isNotEmpty) ...[
+                    if (!_isPaperWise &&
+                        selected != null &&
+                        cards.isNotEmpty) ...[
                       const SizedBox(height: 18),
                       SyllabusPaperProgressBanner(
                         paperTitle: selected.label,
                         progress: 0,
                       ),
                     ],
-                    const SizedBox(height: 8),
-                    const SyllabusWaveFooter(),
+                    if (!_isPaperWise) ...[
+                      const SizedBox(height: 8),
+                      const SyllabusWaveFooter(),
+                    ],
                   ],
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PaperWiseHeader extends StatelessWidget {
+  const _PaperWiseHeader({required this.title, required this.onBack});
+
+  final String title;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            SyllabusVisual.pagePadding,
+            8,
+            SyllabusVisual.pagePadding,
+            8,
+          ),
+          child: Row(
+            children: [
+              Material(
+                color: SyllabusVisual.surface,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: AppRadius.smAll,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: IconButton(
+                  tooltip: 'Back',
+                  onPressed: onBack,
+                  icon: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: SyllabusVisual.accent,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.titleLarge(context).copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: SyllabusVisual.ink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -8,7 +8,7 @@ import '../../../syllabus/presentation/widgets/landing_sheet.dart';
 /// Compact purple hero for Test Series → Group-II / Group-III.
 ///
 /// Bottom edge is square: [LandingSheet] shapes the wave into the cards.
-/// Text stays clear of [overlapClearance] so the subtitle is never clipped.
+/// The title stays clear of [overlapClearance] so the sheet cannot clip it.
 class ExamCategoryHero extends StatelessWidget {
   const ExamCategoryHero({
     super.key,
@@ -54,21 +54,14 @@ class ExamCategoryHero extends StatelessWidget {
               Positioned(
                 top: topInset + 4,
                 left: 4,
-                right: 8,
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: onBack,
-                      tooltip: 'Back',
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    const Spacer(),
-                    const _NotificationBell(),
-                  ],
+                child: IconButton(
+                  onPressed: onBack,
+                  tooltip: 'Back',
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
               ),
               Positioned(
@@ -83,29 +76,14 @@ class ExamCategoryHero extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: maxTextWidth),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            title,
-                            style: AppTextStyles.headline(context).copyWith(
-                              color: SyllabusVisual.headerOn,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 28,
-                              height: 1.1,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Choose a category to begin.',
-                            style: AppTextStyles.bodyMedium(context).copyWith(
-                              color: SyllabusVisual.headerOnMuted,
-                              fontSize: 14.5,
-                              height: 1.32,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        title,
+                        style: AppTextStyles.headline(context).copyWith(
+                          color: SyllabusVisual.headerOn,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 28,
+                          height: 1.1,
+                        ),
                       ),
                     ),
                   ),
@@ -121,45 +99,6 @@ class ExamCategoryHero extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        shape: BoxShape.circle,
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          const Icon(
-            Icons.notifications_none_rounded,
-            color: Colors.white,
-            size: 22,
-          ),
-          Positioned(
-            top: 6,
-            right: 7,
-            child: Container(
-              width: 7,
-              height: 7,
-              decoration: const BoxDecoration(
-                color: Color(0xFFE53935),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

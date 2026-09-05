@@ -9,8 +9,8 @@ import '../../../syllabus/presentation/widgets/landing_sheet.dart';
 ///
 /// The bottom edge is square: [LandingSheet]'s wave clip shapes the
 /// transition, so the gradient must reach both screen edges without a corner
-/// notch. Text keeps clear of [overlapClearance] so the sheet can never clip
-/// the subtitle.
+/// notch. The title keeps clear of [overlapClearance] so the sheet cannot
+/// clip it.
 class TestsHero extends StatelessWidget {
   const TestsHero({super.key, required this.height});
 
@@ -51,11 +51,6 @@ class TestsHero extends StatelessWidget {
                 child: const _ClipboardStopwatchArt(),
               ),
               Positioned(
-                top: topInset + 8,
-                right: 16,
-                child: const _NotificationBell(),
-              ),
-              Positioned(
                 top: topInset + 34,
                 left: SyllabusVisual.pagePadding,
                 right: artWidth + 12,
@@ -74,29 +69,14 @@ class TestsHero extends StatelessWidget {
                                     12)
                                 .clamp(120.0, screenW),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Test Series',
-                            style: AppTextStyles.headline(context).copyWith(
-                              color: SyllabusVisual.headerOn,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 30,
-                              height: 1.1,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Practice with full-length and topic tests.',
-                            style: AppTextStyles.bodyMedium(context).copyWith(
-                              color: SyllabusVisual.headerOnMuted,
-                              fontSize: 14.5,
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        'Test Series',
+                        style: AppTextStyles.headline(context).copyWith(
+                          color: SyllabusVisual.headerOn,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 30,
+                          height: 1.1,
+                        ),
                       ),
                     ),
                   ),
@@ -105,45 +85,6 @@ class TestsHero extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        shape: BoxShape.circle,
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          const Icon(
-            Icons.notifications_none_rounded,
-            color: Colors.white,
-            size: 22,
-          ),
-          Positioned(
-            top: 6,
-            right: 7,
-            child: Container(
-              width: 7,
-              height: 7,
-              decoration: const BoxDecoration(
-                color: Color(0xFFE53935),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

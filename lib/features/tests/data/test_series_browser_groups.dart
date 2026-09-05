@@ -39,6 +39,24 @@ abstract final class TestSeriesBrowserGroups {
     ];
   }
 
+  /// One published test per syllabus paper, in official paper order.
+  /// Extra tests for the same paper are not listed as a third level.
+  static List<TestModel> papersForSeries({
+    required List<SyllabusPaper> papers,
+    required List<TestModel> seriesTests,
+  }) {
+    final byPaper = <String, TestModel>{};
+    for (final test in _sorted(seriesTests)) {
+      final paperId = test.paperId?.trim();
+      if (paperId == null || paperId.isEmpty) continue;
+      byPaper.putIfAbsent(paperId, () => test);
+    }
+    return [
+      for (final paper in papers)
+        if (byPaper[paper.id] != null) byPaper[paper.id]!,
+    ];
+  }
+
   static List<TestSeriesTab> grandTests(List<TestModel> tests) {
     final bySeries = <String, List<TestModel>>{};
     for (final test in tests) {

@@ -315,7 +315,9 @@ void main() {
     expect(find.text('+ Create Test'), findsOneWidget);
   });
 
-  testWidgets('Grand Tests stay empty until a seriesId exists', (tester) async {
+  testWidgets('Grand Tests always lists the four approved series', (
+    tester,
+  ) async {
     final service = _FakeAdminTestService(
       courses: const [groupIi],
       tests: const [],
@@ -332,8 +334,46 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('No Grand Test groups yet'), findsOneWidget);
+    expect(find.text('Grand Test - I'), findsOneWidget);
+    expect(find.text('Grand Test - II'), findsOneWidget);
+    expect(find.text('Grand Test - III'), findsOneWidget);
+    expect(find.text('Old Grand Tests'), findsOneWidget);
+    expect(find.textContaining('No Grand Test groups yet'), findsNothing);
     expect(find.text('Grand Test 1'), findsNothing);
+    expect(find.text('+ Grand Test group'), findsNothing);
+  });
+
+  testWidgets('Grand Tests keep legacy seriesIds visible without rewriting', (
+    tester,
+  ) async {
+    final service = _FakeAdminTestService(
+      courses: const [groupIi],
+      tests: [
+        testDoc(
+          id: 'legacy-gt',
+          examId: 'group-ii',
+          category: TestCategoryType.mockTests,
+          title: 'Legacy Paper I',
+          paperId: 'group-ii-paper-i',
+          seriesId: 'Grand Test 1',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AdminTestSeriesBrowserScreen(
+          service: service,
+          courseId: 'group-ii',
+          mode: AdminTestSeriesMode.grandTests,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Grand Test - I'), findsOneWidget);
+    expect(find.text('Old Grand Tests'), findsOneWidget);
+    expect(find.text('Grand Test 1'), findsOneWidget);
   });
 
   testWidgets('Previous Papers list stored years only', (tester) async {
