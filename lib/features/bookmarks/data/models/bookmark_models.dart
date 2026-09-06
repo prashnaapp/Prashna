@@ -1,3 +1,18 @@
+/// Lifecycle of the bookmark session cache (cloud hydrate).
+enum BookmarkLoadState {
+  /// No successful load for the current session (or cleared).
+  notLoaded,
+
+  /// A cloud read / question resolve is in flight.
+  loading,
+
+  /// Cloud read succeeded (document may be empty).
+  loaded,
+
+  /// Last read failed; prior successful snapshot is retained when present.
+  error,
+}
+
 /// Local bookmark metadata for Practice Bits & Current Affairs.
 class Bookmark {
   const Bookmark({

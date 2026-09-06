@@ -36,6 +36,13 @@ class _FrequentlyIncorrectScreenState extends State<FrequentlyIncorrectScreen> {
       body: FutureBuilder<List<RevisionQuestionGroup>>(
         future: _future,
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return RevisionEmptyState(
+              title: 'Could not load revision data.',
+              subtitle: 'Please try again.',
+              icon: Icons.error_outline_rounded,
+            );
+          }
           if (!snapshot.hasData) {
             return const Center(child: AppCircularProgress());
           }

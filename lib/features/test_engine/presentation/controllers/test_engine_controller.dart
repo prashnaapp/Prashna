@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../bookmarks/data/services/bookmark_service.dart';
+import '../../../question_activity/services/bookmark_eligibility.dart';
 import '../../data/models/test_engine_models.dart';
 import '../../services/test_service.dart';
 
@@ -45,8 +46,9 @@ class TestEngineController extends ChangeNotifier {
   QuestionAttempt get currentAttempt => attempts[currentIndex];
   int get questionNumber => currentIndex + 1;
 
-  /// Bookmarks only for Practice Bits & Current Affairs (practice mode).
-  bool get bookmarksEnabled => test.mode == TestMode.practice;
+  /// Bookmarks for identity-safe Question Bank sources (H2.8F-4B).
+  /// Eligibility is centralized in [BookmarkEligibility] (source + course aware).
+  bool get bookmarksEnabled => BookmarkEligibility.forTest(test);
 
   Map<QuestionStatus, int> get statusCounts => service.statusCounts(attempts);
 

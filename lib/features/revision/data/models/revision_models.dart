@@ -12,12 +12,16 @@ class RevisionHubItem {
     required this.title,
     required this.subtitle,
     required this.count,
+    this.hasError = false,
   });
 
   final RevisionHubType type;
   final String title;
   final String subtitle;
   final int count;
+
+  /// When true, [count] must not be shown as Empty — load failed.
+  final bool hasError;
 }
 
 /// Grouped Question Bank items for Wrong / Frequently Incorrect lists.

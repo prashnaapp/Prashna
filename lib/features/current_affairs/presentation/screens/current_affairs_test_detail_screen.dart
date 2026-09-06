@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/design_system/design_system.dart';
 import '../../../../navigation/tab_scroll_view.dart';
 import '../../../practice/presentation/widgets/primary_action_button.dart';
+import '../../../question_activity/data/models/question_activity_models.dart';
 import '../../../test_engine/data/models/test_engine_models.dart';
 import '../../../test_engine/presentation/test_engine_navigation.dart';
 import '../../data/models/current_affairs_models.dart';
@@ -64,6 +65,7 @@ class CurrentAffairsTestDetailScreen extends StatelessWidget {
 
   Future<void> _startTest(BuildContext context) {
     final service = CurrentAffairsService.instance;
+    final isWeekly = set.mode == CurrentAffairsMode.weekly;
     return TestEngineNavigation.openConfigured(
       context: context,
       id: set.id,
@@ -75,6 +77,11 @@ class CurrentAffairsTestDetailScreen extends StatelessWidget {
       durationMinutes: set.durationMinutes,
       negativeMarks: 0,
       instructions: service.instructions,
+      activitySourceModule: QuestionActivitySourceModule.currentAffairs,
+      activitySourceType: isWeekly
+          ? QuestionActivitySourceType.currentAffairsWeekly
+          : QuestionActivitySourceType.currentAffairsMonthly,
+      currentAffairsSetId: set.id,
     );
   }
 }

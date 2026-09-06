@@ -17,8 +17,8 @@ import {
 } from './unit_performance_service.js';
 
 export const AUTHORITY_SERVER_VERIFIED = 'server_verified';
+export const FREQUENT_WRONG_MIN = 2;
 const ATTEMPT_STATUS_SUBMITTED = 'submitted';
-const FREQUENT_WRONG_MIN = 2;
 const APP_VERSION = 'server-5.27';
 
 function resolveAuthority(data) {
@@ -64,6 +64,72 @@ export function deriveWrongQuestionIds(answers, correctByQuestionId) {
     if (selected !== correct) wrong.push(questionId);
   }
   return uniqueStrings(wrong);
+}
+
+/**
+ * Shared revision merge for trusted wrong IDs (catalog attempts + question activity).
+ *
+ * Does not write Firestore — callers apply inside their own transactions.
+ * mistakeCounts increment once per trusted wrong id in this batch.
+ * frequentlyWrongQuestions rebuilt from counts using FREQUENT_WRONG_MIN.
+ *
+ * @param {object} input
+ * @param {object} [input.priorRevision] existing user_revision data (or {})
+ * @param {string[]} input.trustedWrongIds server-derived wrong question IDs
+ * @param {string} input.courseId course stamped on the revision document
+ * @param {string} [input.uid]
+ * @param {string} [input.appVersion]
+ * @returns {{ wrongQuestions: string[], weakQuestions: string[],
+ *   frequentlyWrongQuestions: string[], mistakeCounts: Object,
+ *   courseId: string, uid?: string, appVersion: string,
+ *   authority: string }}
+ */
+export function mergeTrustedWrongQuestionsIntoRevision({
+  priorRevision = {},
+  trustedWrongIds = [],
+  courseId,
+  uid = null,
+  appVersion = APP_VERSION,
+} = {}) {
+  const cleanCourseId = String(courseId || '').trim();
+  const ids = uniqueStrings(trustedWrongIds);
+  const priorWrong = uniqueStrings(priorRevision.wrongQuestions);
+  const priorWeak = uniqueStrings(priorRevision.weakQuestions);
+  const priorCounts = {
+    ...(priorRevision.mistakeCounts &&
+    typeof priorRevision.mistakeCounts === 'object'
+      ? priorRevision.mistakeCounts
+      : {}),
+  };
+
+  const nextWrong = uniqueStrings([...priorWrong, ...ids]);
+  for (const qid of ids) {
+    priorCounts[qid] = asInt(priorCounts[qid]) + 1;
+  }
+
+  const frequent = [];
+  for (const [qid, count] of Object.entries(priorCounts)) {
+    if (asInt(count) >= FREQUENT_WRONG_MIN) frequent.push(qid);
+  }
+  for (const qid of uniqueStrings(priorRevision.frequentlyWrongQuestions)) {
+    if (
+      !frequent.includes(qid) &&
+      asInt(priorCounts[qid]) >= FREQUENT_WRONG_MIN
+    ) {
+      frequent.push(qid);
+    }
+  }
+
+  return {
+    ...(uid ? { uid: String(uid).trim() } : {}),
+    courseId: cleanCourseId,
+    wrongQuestions: nextWrong,
+    weakQuestions: priorWeak,
+    frequentlyWrongQuestions: uniqueStrings(frequent),
+    mistakeCounts: priorCounts,
+    appVersion,
+    authority: AUTHORITY_SERVER_VERIFIED,
+  };
 }
 
 export function createProgressRevisionService({ db, now = () => new Date() } = {}) {
@@ -309,47 +375,20 @@ export function createProgressRevisionService({ db, now = () => new Date() } = {
         const priorRevision = revisionSnap.exists
           ? revisionSnap.data() || {}
           : {};
-        const priorWrong = uniqueStrings(priorRevision.wrongQuestions);
-        const priorWeak = uniqueStrings(priorRevision.weakQuestions);
-        const priorCounts = {
-          ...(priorRevision.mistakeCounts &&
-          typeof priorRevision.mistakeCounts === 'object'
-            ? priorRevision.mistakeCounts
-            : {}),
-        };
-
-        const nextWrong = uniqueStrings([...priorWrong, ...trustedWrongIds]);
-        for (const qid of trustedWrongIds) {
-          priorCounts[qid] = asInt(priorCounts[qid]) + 1;
-        }
-
-        const frequent = [];
-        for (const [qid, count] of Object.entries(priorCounts)) {
-          if (asInt(count) >= FREQUENT_WRONG_MIN) frequent.push(qid);
-        }
-        for (const qid of uniqueStrings(priorRevision.frequentlyWrongQuestions)) {
-          if (
-            !frequent.includes(qid) &&
-            asInt(priorCounts[qid]) >= FREQUENT_WRONG_MIN
-          ) {
-            frequent.push(qid);
-          }
-        }
-
-        nextWrongCount = nextWrong.length;
+        const merged = mergeTrustedWrongQuestionsIntoRevision({
+          priorRevision,
+          trustedWrongIds,
+          courseId,
+          uid,
+          appVersion: APP_VERSION,
+        });
+        nextWrongCount = merged.wrongQuestions.length;
 
         tx.set(
           rRef,
           {
-            uid,
-            courseId,
-            wrongQuestions: nextWrong,
-            weakQuestions: priorWeak,
-            frequentlyWrongQuestions: uniqueStrings(frequent),
-            mistakeCounts: priorCounts,
+            ...merged,
             updatedAt: FieldValue.serverTimestamp(),
-            appVersion: APP_VERSION,
-            authority: AUTHORITY_SERVER_VERIFIED,
           },
           { merge: false },
         );

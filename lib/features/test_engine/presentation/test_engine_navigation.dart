@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../question_activity/data/models/question_activity_models.dart';
 import '../data/models/test_engine_models.dart';
 import '../services/test_service.dart';
 import 'screens/test_attempt_flow_screen.dart';
@@ -68,7 +69,14 @@ abstract final class TestEngineNavigation {
     );
     if (!context.mounted) return;
     // Practice is local UX only — no authoritative cloud attempt.
-    return openTest(context, test: test, onCompleted: onCompleted);
+    return openTest(
+      context,
+      test: test.copyWith(
+        activitySourceModule: QuestionActivitySourceModule.practice,
+        activitySourceType: QuestionActivitySourceType.topicPractice,
+      ),
+      onCompleted: onCompleted,
+    );
   }
 
   static Future<void> openConfigured({
@@ -87,6 +95,9 @@ abstract final class TestEngineNavigation {
     List<String>? instructions,
     String? serverAttemptId,
     bool skipInstructions = false,
+    QuestionActivitySourceModule? activitySourceModule,
+    QuestionActivitySourceType? activitySourceType,
+    String? currentAffairsSetId,
     void Function(TestResult result)? onCompleted,
   }) async {
     final test = await TestService().createConfiguredTest(
@@ -106,7 +117,11 @@ abstract final class TestEngineNavigation {
     if (!context.mounted) return;
     return openTest(
       context,
-      test: test,
+      test: test.copyWith(
+        activitySourceModule: activitySourceModule,
+        activitySourceType: activitySourceType,
+        currentAffairsSetId: currentAffairsSetId,
+      ),
       serverAttemptId: serverAttemptId,
       skipInstructions: skipInstructions,
       onCompleted: onCompleted,
@@ -134,12 +149,19 @@ abstract final class TestEngineNavigation {
     bool skipInstructions = false,
     TestService? engineService,
     List<Map<String, dynamic>>? studentQuestions,
+    QuestionActivitySourceModule? activitySourceModule,
+    QuestionActivitySourceType? activitySourceType,
+    String? syllabusUnitId,
+    String? seriesId,
+    int? year,
+    String? paperId,
+    String? partId,
     void Function(TestResult result)? onCompleted,
   }) async {
     final service = engineService ?? TestService();
-    final Test test;
+    final Test built;
     if (studentQuestions != null && studentQuestions.isNotEmpty) {
-      test = await service.createTestFromStudentSafeQuestions(
+      built = await service.createTestFromStudentSafeQuestions(
         id: id,
         title: title,
         courseId: courseId,
@@ -151,7 +173,7 @@ abstract final class TestEngineNavigation {
         instructions: instructions,
       );
     } else {
-      test = await service.createTestFromQuestionIds(
+      built = await service.createTestFromQuestionIds(
         id: id,
         title: title,
         courseId: courseId,
@@ -166,6 +188,15 @@ abstract final class TestEngineNavigation {
         expectedCount: expectedQuestionCount,
       );
     }
+    final test = built.copyWith(
+      activitySourceModule: activitySourceModule,
+      activitySourceType: activitySourceType,
+      syllabusUnitId: syllabusUnitId,
+      seriesId: seriesId,
+      year: year,
+      paperId: paperId ?? built.paperId,
+      partId: partId ?? built.partId,
+    );
     if (!context.mounted) return;
     return openTest(
       context,

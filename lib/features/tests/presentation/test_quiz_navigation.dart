@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../question_activity/data/models/question_activity_models.dart';
+import '../../question_activity/data/question_activity_context_factory.dart';
 import '../../test_engine/data/models/test_engine_models.dart';
 import '../../test_engine/presentation/test_engine_navigation.dart';
 import '../../test_engine/services/test_service.dart' as engine;
+import '../../tests/data/grand_test_series.dart';
 import '../data/models/test_models.dart';
 import '../data/tests_dummy_data.dart';
 
@@ -16,12 +19,16 @@ typedef StartCatalogAttempt =
 ///
 /// Dummy/synthetic catalog models never reach [startAttempt].
 /// Returns true when the question engine was opened.
+///
+/// [fromSyllabusUnit] marks Chapters unit-catalog attempts so activity
+/// reporting can distinguish them from Paper-wise `chapterTests` rows.
 Future<bool> openTestPracticeSession(
   BuildContext context,
   TestModel test, {
   StartCatalogAttempt? startAttempt,
   engine.TestService? engineService,
   String? startRequestId,
+  bool fromSyllabusUnit = false,
 }) async {
   if (!test.isAvailableForNewAttempts ||
       TestsDummyData.isSyntheticCatalogTest(test)) {
@@ -39,6 +46,16 @@ Future<bool> openTestPracticeSession(
   final requestId = (startRequestId != null && startRequestId.trim().isNotEmpty)
       ? startRequestId.trim()
       : engine.TestService.newStartRequestId();
+  final sourceModule = QuestionActivityContextFactory.moduleForCatalog(
+    category: test.category,
+    fromSyllabusUnit: fromSyllabusUnit,
+  );
+  final sourceType = QuestionActivityContextFactory.inferType(
+    mode: mode,
+    category: test.category,
+    seriesId: test.seriesId,
+    testId: test.id,
+  );
 
   try {
     // Server-authoritative attempt creation — question set/config from backend.
@@ -109,11 +126,37 @@ Future<bool> openTestPracticeSession(
       skipInstructions: true,
       engineService: engineService,
       studentQuestions: studentQuestions.isNotEmpty ? studentQuestions : null,
+      activitySourceModule: sourceModule,
+      activitySourceType: _refineSourceType(
+        inferred: sourceType,
+        seriesId: test.seriesId,
+      ),
+      syllabusUnitId: test.syllabusUnitId,
+      seriesId: test.seriesId,
+      year: test.year,
+      paperId: test.paperId,
+      partId: test.partId,
     );
     return true;
   } catch (_) {
     return false;
   }
+}
+
+QuestionActivitySourceType _refineSourceType({
+  required QuestionActivitySourceType inferred,
+  String? seriesId,
+}) {
+  final series = seriesId?.trim();
+  if (series == GrandTestSeries.oldGrandTests) {
+    return QuestionActivitySourceType.oldGrandTest;
+  }
+  if (series != null &&
+      series.isNotEmpty &&
+      GrandTestSeries.isApproved(series)) {
+    return QuestionActivitySourceType.grandTest;
+  }
+  return inferred;
 }
 
 TestMode _modeFor(TestCategoryType category) {

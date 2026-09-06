@@ -20,11 +20,15 @@ class TestInstructionsScreen extends StatefulWidget {
     required this.test,
     this.startAttempt,
     this.engineService,
+    this.fromSyllabusUnit = false,
   });
 
   final TestModel test;
   final StartCatalogAttempt? startAttempt;
   final engine.TestService? engineService;
+
+  /// True when opened from Chapters / syllabus unit catalog.
+  final bool fromSyllabusUnit;
 
   @override
   State<TestInstructionsScreen> createState() => _TestInstructionsScreenState();
@@ -69,6 +73,7 @@ class _TestInstructionsScreenState extends State<TestInstructionsScreen> {
         startAttempt: widget.startAttempt,
         engineService: widget.engineService,
         startRequestId: _startRequestId,
+        fromSyllabusUnit: widget.fromSyllabusUnit,
       );
       if (!started && mounted) {
         setState(() {

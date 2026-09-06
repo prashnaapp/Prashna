@@ -1,3 +1,4 @@
+import '../../../question_activity/data/models/question_activity_models.dart';
 import '../../../question_bank/data/models/question_models.dart';
 
 enum TestMode { practice, topic, section, paper, mock, previousYear, grand }
@@ -82,6 +83,12 @@ class Test {
     this.lessonId,
     this.majorStudyAreaId,
     this.contentTopicId,
+    this.syllabusUnitId,
+    this.seriesId,
+    this.year,
+    this.currentAffairsSetId,
+    this.activitySourceModule,
+    this.activitySourceType,
   });
 
   final String id;
@@ -94,6 +101,15 @@ class Test {
   final String? lessonId;
   final String? majorStudyAreaId;
   final String? contentTopicId;
+
+  /// Optional catalog / CA encounter hints for question activity reporting.
+  final String? syllabusUnitId;
+  final String? seriesId;
+  final int? year;
+  final String? currentAffairsSetId;
+  final QuestionActivitySourceModule? activitySourceModule;
+  final QuestionActivitySourceType? activitySourceType;
+
   final Duration duration;
   final int totalQuestions;
   final int totalMarks;
@@ -101,6 +117,58 @@ class Test {
   final List<String> instructions;
   final TestMode mode;
   final List<TestQuestion> questions;
+
+  Test copyWith({
+    String? id,
+    String? title,
+    String? courseId,
+    String? paperId,
+    String? sectionId,
+    String? topicId,
+    String? partId,
+    String? lessonId,
+    String? majorStudyAreaId,
+    String? contentTopicId,
+    String? syllabusUnitId,
+    String? seriesId,
+    int? year,
+    String? currentAffairsSetId,
+    QuestionActivitySourceModule? activitySourceModule,
+    QuestionActivitySourceType? activitySourceType,
+    Duration? duration,
+    int? totalQuestions,
+    int? totalMarks,
+    double? negativeMarks,
+    List<String>? instructions,
+    TestMode? mode,
+    List<TestQuestion>? questions,
+  }) {
+    return Test(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      courseId: courseId ?? this.courseId,
+      paperId: paperId ?? this.paperId,
+      sectionId: sectionId ?? this.sectionId,
+      topicId: topicId ?? this.topicId,
+      partId: partId ?? this.partId,
+      lessonId: lessonId ?? this.lessonId,
+      majorStudyAreaId: majorStudyAreaId ?? this.majorStudyAreaId,
+      contentTopicId: contentTopicId ?? this.contentTopicId,
+      syllabusUnitId: syllabusUnitId ?? this.syllabusUnitId,
+      seriesId: seriesId ?? this.seriesId,
+      year: year ?? this.year,
+      currentAffairsSetId: currentAffairsSetId ?? this.currentAffairsSetId,
+      activitySourceModule: activitySourceModule ?? this.activitySourceModule,
+      activitySourceType: activitySourceType ?? this.activitySourceType,
+      duration: duration ?? this.duration,
+      totalQuestions: totalQuestions ?? this.totalQuestions,
+      totalMarks: totalMarks ?? this.totalMarks,
+      negativeMarks: negativeMarks ?? this.negativeMarks,
+      instructions: instructions ?? this.instructions,
+      mode: mode ?? this.mode,
+      questions: questions ?? this.questions,
+    );
+  }
 }
 
 class QuestionAttempt {

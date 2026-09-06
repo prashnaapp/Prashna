@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../progress/services/progress_service.dart';
+import '../../question_activity/data/question_activity_context_factory.dart';
+import '../../question_activity/data/models/question_activity_models.dart';
+import '../../question_activity/services/question_activity_reporter.dart';
 import '../../question_bank/data/models/question_models.dart';
 import '../../question_bank/data/services/question_service.dart';
 import '../../revision/services/revision_service.dart';
@@ -27,14 +30,18 @@ class TestService {
     QuestionService? questionService,
     TestAttemptCloudRepository? attemptCloudRepository,
     TestAttemptApi? attemptApi,
+    QuestionActivityReporter? questionActivityReporter,
   }) : _repository = repository ?? TestRepository.instance,
        _questionService = questionService ?? QuestionService.instance,
        _attemptCloud = attemptCloudRepository ?? TestAttemptCloudRepository(),
-       _attemptApiOverride = attemptApi;
+       _attemptApiOverride = attemptApi,
+       _questionActivity =
+           questionActivityReporter ?? QuestionActivityReporter.instance;
 
   final TestRepository _repository;
   final QuestionService _questionService;
   final TestAttemptCloudRepository _attemptCloud;
+  final QuestionActivityReporter _questionActivity;
   TestAttemptApi? _attemptApiOverride;
 
   TestAttemptApi get _attemptApi => _attemptApiOverride ??= TestAttemptApi();
@@ -48,6 +55,9 @@ class TestService {
   /// Dedupes cloud saves if [submitTest] is invoked more than once on this
   /// instance (controller already guards UI double-submit).
   String? _cloudSavedAttemptKey;
+
+  /// Stable per TestService instance — reused across submit retries.
+  String? _questionActivitySessionId;
 
   Future<Test> loadTest(String testId) => _repository.loadTest(testId);
 
@@ -785,9 +795,89 @@ class TestService {
       RevisionService.instance.scheduleCloudSync(courseId: test.courseId);
     }
 
+    // Shared activity boundary: encounter context under global question IDs.
+    // Catalog revision is already applied by submitTestAttempt.
+    // Practice / revision practice also dispatch verified reportQuestionActivity.
+    await _reportWrongActivity(
+      test: test,
+      attempts: attempts,
+      isServerCatalog: isServerCatalog,
+    );
+
     onCompleted?.call(result);
     onCompleted = null;
     return result;
+  }
+
+  String _ensureQuestionActivitySessionId() {
+    return _questionActivitySessionId ??=
+        's${DateTime.now().microsecondsSinceEpoch}_${Object().hashCode.abs()}';
+  }
+
+  Future<void> _reportWrongActivity({
+    required Test test,
+    required List<QuestionAttempt> attempts,
+    required bool isServerCatalog,
+  }) async {
+    final byId = {
+      for (final question in test.questions) question.id: question,
+    };
+    final wrongAttempts = <QuestionAttempt>[];
+    for (final attempt in attempts) {
+      final question = byId[attempt.questionId];
+      if (question == null) continue;
+      if (!attempt.answered || attempt.selectedOption == null) continue;
+      if (attempt.selectedOption == question.correctOption) continue;
+      wrongAttempts.add(attempt);
+    }
+    if (wrongAttempts.isEmpty) return;
+
+    if (isServerCatalog) {
+      final contexts = [
+        for (final attempt in wrongAttempts)
+          QuestionActivityContextFactory.fromTest(
+            test,
+            questionId: attempt.questionId,
+            encounterId: serverAttemptId,
+          ),
+      ];
+      _questionActivity.reportWrongAnswers(
+        contexts: contexts,
+        authority: QuestionActivityAuthority.serverVerified,
+      );
+      return;
+    }
+
+    final sessionId = _ensureQuestionActivitySessionId();
+    final submissions = <QuestionActivityWrongSubmission>[
+      for (final attempt in wrongAttempts)
+        QuestionActivityWrongSubmission(
+          activityEventId: QuestionActivityReporter.activityEventIdFor(
+            activitySessionId: sessionId,
+            questionId: attempt.questionId,
+          ),
+          selectedOption: attempt.selectedOption!.trim(),
+          context: QuestionActivityContextFactory.fromTest(
+            test,
+            questionId: attempt.questionId,
+            encounterId: sessionId,
+          ),
+        ),
+    ];
+
+    // LOCAL ACTIVITY RECORDED + optional SERVER AUTHORITATIVE PERSISTED.
+    // Failures are returned in results; submit UX still completes.
+    final results = await _questionActivity.reportAndPersistWrongAnswers(
+      submissions: submissions,
+    );
+    final failed = results
+        .where((r) => r.state == QuestionActivityPersistState.serverFailed)
+        .length;
+    if (failed > 0) {
+      debugPrint(
+        'TestService: $failed practice wrong(s) failed verified activity persist',
+      );
+    }
   }
 
   /// Stable unique key for one Start Test action (retries reuse the same key).

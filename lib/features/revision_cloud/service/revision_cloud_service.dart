@@ -6,7 +6,8 @@ import '../repository/revision_cloud_repository.dart';
 
 /// App-facing API for cloud revision documents.
 ///
-/// Firestore is a synchronized copy — local revision data remains source of truth.
+/// Catalog documents in `user_revision/{uid}` are server-authored. Client
+/// [syncSnapshot] remains best-effort and is denied by Firestore rules.
 class RevisionCloudService {
   RevisionCloudService({
     RevisionCloudRepository? repository,

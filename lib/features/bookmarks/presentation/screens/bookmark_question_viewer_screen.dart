@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/design_system.dart';
 import '../../../../navigation/tab_scroll_view.dart';
+import '../../../question_activity/services/bookmark_eligibility.dart';
 import '../../../question_bank/data/models/question_models.dart';
 import '../../../question_bank/data/services/question_service.dart';
 import '../../../test_engine/presentation/widgets/attempt_option_tile.dart';
@@ -41,35 +42,47 @@ class _BookmarkQuestionViewerScreenState
       future: _future,
       builder: (context, snapshot) {
         final question = snapshot.data;
+        final canAdd = BookmarkEligibility.forQuestion(question);
+        final canMutate = bookmarked || canAdd;
 
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
             title: Text(widget.title),
             actions: [
-              IconButton(
-                tooltip: 'Bookmark',
-                onPressed: question == null
-                    ? null
-                    : () async {
-                        await BookmarkService.instance.toggleBookmark(
-                          questionId: question.id,
-                          courseId: question.courseId,
-                          paperId: question.paperId,
-                          partId: question.sectionId,
-                          chapterId: question.topicId,
-                          questionType: question.questionType.name,
-                          questionTitle: question.question,
-                        );
-                        if (mounted) setState(() {});
-                      },
-                icon: Icon(
-                  bookmarked ? Icons.star_rounded : Icons.star_border_rounded,
-                  color: bookmarked
-                      ? AppColors.accentWarm
-                      : AppColors.textSecondary,
+              if (canMutate)
+                IconButton(
+                  tooltip: bookmarked ? 'Remove bookmark' : 'Bookmark',
+                  // Removal is never eligibility-gated (H2.8F-4B): existing
+                  // bookmarks must remain removable even if getById fails.
+                  onPressed: bookmarked
+                      ? () async {
+                          await BookmarkService.instance.removeBookmark(
+                            widget.questionId,
+                          );
+                          if (mounted) setState(() {});
+                        }
+                      : question == null
+                      ? null
+                      : () async {
+                          await BookmarkService.instance.addBookmark(
+                            questionId: question.id,
+                            courseId: question.courseId,
+                            paperId: question.paperId,
+                            partId: question.sectionId,
+                            chapterId: question.topicId,
+                            questionType: question.questionType.name,
+                            questionTitle: question.question,
+                          );
+                          if (mounted) setState(() {});
+                        },
+                  icon: Icon(
+                    bookmarked ? Icons.star_rounded : Icons.star_border_rounded,
+                    color: bookmarked
+                        ? AppColors.accentWarm
+                        : AppColors.textSecondary,
+                  ),
                 ),
-              ),
             ],
           ),
           body: !snapshot.hasData

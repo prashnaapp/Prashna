@@ -6,7 +6,9 @@ import '../repository/bookmark_cloud_repository.dart';
 
 /// App-facing API for cloud bookmark documents.
 ///
-/// Firestore is a synchronized copy — local bookmarks remain source of truth.
+/// Firestore stores the durable `questionIds` list under `user_bookmarks/{uid}`.
+/// Session UI reads through [BookmarkService] after hydrate; mutation sync
+/// remains best-effort and fire-and-forget.
 class BookmarkCloudService {
   BookmarkCloudService({
     BookmarkCloudRepository? repository,

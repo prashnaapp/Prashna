@@ -11,6 +11,7 @@ import { createEntitlementService } from './entitlement_service.js';
 import { getDb } from './firebase.js';
 import { createPaymentProcessingService } from './payment_processing_service.js';
 import { createPlayPurchaseService } from './play_purchase_service.js';
+import { createQuestionActivityService } from './question_activity_service.js';
 import { createSyllabusCompletionService } from './syllabus_completion_service.js';
 import { createTestAttemptService } from './test_attempt_service.js';
 import { createTransactionService } from './transaction_service.js';
@@ -59,6 +60,7 @@ function services() {
     payments: createPaymentProcessingService(db),
     playPurchases: createPlayPurchaseService({ db }),
     testAttempts: createTestAttemptService({ db }),
+    questionActivity: createQuestionActivityService({ db }),
     syllabusCompletion: createSyllabusCompletionService(db),
     content: createAdminContentService(db),
   };
@@ -254,6 +256,56 @@ export const submitTestAttempt = onCall(
   } catch (error) {
     mapServiceError(error);
   }
+  },
+);
+
+/**
+ * Authenticated student callable: verified non-catalog question activity.
+ *
+ * Client may send activityEventId + questionId + selectedOption + source
+ * context. Server loads the question and decides wrongness. Does not accept
+ * isWrong / correctOption / mistakeCounts from the client.
+ *
+ * Catalog tests must continue to use submitTestAttempt — not this callable.
+ */
+export const reportQuestionActivity = onCall(
+  { region: 'asia-south1' },
+  async (request) => {
+    const uid = assertAuthenticated(request);
+    const data = request.data || {};
+    if (data.uid && String(data.uid) !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'uid must match the authenticated user.',
+      );
+    }
+    if (
+      data.isWrong != null
+      || data.correctOption != null
+      || data.mistakeCounts != null
+      || data.wrongQuestions != null
+      || data.score != null
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Client must not supply revision authority fields.',
+      );
+    }
+    try {
+      const { questionActivity } = services();
+      return await questionActivity.reportQuestionActivity({
+        uid,
+        activityEventId: data.activityEventId,
+        questionId: data.questionId,
+        selectedOption: data.selectedOption,
+        sourceModule: data.sourceModule,
+        sourceType: data.sourceType,
+        encounterId: data.encounterId,
+        context: data.context,
+      });
+    } catch (error) {
+      mapServiceError(error);
+    }
   },
 );
 

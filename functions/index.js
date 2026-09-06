@@ -28,6 +28,7 @@ import {
   setSyllabusCompletion,
   startTestAttempt,
   submitTestAttempt,
+  reportQuestionActivity,
   verifyPlayPurchase,
 } from './src/callables.js';
 import { ensureAdminApp } from './src/firebase.js';
@@ -65,6 +66,7 @@ export {
   startTestAttempt,
   submitTestAttempt,
   setSyllabusCompletion,
+  reportQuestionActivity,
   onPlayRtdn,
   PLAY_RTDN_TOPIC,
   reconcileVoidedPurchases,
@@ -98,8 +100,15 @@ export { calculateScoreV1, SCORING_VERSION_V1 } from './src/test_scoring.js';
 export {
   createProgressRevisionService,
   deriveWrongQuestionIds,
+  mergeTrustedWrongQuestionsIntoRevision,
+  FREQUENT_WRONG_MIN,
   AUTHORITY_SERVER_VERIFIED as PROGRESS_AUTHORITY_SERVER_VERIFIED,
 } from './src/progress_revision_service.js';
+export {
+  createQuestionActivityService,
+  QUESTION_ACTIVITY_EVENTS_COLLECTION,
+  QUESTION_ACTIVITY_SOURCE,
+} from './src/question_activity_service.js';
 export {
   createSyllabusCompletionService,
   SyllabusCompletionStatus,

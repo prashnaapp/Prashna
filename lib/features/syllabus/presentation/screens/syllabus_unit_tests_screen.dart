@@ -104,7 +104,7 @@ class _SyllabusUnitTestsScreenState extends State<SyllabusUnitTestsScreen> {
     Navigator.push(
       context,
       TestEngineNavigation.catalogInstructionsRoute(
-        (_) => TestInstructionsScreen(test: test),
+        (_) => TestInstructionsScreen(test: test, fromSyllabusUnit: true),
       ),
     );
   }

@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../authentication/services/user_session_state_coordinator.dart';
+import '../../bookmarks/data/models/bookmark_models.dart';
 import '../../bookmarks/data/services/bookmark_service.dart';
 import '../../progress/services/progress_service.dart';
+import '../../question_activity/data/models/question_activity_models.dart';
 import '../../question_bank/data/models/question_models.dart';
 import '../../question_bank/data/services/question_service.dart';
 import '../../revision_cloud/model/revision_cloud.dart';
@@ -17,8 +19,9 @@ import '../data/repositories/revision_repository.dart';
 
 /// Builds revision views from Progress, Bookmarks, and Question Bank.
 ///
-/// Local Progress/Question Bank data remains the source of truth.
-/// Cloud sync is asynchronous and best-effort.
+/// Catalog revision documents (`user_revision/{uid}`) are hydrated through
+/// [RevisionRepository]. Bookmarked hub counts hydrate through
+/// [BookmarkService] session cache (independent of revision forceRefresh).
 class RevisionService {
   RevisionService({
     QuestionService? questionService,
@@ -61,24 +64,31 @@ class RevisionService {
   int _cloudSyncGeneration = 0;
   String? _pendingCloudCourseId;
 
-  Future<List<RevisionHubItem>> loadHubItems({String? courseId}) async {
-    final wrong = await _progress.loadWrongQuestionIds();
-    final frequent = await _progress.loadFrequentlyWrongIds();
-    final weak = await _progress.calculateWeakAreas(
-      courseId: courseId,
-      limit: 50,
-    );
+  Future<List<RevisionHubItem>> loadHubItems({
+    String? courseId,
+    bool forceRefresh = false,
+  }) async {
+    final catalog = await _loadCatalogRevisionOrThrow(force: forceRefresh);
+    final wrong = catalog?.wrongQuestions ?? const <String>[];
+    final frequent = catalog?.frequentlyWrongQuestions ?? const <String>[];
+
+    // Bookmark hydrate is independent of forceRefresh (Wrong/Frequent only).
+    final bookmarkState = await _bookmarks.loadCurrentUserBookmarks();
     final bookmarks = _bookmarks.getBookmarks();
+    final bookmarkHasError = bookmarkState == BookmarkLoadState.error;
+    final bookmarkCount = bookmarkHasError
+        ? 0
+        : courseId == null
+            ? bookmarks.length
+            : bookmarks.where((b) => b.courseId == courseId).length;
 
     final wrongCount = await _countForCourse(wrong, courseId);
     final frequentCount = await _countForCourse(frequent, courseId);
-    final bookmarkCount = courseId == null
-        ? bookmarks.length
-        : bookmarks.where((b) => b.courseId == courseId).length;
-    final weakCount = weak.length;
 
     scheduleCloudSync(courseId: courseId);
 
+    // H2.8E: Revision Center composition excludes Weak Topics (UI only).
+    // Weak Topics logic remains available via [loadWeakTopicGroups].
     return [
       RevisionHubItem(
         type: RevisionHubType.wrongQuestions,
@@ -87,16 +97,11 @@ class RevisionService {
         count: wrongCount,
       ),
       RevisionHubItem(
-        type: RevisionHubType.weakTopics,
-        title: 'Weak Topics',
-        subtitle: 'Automatically generated from Progress',
-        count: weakCount,
-      ),
-      RevisionHubItem(
         type: RevisionHubType.bookmarked,
         title: 'Bookmarked Questions',
         subtitle: 'Saved while practicing',
         count: bookmarkCount,
+        hasError: bookmarkHasError,
       ),
       RevisionHubItem(
         type: RevisionHubType.frequentlyIncorrect,
@@ -110,20 +115,28 @@ class RevisionService {
   Future<List<RevisionQuestionGroup>> loadWrongQuestionGroups({
     String? courseId,
   }) async {
-    final ids = await _progress.loadWrongQuestionIds();
-    scheduleCloudSync(courseId: courseId);
-    return _groupQuestions(ids, courseId: courseId);
+    final catalog = await _loadCatalogRevisionOrThrow(force: true);
+    final ids = _dedupePreserveOrder(catalog?.wrongQuestions ?? const []);
+    return _groupQuestions(
+      ids,
+      courseId: courseId,
+      wrongCounts: catalog?.mistakeCounts,
+    );
   }
 
   Future<List<RevisionQuestionGroup>> loadFrequentlyIncorrectGroups({
     String? courseId,
   }) async {
-    final stats = await _progress.loadMistakeStats();
-    final frequent = stats.where((s) => s.wrongCount >= 2).toList();
-    final ids = [for (final s in frequent) s.questionId];
-    final wrongCounts = {for (final s in frequent) s.questionId: s.wrongCount};
-    scheduleCloudSync(courseId: courseId);
-    return _groupQuestions(ids, courseId: courseId, wrongCounts: wrongCounts);
+    final catalog = await _loadCatalogRevisionOrThrow(force: true);
+    // Authoritative frequent IDs from server — do not re-threshold locally.
+    final ids = _dedupePreserveOrder(
+      catalog?.frequentlyWrongQuestions ?? const [],
+    );
+    return _groupQuestions(
+      ids,
+      courseId: courseId,
+      wrongCounts: catalog?.mistakeCounts,
+    );
   }
 
   Future<List<RevisionWeakTopicGroup>> loadWeakTopicGroups({
@@ -187,7 +200,7 @@ class RevisionService {
     if (!_sessions.isCurrent(session)) return null;
     scheduleCloudSync(courseId: topic.courseId, session: session);
 
-    return _tests.createTestFromQuestions(
+    final built = await _tests.createTestFromQuestions(
       id: 'revision-weak-${topic.topicId}-${DateTime.now().millisecondsSinceEpoch}',
       title: 'Revision · ${topic.topicName}',
       courseId: topic.courseId,
@@ -198,6 +211,10 @@ class RevisionService {
         'Focus on understanding explanations after each attempt.',
         'Your results will update Progress analytics automatically.',
       ],
+    );
+    return built.copyWith(
+      activitySourceModule: QuestionActivitySourceModule.revision,
+      activitySourceType: QuestionActivitySourceType.revisionPractice,
     );
   }
 
@@ -225,7 +242,7 @@ class RevisionService {
     if (!_sessions.isCurrent(session)) return null;
     scheduleCloudSync(courseId: courseId, session: session);
 
-    return _tests.createTestFromQuestions(
+    final built = await _tests.createTestFromQuestions(
       id: 'revision-${collection.type.name}-${DateTime.now().millisecondsSinceEpoch}',
       title: 'Revision · ${collection.title}',
       courseId: courseId,
@@ -240,6 +257,10 @@ class RevisionService {
         'Your results will update Progress analytics automatically.',
       ],
     );
+    return built.copyWith(
+      activitySourceModule: QuestionActivitySourceModule.revision,
+      activitySourceType: QuestionActivitySourceType.revisionPractice,
+    );
   }
 
   /// Clears local revision-session state for the previous authenticated user.
@@ -248,6 +269,64 @@ class RevisionService {
     _cloudSyncGeneration++;
     _pendingCloudCourseId = null;
     _repository.clear();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Catalog revision hydrate (H2.8D-1) — Wrong / Frequently Incorrect consumers
+  // ---------------------------------------------------------------------------
+
+  CatalogRevisionLoadState get catalogRevisionLoadState =>
+      _repository.catalogLoadState;
+
+  RevisionCloud? get currentCatalogRevision =>
+      _repository.currentCatalogRevision;
+
+  Object? get catalogRevisionLoadError => _repository.catalogLoadError;
+
+  /// Hydrates authoritative `user_revision/{uid}` into the session cache.
+  Future<CatalogRevisionLoadState> loadCatalogRevision({
+    bool force = false,
+  }) {
+    return _repository.loadCurrentUserRevision(force: force);
+  }
+
+  /// Forces a fresh cloud read into the session cache.
+  Future<CatalogRevisionLoadState> refreshCatalogRevision() {
+    return _repository.refreshCurrentUserRevision();
+  }
+
+  /// Ensures catalog revision is hydrated for the current authenticated user.
+  ///
+  /// Returns null when there is no authenticated user (safe empty).
+  /// Throws when the cloud load failed so callers do not treat failure as empty.
+  Future<RevisionCloud?> _loadCatalogRevisionOrThrow({
+    bool force = false,
+  }) async {
+    final state = force
+        ? await _repository.refreshCurrentUserRevision()
+        : await _repository.loadCurrentUserRevision();
+    if (state == CatalogRevisionLoadState.error) {
+      final error = _repository.catalogLoadError;
+      if (error != null) {
+        throw error;
+      }
+      throw StateError('Failed to load catalog revision');
+    }
+    if (state == CatalogRevisionLoadState.notLoaded) {
+      return null;
+    }
+    return _repository.currentCatalogRevision;
+  }
+
+  List<String> _dedupePreserveOrder(List<String> ids) {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final id in ids) {
+      final trimmed = id.trim();
+      if (trimmed.isEmpty) continue;
+      if (seen.add(trimmed)) out.add(trimmed);
+    }
+    return out;
   }
 
   void _registerSessionReset() {
@@ -358,6 +437,10 @@ class RevisionService {
       wrongQuestions: wrongQuestions,
       weakQuestions: weakQuestions,
       frequentlyWrongQuestions: frequentlyWrongQuestions,
+      // Client practice sync does not own catalog tallies; keep empty here.
+      // Server-authored mistakeCounts live on user_revision and are hydrated
+      // separately by RevisionRepository.
+      mistakeCounts: const {},
       updatedAt: null,
       appVersion: null,
     );
