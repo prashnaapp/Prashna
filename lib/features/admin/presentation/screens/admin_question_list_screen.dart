@@ -91,6 +91,38 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
     if (mounted) await _loadQuestions();
   }
 
+  Future<void> _requestLifecycleStatus(
+    Question question,
+    QuestionPublicationStatus status,
+  ) async {
+    if (status == QuestionPublicationStatus.archived) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Archive Question?'),
+            content: const Text(
+              'This question will be removed from Student Practice and new Tests.\n'
+              'Existing historical records will not be deleted.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Archive'),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) return;
+    }
+    await _setStatus(question, status);
+  }
+
   Future<void> _setStatus(
     Question question,
     QuestionPublicationStatus status,
@@ -266,7 +298,8 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
                     return _QuestionCard(
                       question: question,
                       onEdit: () => _openEdit(question),
-                      onSetStatus: (status) => _setStatus(question, status),
+                      onRequestStatus: (status) =>
+                          _requestLifecycleStatus(question, status),
                     );
                   },
                 ),
@@ -293,65 +326,106 @@ class _QuestionCard extends StatelessWidget {
   const _QuestionCard({
     required this.question,
     required this.onEdit,
-    required this.onSetStatus,
+    required this.onRequestStatus,
   });
 
   final Question question;
   final VoidCallback onEdit;
-  final ValueChanged<QuestionPublicationStatus> onSetStatus;
+  final ValueChanged<QuestionPublicationStatus> onRequestStatus;
+
+  static String statusLabel(QuestionPublicationStatus status) {
+    switch (status) {
+      case QuestionPublicationStatus.draft:
+        return 'Draft';
+      case QuestionPublicationStatus.published:
+        return 'Published';
+      case QuestionPublicationStatus.archived:
+        return 'Archived';
+    }
+  }
+
+  static QuestionPublicationStatus effectiveStatus(Question question) {
+    return question.status ??
+        (question.isActive
+            ? QuestionPublicationStatus.published
+            : QuestionPublicationStatus.archived);
+  }
 
   @override
   Widget build(BuildContext context) {
     final updated = question.updatedAt.millisecondsSinceEpoch == 0
         ? '—'
         : '${question.updatedAt.year}-${question.updatedAt.month.toString().padLeft(2, '0')}-${question.updatedAt.day.toString().padLeft(2, '0')}';
-    final status =
-        question.status ??
-        (question.isActive
-            ? QuestionPublicationStatus.published
-            : QuestionPublicationStatus.archived);
+    final status = effectiveStatus(question);
+    final colorScheme = Theme.of(context).colorScheme;
+    final (lifecycleLabel, lifecycleIcon, nextStatus) = switch (status) {
+      QuestionPublicationStatus.published => (
+        'Archive',
+        Icons.archive_outlined,
+        QuestionPublicationStatus.archived,
+      ),
+      QuestionPublicationStatus.archived => (
+        'Restore',
+        Icons.unarchive_outlined,
+        QuestionPublicationStatus.published,
+      ),
+      QuestionPublicationStatus.draft => (
+        'Publish',
+        Icons.publish_outlined,
+        QuestionPublicationStatus.published,
+      ),
+    };
+
     return Card(
       child: ListTile(
-        title: Text(
-          question.question,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+        title: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                question.question,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Chip(
+              key: ValueKey('question-status-${question.id}'),
+              label: Text(statusLabel(status)),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: EdgeInsets.zero,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          ],
         ),
         subtitle: Text(
           '${question.id} • ${question.topicId.isEmpty ? 'No topic' : question.topicId}\n'
-          '${question.difficulty.name} • ${question.questionType.name} • '
-          '${status.name}'
+          '${question.difficulty.name} • ${question.questionType.name}'
           ' • Updated $updated',
         ),
         isThreeLine: true,
         leading: Icon(
           question.isActive ? Icons.check_circle : Icons.pause_circle,
           color: question.isActive
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.outline,
+              ? colorScheme.primary
+              : colorScheme.outline,
         ),
         trailing: Wrap(
           spacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             IconButton(
+              key: ValueKey('question-edit-${question.id}'),
               tooltip: 'Edit',
               onPressed: onEdit,
               icon: const Icon(Icons.edit_outlined),
             ),
-            IconButton(
-              tooltip: status == QuestionPublicationStatus.published
-                  ? 'Archive'
-                  : 'Publish',
-              onPressed: () => onSetStatus(
-                status == QuestionPublicationStatus.published
-                    ? QuestionPublicationStatus.archived
-                    : QuestionPublicationStatus.published,
-              ),
-              icon: Icon(
-                question.isActive
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-              ),
+            TextButton.icon(
+              key: ValueKey('question-lifecycle-${question.id}'),
+              onPressed: () => onRequestStatus(nextStatus),
+              icon: Icon(lifecycleIcon, size: 18),
+              label: Text(lifecycleLabel),
             ),
           ],
         ),

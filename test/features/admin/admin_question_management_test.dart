@@ -27,6 +27,8 @@ void main() {
   Question buildQuestion({
     String id = '',
     String text = 'What is the capital of Telangana?',
+    QuestionPublicationStatus? status,
+    bool isActive = true,
   }) {
     final now = DateTime(2026, 8, 9);
     return Question(
@@ -48,6 +50,8 @@ void main() {
       estimatedTime: const Duration(seconds: 60),
       createdAt: now,
       updatedAt: now,
+      status: status,
+      isActive: isActive,
     );
   }
 
@@ -62,6 +66,16 @@ void main() {
           onSubmit: onSubmit,
         ),
       ),
+    );
+  }
+
+  Widget listApp(
+    _FakeAdminQuestionService service, {
+    RouteFactory? onGenerateRoute,
+  }) {
+    return MaterialApp(
+      home: AdminQuestionListScreen(service: service),
+      onGenerateRoute: onGenerateRoute,
     );
   }
 
@@ -116,8 +130,8 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: AdminQuestionListScreen(service: service),
+      listApp(
+        service,
         onGenerateRoute: (settings) {
           if (settings.name == AdminRoutes.questionCreate) {
             return MaterialPageRoute<void>(
@@ -138,20 +152,250 @@ void main() {
 
     expect(find.text('Create route opened'), findsOneWidget);
   });
+
+  testWidgets('5: published question shows Archive action and status chip', (
+    tester,
+  ) async {
+    final published = buildQuestion(
+      id: 'q-published',
+      status: QuestionPublicationStatus.published,
+      isActive: true,
+    );
+    final service = _FakeAdminQuestionService(
+      courses: const [course],
+      questions: [published],
+    );
+
+    await tester.pumpWidget(listApp(service));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Published'), findsWidgets);
+    expect(find.text('Archive'), findsOneWidget);
+    expect(find.text('Restore'), findsNothing);
+    expect(find.text('Publish'), findsNothing);
+    expect(find.text('Delete'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('question-edit-q-published')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('6: archive requires confirmation then sets archived status', (
+    tester,
+  ) async {
+    final published = buildQuestion(
+      id: 'q-to-archive',
+      status: QuestionPublicationStatus.published,
+      isActive: true,
+    );
+    final service = _FakeAdminQuestionService(
+      courses: const [course],
+      questions: [published],
+    );
+
+    await tester.pumpWidget(listApp(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Archive'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Archive Question?'), findsOneWidget);
+    expect(
+      find.textContaining('removed from Student Practice and new Tests'),
+      findsOneWidget,
+    );
+    expect(service.statusUpdates, isEmpty);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(service.statusUpdates, isEmpty);
+    expect(find.text('Archive'), findsOneWidget);
+
+    await tester.tap(find.text('Archive'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Archive'));
+    await tester.pumpAndSettle();
+
+    expect(service.statusUpdates, [
+      ('q-to-archive', QuestionPublicationStatus.archived),
+    ]);
+    expect(find.text('Restore'), findsOneWidget);
+    expect(find.text('Archived'), findsWidgets);
+  });
+
+  testWidgets(
+    '7: archived question Restore publishes via existing status path',
+    (tester) async {
+      final archived = buildQuestion(
+        id: 'q-archived',
+        status: QuestionPublicationStatus.archived,
+        isActive: false,
+      );
+      final service = _FakeAdminQuestionService(
+        courses: const [course],
+        questions: [archived],
+      );
+
+      await tester.pumpWidget(listApp(service));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Restore'), findsOneWidget);
+      expect(find.text('Archive Question?'), findsNothing);
+
+      await tester.tap(find.text('Restore'));
+      await tester.pumpAndSettle();
+
+      expect(service.statusUpdates, [
+        ('q-archived', QuestionPublicationStatus.published),
+      ]);
+      expect(find.text('Archive'), findsOneWidget);
+      expect(find.text('Published'), findsWidgets);
+    },
+  );
+
+  testWidgets('8: draft question Publish publishes via existing status path', (
+    tester,
+  ) async {
+    final draft = buildQuestion(
+      id: 'q-draft',
+      status: QuestionPublicationStatus.draft,
+      isActive: false,
+    );
+    final service = _FakeAdminQuestionService(
+      courses: const [course],
+      questions: [draft],
+    );
+
+    await tester.pumpWidget(listApp(service));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Publish'), findsOneWidget);
+    expect(find.text('Draft'), findsWidgets);
+
+    await tester.tap(find.text('Publish'));
+    await tester.pumpAndSettle();
+
+    expect(service.statusUpdates, [
+      ('q-draft', QuestionPublicationStatus.published),
+    ]);
+    expect(find.text('Archive'), findsOneWidget);
+  });
+
+  testWidgets('9: edit action still opens the edit route', (tester) async {
+    final published = buildQuestion(
+      id: 'q-edit-row',
+      status: QuestionPublicationStatus.published,
+      isActive: true,
+    );
+    final service = _FakeAdminQuestionService(
+      courses: const [course],
+      questions: [published],
+    );
+
+    await tester.pumpWidget(
+      listApp(
+        service,
+        onGenerateRoute: (settings) {
+          if (settings.name == AdminRoutes.questionEdit) {
+            final arg = settings.arguments;
+            expect(arg, isA<Question>());
+            expect((arg as Question).id, 'q-edit-row');
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Edit route opened'),
+              ),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('question-edit-q-edit-row')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit route opened'), findsOneWidget);
+  });
+
+  testWidgets('10: no permanent delete affordance is shown', (tester) async {
+    final service = _FakeAdminQuestionService(
+      courses: const [course],
+      questions: [
+        buildQuestion(
+          id: 'q-a',
+          status: QuestionPublicationStatus.archived,
+          isActive: false,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(listApp(service));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete'), findsNothing);
+    expect(find.text('Permanently Delete'), findsNothing);
+    expect(find.text('Remove'), findsNothing);
+    expect(find.byIcon(Icons.delete), findsNothing);
+    expect(find.byIcon(Icons.delete_outline), findsNothing);
+  });
 }
 
 class _FakeAdminQuestionService extends AdminQuestionService {
   _FakeAdminQuestionService({
     required this.courses,
-    required this.questions,
-  }) : super();
+    required List<Question> questions,
+  }) : questions = List<Question>.from(questions),
+       super();
 
   final List<Course> courses;
   final List<Question> questions;
+  final List<(String, QuestionPublicationStatus)> statusUpdates = [];
 
   @override
   Future<List<Course>> loadCourses() async => courses;
 
   @override
-  Future<List<Question>> loadQuestions(String courseId) async => questions;
+  Future<List<Question>> loadQuestions(String courseId) async =>
+      List<Question>.from(questions);
+
+  @override
+  Future<void> setStatus(
+    String questionId,
+    QuestionPublicationStatus status,
+  ) async {
+    statusUpdates.add((questionId, status));
+    final index = questions.indexWhere((q) => q.id == questionId);
+    if (index < 0) return;
+    final current = questions[index];
+    questions[index] = Question(
+      id: current.id,
+      courseId: current.courseId,
+      paperId: current.paperId,
+      sectionId: current.sectionId,
+      topicId: current.topicId,
+      question: current.question,
+      options: current.options,
+      correctOption: current.correctOption,
+      explanation: current.explanation,
+      difficulty: current.difficulty,
+      questionType: current.questionType,
+      language: current.language,
+      marks: current.marks,
+      negativeMarks: current.negativeMarks,
+      tags: current.tags,
+      estimatedTime: current.estimatedTime,
+      createdAt: current.createdAt,
+      updatedAt: current.updatedAt,
+      content: current.content,
+      syllabus: current.syllabus,
+      status: status,
+      year: current.year,
+      examName: current.examName,
+      hint: current.hint,
+      aiExplanation: current.aiExplanation,
+      isActive: status == QuestionPublicationStatus.published,
+      itemFormat: current.itemFormat,
+    );
+  }
 }

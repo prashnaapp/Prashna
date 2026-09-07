@@ -64,7 +64,7 @@ class AdminDashboardScreen extends StatelessWidget {
                 child: ListTile(
                   title: const Text('Questions'),
                   subtitle: const Text(
-                    'Create, edit, and deactivate questions',
+                    'Create, edit, publish, and archive questions',
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () =>
