@@ -124,7 +124,7 @@ class AdminManagedTestList extends StatelessWidget {
             AdminTestRow(
               test: test,
               onEdit: () => _openEdit(context, test),
-              onPublish: test.status != TestPublicationStatus.published
+              onPublish: test.status == TestPublicationStatus.draft
                   ? () => _setStatus(
                       context,
                       test,
@@ -132,6 +132,13 @@ class AdminManagedTestList extends StatelessWidget {
                     )
                   : null,
               onUnpublish: test.status == TestPublicationStatus.published
+                  ? () => _setStatus(
+                      context,
+                      test,
+                      TestPublicationStatus.draft,
+                    )
+                  : null,
+              onRestore: test.status == TestPublicationStatus.archived
                   ? () => _setStatus(
                       context,
                       test,

@@ -610,6 +610,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
         Text('Previous Papers', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         TextFormField(
+          key: const ValueKey('test-year'),
           controller: _year,
           decoration: const InputDecoration(
             labelText: 'Year',
@@ -618,6 +619,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
           ),
           keyboardType: TextInputType.number,
           enabled: !_saving,
+          onChanged: (_) => setState(() {}),
           validator: (value) {
             final year = _parseInt(value ?? '');
             if (year == null || year < 1900 || year > 2100) {
@@ -709,7 +711,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
                       DropdownMenuItem(
                         value: course.courseId,
                         child: Text(
-                          '${course.title} (${course.courseId})',
+                          course.title,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -722,6 +724,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
                             _paperId = null;
                             _partId = null;
                             _syllabusUnitId = null;
+                            _seriesId = null;
+                            _year.clear();
                           });
                         }),
                   validator: (value) => value == null || value.isEmpty
@@ -1092,7 +1096,10 @@ class _AdminTestFormState extends State<AdminTestForm> {
               ),
               items: [
                 for (final status in TestPublicationStatus.values)
-                  DropdownMenuItem(value: status, child: Text(status.name)),
+                  DropdownMenuItem(
+                    value: status,
+                    child: Text(_statusLabel(status)),
+                  ),
               ],
               onChanged: _saving
                   ? null
@@ -1137,7 +1144,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
                     '${preview.partId == null ? '' : ' / ${preview.partId}'}'
                     ' / ${preview.syllabusUnitId}',
                   ),
-                Text('Status: ${preview.status.name}'),
+                Text('Status: ${_statusLabel(preview.status)}'),
               ],
             ),
           ),
@@ -1288,6 +1295,17 @@ class _AdminTestFormState extends State<AdminTestForm> {
         ),
       ),
     );
+  }
+
+  static String _statusLabel(TestPublicationStatus status) {
+    switch (status) {
+      case TestPublicationStatus.draft:
+        return 'Draft';
+      case TestPublicationStatus.published:
+        return 'Published';
+      case TestPublicationStatus.archived:
+        return 'Archived';
+    }
   }
 
   static String _publicationHelp(TestPublicationStatus status) {

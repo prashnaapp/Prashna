@@ -354,7 +354,7 @@ void main() {
       await openDropdownAndSelect(
         tester,
         fieldKey: const ValueKey('test-status'),
-        optionText: 'published',
+        optionText: 'Published',
       );
       expect(dirty, isTrue);
     });
@@ -776,7 +776,7 @@ void main() {
       await openDropdownAndSelect(
         tester,
         fieldKey: const ValueKey('test-status'),
-        optionText: 'published',
+        optionText: 'Published',
       );
 
       await tester.tap(find.text('Sign out').first);
@@ -821,7 +821,7 @@ void main() {
       await openDropdownAndSelect(
         tester,
         fieldKey: const ValueKey('test-status'),
-        optionText: 'published',
+        optionText: 'Published',
       );
 
       await tester.tap(find.text('Sign out').first);

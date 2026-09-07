@@ -61,6 +61,8 @@ class _AdminTestSeriesBrowserScreenState
 
   List<Course> _courses = const [];
   List<TestModel> _tests = const [];
+  /// Years added via "+ Examination year" before any test documents exist.
+  final Set<int> _knownYears = <int>{};
   bool _loading = true;
   String? _error;
 
@@ -157,9 +159,13 @@ class _AdminTestSeriesBrowserScreenState
         ],
       ),
     );
-    controller.dispose();
+    // Dispose after the dialog route has finished tearing down.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.dispose();
+    });
     final year = int.tryParse(value ?? '');
     if (year == null || year < 1900 || year > 2100) return;
+    setState(() => _knownYears.add(year));
     _open(mode: AdminTestSeriesMode.previousPapers, year: year);
   }
 
@@ -493,10 +499,14 @@ class _AdminTestSeriesBrowserScreenState
 
   Widget _previousPapers(SyllabusCourse course) {
     if (widget.year == null) {
-      final years = AdminTestHierarchy.years(
-        tests: _tests,
-        courseId: course.id,
-      );
+      final years = <int>{
+        ...AdminTestHierarchy.years(
+          tests: _tests,
+          courseId: course.id,
+        ),
+        ..._knownYears,
+      }.toList()
+        ..sort();
       return ListView(
         padding: const EdgeInsets.all(AdminSpacing.pagePadding),
         children: [

@@ -282,7 +282,7 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
                     return AdminTestRow(
                       test: test,
                       onEdit: () => _openEdit(test),
-                      onPublish: test.status != TestPublicationStatus.published
+                      onPublish: test.status == TestPublicationStatus.draft
                           ? () => _setStatus(
                               test,
                               TestPublicationStatus.published,
@@ -298,6 +298,10 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
                               test,
                               TestPublicationStatus.archived,
                             )
+                          : null,
+                      onRestore: test.status == TestPublicationStatus.archived
+                          ? () =>
+                                _setStatus(test, TestPublicationStatus.draft)
                           : null,
                     );
                   },

@@ -584,6 +584,7 @@ void main() {
       update: ({required testId, required data}) async {
         updatedData = data;
       },
+      getById: (testId) async => sampleTest(id: testId, title: 'New Test'),
       idGenerator: () => 'test-generated',
     );
     final service = AdminTestService(testRepository: repo);

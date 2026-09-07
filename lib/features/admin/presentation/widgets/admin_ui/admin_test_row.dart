@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../syllabus/services/syllabus_service.dart';
 import '../../../../tests/data/models/test_models.dart';
+import '../../../data/admin_test_hierarchy.dart';
 import '../../../theme/admin_colors.dart';
 import '../../../theme/admin_spacing.dart';
 import 'admin_status_badge.dart';
@@ -15,6 +17,8 @@ class AdminTestRow extends StatelessWidget {
     this.onPublish,
     this.onUnpublish,
     this.onArchive,
+    this.onRestore,
+    this.syllabusService,
   });
 
   final TestModel test;
@@ -22,6 +26,8 @@ class AdminTestRow extends StatelessWidget {
   final VoidCallback? onPublish;
   final VoidCallback? onUnpublish;
   final VoidCallback? onArchive;
+  final VoidCallback? onRestore;
+  final SyllabusService? syllabusService;
 
   static String categoryLabel(TestCategoryType type) {
     switch (type) {
@@ -38,17 +44,86 @@ class AdminTestRow extends StatelessWidget {
     }
   }
 
+  /// Human-friendly hierarchy crumbs; falls back to IDs when unresolved.
+  List<String> _scopeLabels() {
+    final syllabus = syllabusService ?? SyllabusService.instance;
+    final courseId = test.examId;
+    final parts = <String>[];
+
+    final paperId = test.paperId?.trim();
+    if (paperId != null && paperId.isNotEmpty) {
+      final paper = syllabus.getPaper(courseId: courseId, paperId: paperId);
+      parts.add(
+        paper == null ? paperId : AdminTestHierarchy.paperLabel(paper),
+      );
+
+      final partId = test.partId?.trim();
+      if (partId != null && partId.isNotEmpty) {
+        final part = syllabus.getPart(
+          courseId: courseId,
+          paperId: paperId,
+          partId: partId,
+        );
+        parts.add(part?.displayName ?? partId);
+      }
+
+      final unitId = test.syllabusUnitId?.trim();
+      if (unitId != null && unitId.isNotEmpty) {
+        parts.add(_unitLabel(syllabus, courseId, paperId, partId, unitId));
+      }
+    } else {
+      final unitId = test.syllabusUnitId?.trim();
+      if (unitId != null && unitId.isNotEmpty) parts.add(unitId);
+    }
+
+    final seriesId = test.seriesId?.trim();
+    if (seriesId != null && seriesId.isNotEmpty) parts.add(seriesId);
+
+    if (test.year != null) parts.add('${test.year}');
+    return parts;
+  }
+
+  static String _unitLabel(
+    SyllabusService syllabus,
+    String courseId,
+    String paperId,
+    String? partId,
+    String unitId,
+  ) {
+    final paper = syllabus.getPaper(courseId: courseId, paperId: paperId);
+    if (paper == null) return unitId;
+
+    for (final area in paper.majorStudyAreas) {
+      if (area.id == unitId) return area.displayName;
+      for (final topic in area.contentTopics) {
+        if (topic.id == unitId) return topic.displayName;
+      }
+    }
+    for (final unit in paper.syllabusUnits) {
+      if (unit.id == unitId) return unit.displayName;
+    }
+    if (partId != null && partId.isNotEmpty) {
+      final part = syllabus.getPart(
+        courseId: courseId,
+        paperId: paperId,
+        partId: partId,
+      );
+      if (part != null) {
+        for (final unit in part.syllabusUnits) {
+          if (unit.id == unitId) return unit.displayName;
+        }
+        for (final topic in part.topics) {
+          if (topic.id == unitId) return topic.resolvedDisplayName;
+        }
+      }
+    }
+    return unitId;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scopeParts = <String>[
-      if (test.paperId != null && test.paperId!.isNotEmpty) test.paperId!,
-      if (test.partId != null && test.partId!.isNotEmpty) test.partId!,
-      if (test.syllabusUnitId != null && test.syllabusUnitId!.isNotEmpty)
-        test.syllabusUnitId!,
-      if (test.seriesId != null && test.seriesId!.isNotEmpty) test.seriesId!,
-      if (test.year != null) '${test.year}',
-    ];
+    final scopeParts = _scopeLabels();
 
     final metadata = <String>[
       categoryLabel(test.category),
@@ -84,6 +159,13 @@ class AdminTestRow extends StatelessWidget {
             tooltip: 'Unpublish',
             onPressed: onUnpublish,
             icon: const Icon(Icons.visibility_off_outlined, size: 20),
+          ),
+        if (onRestore != null)
+          IconButton(
+            key: ValueKey('test-restore-${test.id}'),
+            tooltip: 'Restore',
+            onPressed: onRestore,
+            icon: const Icon(Icons.unarchive_outlined, size: 20),
           ),
         if (onArchive != null)
           IconButton(

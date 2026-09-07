@@ -87,6 +87,27 @@ class AdminTestService {
       throw FormatException(errors.join(' '));
     }
     await _validateAssignedQuestions(test);
+
+    // Form Save can change status. Apply the same publication guards as
+    // [publishTest] so archived → published cannot bypass the list path.
+    final current = await _tests.getAdminTestById(test.id);
+    if (current == null) {
+      throw const FormatException('Test was not found.');
+    }
+    if (test.status == TestPublicationStatus.published &&
+        current.status != TestPublicationStatus.published) {
+      if (current.status == TestPublicationStatus.archived) {
+        throw const FormatException('Archived tests cannot be published.');
+      }
+      final publicationErrors = TestCloudMapper.validateForPublication(
+        test,
+        documentId: test.id,
+      );
+      if (publicationErrors.isNotEmpty) {
+        throw FormatException(publicationErrors.join(' '));
+      }
+    }
+
     await _tests.updateTest(test);
   }
 
