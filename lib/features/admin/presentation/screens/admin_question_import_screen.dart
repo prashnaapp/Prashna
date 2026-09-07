@@ -34,6 +34,9 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
   String? _error;
   bool _busy = false;
 
+  /// True after a successful batch write so callers can refresh lists.
+  bool _dataChanged = false;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +47,13 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
   void dispose() {
     _jsonController.dispose();
     super.dispose();
+  }
+
+  void _leave() {
+    if (!mounted) return;
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(_dataChanged);
+    }
   }
 
   Future<void> _validate() async {
@@ -103,6 +113,15 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
     try {
       final report = await _service.importValidatedBatch(validation);
       if (!mounted) return;
+      if (report.succeeded) {
+        _dataChanged = true;
+        // When opened from Question Bank (or any caller), return immediately
+        // so the list can reload. Standalone/shell-root Import keeps the report.
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop(true);
+          return;
+        }
+      }
       setState(() {
         _importReport = report;
         _busy = false;
@@ -385,6 +404,26 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
                       label: 'Records rejected',
                       value: '${report.recordsRejected}',
                     ),
+                    if (report.succeeded) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: AdminSpacing.md),
+                        child: Text(
+                          'Import succeeded. All questions are drafts '
+                          'pending human review.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AdminColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AdminSpacing.lg),
+                      FilledButton.icon(
+                        key: const ValueKey('import-done'),
+                        onPressed: _leave,
+                        icon: const Icon(Icons.check, size: 18),
+                        label: const Text('Done'),
+                      ),
+                    ],
                     if (report.createdQuestionIds.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: AdminSpacing.sm),
@@ -404,18 +443,6 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
                           ),
                         ),
                       ),
-                    if (report.succeeded)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AdminSpacing.md),
-                        child: Text(
-                          'Import succeeded. All questions are drafts '
-                          'pending human review.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: AdminColors.success,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -425,17 +452,35 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
       ),
     );
 
+    final hasCaller = Navigator.of(context).canPop();
+    final body = PopScope(
+      // When Import is a shell major destination (no caller), do not trap back.
+      canPop: !hasCaller,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _leave();
+      },
+      child: content,
+    );
+
     if (widget.embeddedInShell) {
       // Shell already supplies Scaffold; Material keeps TextField ink/theme safe.
       return Material(
         color: AdminColors.backgroundTop,
-        child: content,
+        child: body,
       );
     }
     return Scaffold(
       backgroundColor: AdminColors.backgroundTop,
-      appBar: AppBar(title: const Text('Import Questions')),
-      body: content,
+      appBar: AppBar(
+        title: const Text('Import Questions'),
+        leading: IconButton(
+          tooltip: 'Back',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _leave,
+        ),
+      ),
+      body: body,
     );
   }
 }

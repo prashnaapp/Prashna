@@ -124,10 +124,10 @@ class _AdminTestSeriesBrowserScreenState
   }
 
   Future<void> _create(AdminTestScope scope) async {
-    await Navigator.of(
+    final changed = await Navigator.of(
       context,
     ).pushNamed(AdminRoutes.testCreate, arguments: scope);
-    if (mounted) await _load();
+    if (mounted && changed == true) await _load();
   }
 
   Future<void> _addYear() async {

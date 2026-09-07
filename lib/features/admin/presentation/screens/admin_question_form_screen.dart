@@ -67,14 +67,14 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
 
   Future<void> _handlePopRequest() async {
     if (!_dirty) {
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop(false);
       return;
     }
     final controller = _dirtyController;
     final leave = controller != null
         ? await controller.confirmLeaveIfNeeded(context)
         : await _showLocalDiscardDialog();
-    if (leave && mounted) Navigator.of(context).pop();
+    if (leave && mounted) Navigator.of(context).pop(false);
   }
 
   Future<bool> _showLocalDiscardDialog() async {

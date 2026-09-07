@@ -72,6 +72,12 @@ class _AdminShellState extends State<AdminShell> {
     _scaffoldKey.currentState?.closeDrawer();
   }
 
+  Future<void> _requestSignOut() async {
+    final allowed = await _dirtyController.confirmSignOutIfNeeded(context);
+    if (!allowed || !mounted) return;
+    await widget.onSignOut();
+  }
+
   void _onNestedRoute(Route<dynamic> route, Route<dynamic>? previousRoute) {
     final name = route.settings.name;
     final matched = AdminNavDestinationX.fromRouteName(name);
@@ -107,7 +113,7 @@ class _AdminShellState extends State<AdminShell> {
                       displayName: displayName,
                       email: widget.user?.email,
                       onSelect: _go,
-                      onSignOut: widget.onSignOut,
+                      onSignOut: _requestSignOut,
                     ),
                   ),
                 ),
@@ -124,7 +130,7 @@ class _AdminShellState extends State<AdminShell> {
                         displayName: displayName,
                         email: widget.user?.email,
                         onSelect: _go,
-                        onSignOut: widget.onSignOut,
+                        onSignOut: _requestSignOut,
                       ),
                     ),
                   ),
@@ -156,7 +162,7 @@ class _AdminShellState extends State<AdminShell> {
                                 ),
                                 const Spacer(),
                                 TextButton(
-                                  onPressed: () => widget.onSignOut(),
+                                  onPressed: _requestSignOut,
                                   child: const Text('Sign out'),
                                 ),
                               ],

@@ -80,17 +80,17 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
   }
 
   Future<void> _openCreate() async {
-    await Navigator.of(
+    final changed = await Navigator.of(
       context,
     ).pushNamed(AdminRoutes.testCreate, arguments: _courseId);
-    if (mounted) await _loadTests();
+    if (mounted && changed == true) await _loadTests();
   }
 
   Future<void> _openEdit(TestModel test) async {
-    await Navigator.of(
+    final changed = await Navigator.of(
       context,
     ).pushNamed(AdminRoutes.testEdit, arguments: test);
-    if (mounted) await _loadTests();
+    if (mounted && changed == true) await _loadTests();
   }
 
   Future<void> _setStatus(TestModel test, TestPublicationStatus status) async {

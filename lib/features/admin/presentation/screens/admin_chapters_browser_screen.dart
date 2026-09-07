@@ -116,7 +116,7 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
     final paperId = widget.paperId;
     final unitId = widget.unitId;
     if (courseId == null || paperId == null || unitId == null) return;
-    await Navigator.of(context).pushNamed(
+    final changed = await Navigator.of(context).pushNamed(
       AdminRoutes.testCreate,
       arguments: AdminTestScope(
         category: TestCategoryType.chapterTests,
@@ -126,7 +126,7 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
         syllabusUnitId: unitId,
       ),
     );
-    if (mounted) await _load();
+    if (mounted && changed == true) await _load();
   }
 
   String get _title {

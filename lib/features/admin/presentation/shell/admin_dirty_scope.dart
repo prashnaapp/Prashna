@@ -48,6 +48,39 @@ class AdminDirtyController extends ChangeNotifier {
     );
     return result == true;
   }
+
+  /// Returns true when sign-out may proceed.
+  Future<bool> confirmSignOutIfNeeded(BuildContext context) async {
+    if (!isDirty) return true;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('You have unsaved changes'),
+          content: const Text(
+            'You have unsaved changes. If you sign out now, your changes '
+            'will be lost.',
+          ),
+          actions: [
+            TextButton(
+              key: const ValueKey('dirty-sign-out-stay'),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Stay'),
+            ),
+            FilledButton(
+              key: const ValueKey('dirty-sign-out-discard'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AdminColors.danger,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Discard & Sign Out'),
+            ),
+          ],
+        );
+      },
+    );
+    return result == true;
+  }
 }
 
 class AdminDirtyScope extends InheritedNotifier<AdminDirtyController> {

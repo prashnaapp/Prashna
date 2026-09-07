@@ -30,8 +30,10 @@ class AdminManagedTestList extends StatelessWidget {
   final String? scopeLabel;
 
   Future<void> _openEdit(BuildContext context, TestModel test) async {
-    await Navigator.of(context).pushNamed(AdminRoutes.testEdit, arguments: test);
-    await onChanged();
+    final changed = await Navigator.of(
+      context,
+    ).pushNamed(AdminRoutes.testEdit, arguments: test);
+    if (changed == true) await onChanged();
   }
 
   Future<void> _setStatus(

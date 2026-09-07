@@ -610,6 +610,229 @@ void main() {
     });
   });
 
+  group('Sign-out dirty protection (Phase 4C)', () {
+    Future<void> pumpShellWithQuestion(
+      WidgetTester tester, {
+      required Future<void> Function() onSignOut,
+    }) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AdminShell(
+            user: user,
+            onSignOut: onSignOut,
+            embeddedChild: _ShellDirtyQuestionHost(
+              question: buildQuestion(),
+              courses: const [groupIi, groupIii],
+            ),
+          ),
+        ),
+      );
+      await settleDirtyTracking(tester);
+    }
+
+    Future<void> pumpShellWithTest(
+      WidgetTester tester, {
+      required Future<void> Function() onSignOut,
+    }) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AdminShell(
+            user: user,
+            onSignOut: onSignOut,
+            embeddedChild: _ShellDirtyTestHost(
+              testModel: buildTest(),
+              courses: const [groupIi, groupIii],
+            ),
+          ),
+        ),
+      );
+      await settleDirtyTracking(tester);
+    }
+
+    testWidgets('clean Question form Sign Out skips dirty confirmation', (
+      tester,
+    ) async {
+      var signedOut = false;
+      await pumpShellWithQuestion(tester, onSignOut: () async {
+        signedOut = true;
+      });
+
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('You have unsaved changes'), findsNothing);
+      expect(signedOut, isTrue);
+    });
+
+    testWidgets('dirty Question Sign Out shows confirmation', (tester) async {
+      var signedOut = false;
+      await pumpShellWithQuestion(tester, onSignOut: () async {
+        signedOut = true;
+      });
+
+      await openDropdownAndSelect(
+        tester,
+        fieldKey: const ValueKey('question-status'),
+        optionText: 'published',
+      );
+
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('You have unsaved changes'), findsOneWidget);
+      expect(find.byKey(const ValueKey('dirty-sign-out-stay')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('dirty-sign-out-discard')),
+        findsOneWidget,
+      );
+      expect(signedOut, isFalse);
+    });
+
+    testWidgets('dirty Question Stay keeps form and does not sign out', (
+      tester,
+    ) async {
+      var signedOut = false;
+      await pumpShellWithQuestion(tester, onSignOut: () async {
+        signedOut = true;
+      });
+
+      final questionField = find.widgetWithText(
+        TextFormField,
+        'What is the capital of Telangana?',
+      );
+      await tester.ensureVisible(questionField.first);
+      await tester.enterText(questionField.first, 'Stay preserves this stem');
+      await tester.pump();
+
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+      expect(find.text('You have unsaved changes'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('dirty-sign-out-stay')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('You have unsaved changes'), findsNothing);
+      expect(signedOut, isFalse);
+      expect(find.text('Stay preserves this stem'), findsWidgets);
+      expect(find.byType(AdminQuestionForm), findsOneWidget);
+    });
+
+    testWidgets('dirty Question Discard & Sign Out calls onSignOut', (
+      tester,
+    ) async {
+      var signedOut = false;
+      await pumpShellWithQuestion(tester, onSignOut: () async {
+        signedOut = true;
+      });
+
+      await openDropdownAndSelect(
+        tester,
+        fieldKey: const ValueKey('question-status'),
+        optionText: 'published',
+      );
+
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+      expect(find.text('You have unsaved changes'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('dirty-sign-out-discard')));
+      await tester.pumpAndSettle();
+
+      expect(signedOut, isTrue);
+      expect(find.text('You have unsaved changes'), findsNothing);
+    });
+
+    testWidgets('clean Test form Sign Out skips dirty confirmation', (
+      tester,
+    ) async {
+      var signedOut = false;
+      await pumpShellWithTest(tester, onSignOut: () async {
+        signedOut = true;
+      });
+
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('You have unsaved changes'), findsNothing);
+      expect(signedOut, isTrue);
+    });
+
+    testWidgets('dirty Test Sign Out shows confirmation', (tester) async {
+      var signedOut = false;
+      await pumpShellWithTest(tester, onSignOut: () async {
+        signedOut = true;
+      });
+
+      await openDropdownAndSelect(
+        tester,
+        fieldKey: const ValueKey('test-status'),
+        optionText: 'published',
+      );
+
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('You have unsaved changes'), findsOneWidget);
+      expect(signedOut, isFalse);
+    });
+
+    testWidgets('dirty Test Stay preserves form', (tester) async {
+      var signedOut = false;
+      await pumpShellWithTest(tester, onSignOut: () async {
+        signedOut = true;
+      });
+
+      final titleField = find.widgetWithText(
+        TextFormField,
+        'Group-II Practice Test 1',
+      );
+      await tester.ensureVisible(titleField.first);
+      await tester.enterText(titleField.first, 'Stay keeps test title');
+      await tester.pump();
+
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('dirty-sign-out-stay')));
+      await tester.pumpAndSettle();
+
+      expect(signedOut, isFalse);
+      expect(find.text('Stay keeps test title'), findsWidgets);
+      expect(find.byType(AdminTestForm), findsOneWidget);
+    });
+
+    testWidgets('dirty Test Discard & Sign Out calls onSignOut', (
+      tester,
+    ) async {
+      var signedOut = false;
+      await pumpShellWithTest(tester, onSignOut: () async {
+        signedOut = true;
+      });
+
+      await openDropdownAndSelect(
+        tester,
+        fieldKey: const ValueKey('test-status'),
+        optionText: 'published',
+      );
+
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('dirty-sign-out-discard')));
+      await tester.pumpAndSettle();
+
+      expect(signedOut, isTrue);
+    });
+  });
+
   group('Question form Cancel dirty protection (F1)', () {
     Future<void> openQuestionScreen(
       WidgetTester tester, {
@@ -762,6 +985,59 @@ class _ShellDirtyQuestionHostState extends State<_ShellDirtyQuestionHost> {
       child: AdminQuestionForm(
         courses: widget.courses,
         initialQuestion: widget.question,
+        onSubmit: (_) async {},
+        onDirtyChanged: (value) {
+          if (_dirty == value) return;
+          setState(() => _dirty = value);
+        },
+      ),
+    );
+  }
+}
+
+class _ShellDirtyTestHost extends StatefulWidget {
+  const _ShellDirtyTestHost({
+    required this.testModel,
+    required this.courses,
+  });
+
+  final TestModel testModel;
+  final List<Course> courses;
+
+  @override
+  State<_ShellDirtyTestHost> createState() => _ShellDirtyTestHostState();
+}
+
+class _ShellDirtyTestHostState extends State<_ShellDirtyTestHost> {
+  bool _dirty = false;
+  AdminDirtyController? _controller;
+
+  bool _isDirtyChecker() => _dirty;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = AdminDirtyScope.maybeOf(context);
+    if (!identical(_controller, next)) {
+      _controller?.unbind(_isDirtyChecker);
+      _controller = next;
+      _controller?.bind(_isDirtyChecker);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.unbind(_isDirtyChecker);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: AdminTestForm(
+        courses: widget.courses,
+        initialTest: widget.testModel,
+        initialCourseId: widget.testModel.examId,
         onSubmit: (_) async {},
         onDirtyChanged: (value) {
           if (_dirty == value) return;

@@ -372,10 +372,10 @@ void main() {
     expect(find.byKey(const ValueKey('question-list-search')), findsOneWidget);
     expect(find.byKey(const ValueKey('question-list-course')), findsOneWidget);
     expect(find.byKey(const ValueKey('question-list-status')), findsOneWidget);
-    expect(find.text('Paper'), findsOneWidget);
-    expect(find.text('Part'), findsOneWidget);
-    expect(find.text('Topic'), findsOneWidget);
-    expect(find.text('Lesson'), findsOneWidget);
+    expect(find.byKey(const ValueKey('question-list-paper')), findsOneWidget);
+    // Hierarchy children appear only after a Paper is selected.
+    expect(find.text('Part'), findsNothing);
+    expect(find.text('Major Study Area'), findsNothing);
     expect(find.text('What is the capital of Telangana?'), findsOneWidget);
   });
 
