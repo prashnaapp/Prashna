@@ -69,6 +69,11 @@ void main() {
 
     await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
+    expect(signedOut, isFalse);
+    expect(find.byKey(const ValueKey('admin-sign-out-clean-dialog')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('sign-out-confirm')));
+    await tester.pumpAndSettle();
     expect(signedOut, isTrue);
   });
 

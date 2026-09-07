@@ -267,7 +267,7 @@ void main() {
 
       expect(find.text('No examination years yet'), findsOneWidget);
 
-      await tester.tap(find.text('+ Examination year'));
+      await tester.tap(find.text('Examination year'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), '2018');
       await tester.tap(find.text('Continue'));

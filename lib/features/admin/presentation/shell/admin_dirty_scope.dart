@@ -49,31 +49,66 @@ class AdminDirtyController extends ChangeNotifier {
     return result == true;
   }
 
-  /// Returns true when sign-out may proceed.
-  Future<bool> confirmSignOutIfNeeded(BuildContext context) async {
-    if (!isDirty) return true;
+  /// Always confirms sign-out. Dirty and clean use ONE dialog each (never two).
+  Future<bool> confirmSignOutIfNeeded(BuildContext context) {
+    return AdminSignOutConfirm.show(context, isDirty: isDirty);
+  }
+}
+
+/// Shared Admin sign-out confirmation (shell + auth surfaces).
+///
+/// Clean → Cancel / Sign Out
+/// Dirty → Stay / Discard & Sign Out
+/// Never stacks both dialogs.
+abstract final class AdminSignOutConfirm {
+  static Future<bool> show(
+    BuildContext context, {
+    required bool isDirty,
+  }) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
+        if (isDirty) {
+          return AlertDialog(
+            key: const ValueKey('admin-sign-out-dirty-dialog'),
+            title: const Text('Sign out and discard changes?'),
+            content: const Text(
+              'You have unsaved changes. Signing out will discard them.',
+            ),
+            actions: [
+              TextButton(
+                key: const ValueKey('dirty-sign-out-stay'),
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Stay'),
+              ),
+              FilledButton(
+                key: const ValueKey('dirty-sign-out-discard'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AdminColors.danger,
+                ),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Discard & Sign Out'),
+              ),
+            ],
+          );
+        }
+
         return AlertDialog(
-          title: const Text('You have unsaved changes'),
+          key: const ValueKey('admin-sign-out-clean-dialog'),
+          title: const Text('Sign out?'),
           content: const Text(
-            'You have unsaved changes. If you sign out now, your changes '
-            'will be lost.',
+            'Are you sure you want to sign out of the Admin workspace?',
           ),
           actions: [
             TextButton(
-              key: const ValueKey('dirty-sign-out-stay'),
+              key: const ValueKey('sign-out-cancel'),
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Stay'),
+              child: const Text('Cancel'),
             ),
             FilledButton(
-              key: const ValueKey('dirty-sign-out-discard'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AdminColors.danger,
-              ),
+              key: const ValueKey('sign-out-confirm'),
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Discard & Sign Out'),
+              child: const Text('Sign Out'),
             ),
           ],
         );

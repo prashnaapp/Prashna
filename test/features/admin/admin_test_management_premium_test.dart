@@ -102,7 +102,7 @@ void main() {
 
     expect(find.text('Managed Tests'), findsOneWidget);
     expect(find.text('Group-II › Paper-wise Tests'), findsOneWidget);
-    expect(find.text('+ Create Test'), findsOneWidget);
+    expect(find.text('Create Test'), findsOneWidget);
     expect(find.byType(AdminEmptyState), findsOneWidget);
     expect(find.text('No tests in this folder yet.'), findsOneWidget);
   });

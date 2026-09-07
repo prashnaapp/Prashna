@@ -146,8 +146,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('+ Create Question'), findsOneWidget);
-    await tester.tap(find.text('+ Create Question'));
+    expect(find.text('Create Question'), findsOneWidget);
+    await tester.tap(find.text('Create Question'));
     await tester.pumpAndSettle();
 
     expect(find.text('Create route opened'), findsOneWidget);
@@ -367,7 +367,7 @@ void main() {
       find.textContaining('Manage, review, publish, archive'),
       findsOneWidget,
     );
-    expect(find.text('+ Create Question'), findsOneWidget);
+    expect(find.text('Create Question'), findsOneWidget);
     expect(find.text('Import Questions'), findsOneWidget);
     expect(find.byKey(const ValueKey('question-list-search')), findsOneWidget);
     expect(find.byKey(const ValueKey('question-list-course')), findsOneWidget);
@@ -390,7 +390,7 @@ void main() {
 
     expect(find.text('No questions yet'), findsOneWidget);
     expect(find.textContaining('Create your first question'), findsOneWidget);
-    expect(find.text('+ Create Question'), findsWidgets);
+    expect(find.text('Create Question'), findsWidgets);
   });
 
   testWidgets('13: filtered empty results show adjust-filters guidance', (

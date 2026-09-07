@@ -108,7 +108,7 @@ class AdminManagedTestList extends StatelessWidget {
             FilledButton.icon(
               onPressed: onCreate,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('+ Create Test'),
+              label: const Text('Create Test'),
             ),
           ],
         ),

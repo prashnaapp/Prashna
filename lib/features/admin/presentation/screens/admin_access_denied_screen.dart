@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../authentication/models/auth_user.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
+import '../shell/admin_dirty_scope.dart';
 import '../widgets/admin_ui/admin_surface.dart';
 
 /// Shown when Firebase Auth succeeds but `admin: true` claim is missing.
@@ -78,7 +79,15 @@ class AdminAccessDeniedScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: AdminSpacing.xxl),
                       OutlinedButton(
-                        onPressed: () => onSignOut(),
+                        key: const ValueKey('admin-access-denied-sign-out'),
+                        onPressed: () async {
+                          final allowed = await AdminSignOutConfirm.show(
+                            context,
+                            isDirty: false,
+                          );
+                          if (!allowed || !context.mounted) return;
+                          await onSignOut();
+                        },
                         child: const Text('Sign out'),
                       ),
                     ],

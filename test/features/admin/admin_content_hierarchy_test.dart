@@ -150,7 +150,7 @@ void main() {
     expect(find.text('Mock Tests'), findsNothing);
     expect(
       find.text(
-        'Course → Paper → Part (when applicable) → Chapter → Test',
+        'Browse the syllabus hierarchy and manage chapter tests',
       ),
       findsOneWidget,
     );
@@ -305,14 +305,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Parts'), findsWidgets);
-    expect(find.text('+ Create Test'), findsNothing);
+    expect(find.text('Create Test'), findsNothing);
     for (final part in paper.parts) {
       expect(find.text(part.displayName), findsOneWidget);
     }
 
     await tester.tap(find.text(paper.parts.first.displayName));
     await tester.pumpAndSettle();
-    expect(find.text('+ Create Test'), findsOneWidget);
+    expect(find.text('Create Test'), findsOneWidget);
   });
 
   testWidgets('Grand Tests always lists the four approved series', (
@@ -438,7 +438,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('+ Create Test'));
+    await tester.tap(find.text('Create Test'));
     await tester.pumpAndSettle();
 
     final scope = args as AdminTestScope;

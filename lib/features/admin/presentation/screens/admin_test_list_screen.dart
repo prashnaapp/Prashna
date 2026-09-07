@@ -199,7 +199,7 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
                   FilledButton.icon(
                     onPressed: _courseId == null ? null : _openCreate,
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('+ Create Test'),
+                    label: const Text('Create Test'),
                   ),
                 ],
               ),

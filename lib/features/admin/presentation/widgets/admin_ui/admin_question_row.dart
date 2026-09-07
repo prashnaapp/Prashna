@@ -7,7 +7,7 @@ import 'admin_status_badge.dart';
 import 'admin_surface.dart';
 
 /// Dense premium row for one question in Admin Question Bank.
-class AdminQuestionRow extends StatelessWidget {
+class AdminQuestionRow extends StatefulWidget {
   const AdminQuestionRow({
     super.key,
     required this.question,
@@ -56,9 +56,17 @@ class AdminQuestionRow extends StatelessWidget {
   }
 
   @override
+  State<AdminQuestionRow> createState() => _AdminQuestionRowState();
+}
+
+class _AdminQuestionRowState extends State<AdminQuestionRow> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final status = effectiveStatus(question);
+    final question = widget.question;
+    final status = AdminQuestionRow.effectiveStatus(question);
     final (lifecycleLabel, lifecycleIcon, nextStatus) = switch (status) {
       QuestionPublicationStatus.published => (
         'Archive',
@@ -77,7 +85,7 @@ class AdminQuestionRow extends StatelessWidget {
       ),
     };
 
-    final path = syllabusPath(question);
+    final path = AdminQuestionRow.syllabusPath(question);
     final metadata = <String>[
       question.difficulty.name,
       question.questionType.name,
@@ -86,112 +94,134 @@ class AdminQuestionRow extends StatelessWidget {
       '${_formatNumber(question.marks)} mark${question.marks == 1 ? '' : 's'}',
     ];
 
-    return AdminSurface(
-      padding: const EdgeInsets.fromLTRB(
-        AdminSpacing.lg,
-        AdminSpacing.md,
-        AdminSpacing.md,
-        AdminSpacing.md,
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 640;
-          final actions = Wrap(
-            spacing: AdminSpacing.xs,
-            runSpacing: AdminSpacing.xs,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              IconButton(
-                key: ValueKey('question-edit-${question.id}'),
-                tooltip: 'Edit',
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined, size: 20),
-              ),
-              TextButton.icon(
-                key: ValueKey('question-lifecycle-${question.id}'),
-                onPressed: () => onRequestStatus(nextStatus),
-                icon: Icon(lifecycleIcon, size: 18),
-                label: Text(lifecycleLabel),
-              ),
-            ],
-          );
-
-          final header = Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  previewText(question),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    height: 1.3,
-                    color: AdminColors.textPrimary,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        transform: Matrix4.translationValues(0, _hovered ? -1 : 0, 0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: _hovered
+              ? [
+                  BoxShadow(
+                    color: AdminColors.textPrimary.withValues(alpha: 0.08),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
                   ),
-                ),
-              ),
-              const SizedBox(width: AdminSpacing.sm),
-              AdminStatusBadge.question(
-                status,
-                key: ValueKey('question-status-${question.id}'),
-              ),
-            ],
-          );
-
-          final details = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (path.isNotEmpty) ...[
-                const SizedBox(height: AdminSpacing.xs),
-                Text(
-                  path.join('  ›  '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AdminColors.textSecondary,
-                    height: 1.3,
-                  ),
-                ),
-              ],
-              const SizedBox(height: AdminSpacing.xs),
-              Wrap(
-                spacing: AdminSpacing.sm,
+                ]
+              : const [],
+        ),
+        child: AdminSurface(
+          padding: const EdgeInsets.fromLTRB(
+            AdminSpacing.lg,
+            AdminSpacing.md,
+            AdminSpacing.md,
+            AdminSpacing.md,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 640;
+              final actions = Wrap(
+                spacing: AdminSpacing.xs,
                 runSpacing: AdminSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  for (final item in metadata) _MetaChip(label: item),
-                  _MetaChip(label: question.id, muted: true),
+                  IconButton(
+                    key: ValueKey('question-edit-${question.id}'),
+                    tooltip: 'Edit',
+                    onPressed: widget.onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                  ),
+                  TextButton.icon(
+                    key: ValueKey('question-lifecycle-${question.id}'),
+                    onPressed: () => widget.onRequestStatus(nextStatus),
+                    icon: Icon(lifecycleIcon, size: 18),
+                    label: Text(lifecycleLabel),
+                  ),
                 ],
-              ),
-            ],
-          );
+              );
 
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                header,
-                details,
-                const SizedBox(height: AdminSpacing.sm),
-                Align(alignment: Alignment.centerLeft, child: actions),
-              ],
-            );
-          }
+              final header = Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      AdminQuestionRow.previewText(question),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                        color: AdminColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AdminSpacing.sm),
+                  AdminStatusBadge.question(
+                    status,
+                    key: ValueKey('question-status-${question.id}'),
+                  ),
+                ],
+              );
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
+              final details = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (path.isNotEmpty) ...[
+                    const SizedBox(height: AdminSpacing.xs),
+                    Text(
+                      path.join('  ›  '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AdminColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AdminSpacing.xs),
+                  Wrap(
+                    spacing: AdminSpacing.sm,
+                    runSpacing: AdminSpacing.xs,
+                    children: [
+                      for (final item in metadata) _MetaChip(label: item),
+                      _MetaChip(label: question.id, muted: true),
+                    ],
+                  ),
+                ],
+              );
+
+              if (compact) {
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [header, details],
-                ),
-              ),
-              const SizedBox(width: AdminSpacing.md),
-              actions,
-            ],
-          );
-        },
+                  children: [
+                    header,
+                    details,
+                    const SizedBox(height: AdminSpacing.sm),
+                    Align(alignment: Alignment.centerLeft, child: actions),
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [header, details],
+                    ),
+                  ),
+                  const SizedBox(width: AdminSpacing.md),
+                  actions,
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

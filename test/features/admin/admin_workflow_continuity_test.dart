@@ -268,7 +268,9 @@ void main() {
       await tester.pumpAndSettle();
       final afterInitial = service.loadQuestionsCalls;
 
-      await tester.tap(find.byKey(const ValueKey('question-edit-q-1')));
+      final edit = find.byKey(const ValueKey('question-edit-q-1'));
+      await tester.ensureVisible(edit);
+      await tester.tap(edit);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();

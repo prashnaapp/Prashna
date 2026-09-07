@@ -54,12 +54,29 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
   String? _error;
   bool _loadingCourses = true;
   bool _loadingQuestions = false;
+  late final TextEditingController _searchController;
 
   @override
   void initState() {
     super.initState();
     _service = widget.service ?? AdminQuestionService.instance;
+    _searchController = TextEditingController();
     _loadCourses();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _clearActiveFilters() {
+    setState(() {
+      _searchController.clear();
+      _search = '';
+      _statusFilter = null;
+      _clearHierarchyFilters();
+    });
   }
 
   void _clearHierarchyFilters() {
@@ -248,17 +265,17 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
   }
 
   List<Widget> get _headerActions => [
-    FilledButton.icon(
-      key: const ValueKey('question-list-create'),
-      onPressed: _courseId == null ? null : _openCreate,
-      icon: const Icon(Icons.add, size: 18),
-      label: const Text('+ Create Question'),
-    ),
     OutlinedButton.icon(
       key: const ValueKey('question-list-import'),
       onPressed: _openImport,
       icon: const Icon(Icons.upload_file_outlined, size: 18),
       label: const Text('Import Questions'),
+    ),
+    FilledButton.icon(
+      key: const ValueKey('question-list-create'),
+      onPressed: _courseId == null ? null : _openCreate,
+      icon: const Icon(Icons.add, size: 18),
+      label: const Text('Create Question'),
     ),
   ];
 
@@ -330,146 +347,223 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
     }
 
     final visible = _visibleQuestions;
+    final selectedCourse = _courses
+        .where((c) => c.courseId == _courseId)
+        .firstOrNull;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AdminSpacing.pagePadding,
-            AdminSpacing.pagePadding,
-            AdminSpacing.pagePadding,
-            AdminSpacing.sm,
+    return SingleChildScrollView(
+      key: const ValueKey('question-list-scroll'),
+      padding: const EdgeInsets.fromLTRB(
+        AdminSpacing.pagePadding,
+        AdminSpacing.pagePadding,
+        AdminSpacing.pagePadding,
+        AdminSpacing.pagePadding,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AdminPageHeader(
+            title: 'Question Bank',
+            subtitle:
+                'Manage, review, publish, archive, and organize your exam questions.',
+            actions: _headerActions,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          if (selectedCourse != null) ...[
+            Text(
+              'Managing questions for',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: AdminColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AdminSpacing.xs),
+            Text(
+              selectedCourse.title,
+              key: const ValueKey('question-list-course-context'),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AdminColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AdminSpacing.lg),
+          ],
+          _FilterWorkspace(
+            courses: _courses,
+            syllabus: _syllabus,
+            courseId: _courseId,
+            statusFilter: _statusFilter,
+            paperFilter: _paperFilter,
+            majorStudyAreaFilter: _majorStudyAreaFilter,
+            contentTopicFilter: _contentTopicFilter,
+            partFilter: _partFilter,
+            topicFilter: _topicFilter,
+            lessonFilter: _lessonFilter,
+            syllabusUnitFilter: _syllabusUnitFilter,
+            searchController: _searchController,
+            hasActiveFilters: _hasActiveFilters,
+            onClearFilters: _clearActiveFilters,
+            onCourseChanged: (value) async {
+              setState(() {
+                _courseId = value;
+                _clearHierarchyFilters();
+              });
+              await _loadQuestions();
+            },
+            onSearchChanged: (value) => setState(() => _search = value),
+            onStatusChanged: (value) => setState(() => _statusFilter = value),
+            onPaperChanged: (value) => setState(() {
+              _paperFilter = value;
+              _majorStudyAreaFilter = null;
+              _contentTopicFilter = null;
+              _partFilter = null;
+              _topicFilter = null;
+              _lessonFilter = null;
+              _syllabusUnitFilter = null;
+            }),
+            onMajorStudyAreaChanged: (value) => setState(() {
+              _majorStudyAreaFilter = value;
+              _contentTopicFilter = null;
+            }),
+            onContentTopicChanged: (value) =>
+                setState(() => _contentTopicFilter = value),
+            onPartChanged: (value) => setState(() {
+              _partFilter = value;
+              _topicFilter = null;
+              _lessonFilter = null;
+              _syllabusUnitFilter = null;
+            }),
+            onTopicChanged: (value) => setState(() {
+              _topicFilter = value;
+              _lessonFilter = null;
+            }),
+            onLessonChanged: (value) => setState(() => _lessonFilter = value),
+            onSyllabusUnitChanged: (value) =>
+                setState(() => _syllabusUnitFilter = value),
+          ),
+          const SizedBox(height: AdminSpacing.lg),
+          Row(
             children: [
-              AdminPageHeader(
-                title: 'Question Bank',
-                subtitle:
-                    'Manage, review, publish, archive, and organize your exam questions.',
-                actions: _headerActions,
+              Text(
+                'Questions',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AdminColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              _FilterWorkspace(
-                courses: _courses,
-                syllabus: _syllabus,
-                courseId: _courseId,
-                statusFilter: _statusFilter,
-                paperFilter: _paperFilter,
-                majorStudyAreaFilter: _majorStudyAreaFilter,
-                contentTopicFilter: _contentTopicFilter,
-                partFilter: _partFilter,
-                topicFilter: _topicFilter,
-                lessonFilter: _lessonFilter,
-                syllabusUnitFilter: _syllabusUnitFilter,
-                onCourseChanged: (value) async {
-                  setState(() {
-                    _courseId = value;
-                    _clearHierarchyFilters();
-                  });
-                  await _loadQuestions();
-                },
-                onSearchChanged: (value) => setState(() => _search = value),
-                onStatusChanged: (value) =>
-                    setState(() => _statusFilter = value),
-                onPaperChanged: (value) => setState(() {
-                  _paperFilter = value;
-                  _majorStudyAreaFilter = null;
-                  _contentTopicFilter = null;
-                  _partFilter = null;
-                  _topicFilter = null;
-                  _lessonFilter = null;
-                  _syllabusUnitFilter = null;
-                }),
-                onMajorStudyAreaChanged: (value) => setState(() {
-                  _majorStudyAreaFilter = value;
-                  _contentTopicFilter = null;
-                }),
-                onContentTopicChanged: (value) =>
-                    setState(() => _contentTopicFilter = value),
-                onPartChanged: (value) => setState(() {
-                  _partFilter = value;
-                  _topicFilter = null;
-                  _lessonFilter = null;
-                  _syllabusUnitFilter = null;
-                }),
-                onTopicChanged: (value) => setState(() {
-                  _topicFilter = value;
-                  _lessonFilter = null;
-                }),
-                onLessonChanged: (value) =>
-                    setState(() => _lessonFilter = value),
-                onSyllabusUnitChanged: (value) =>
-                    setState(() => _syllabusUnitFilter = value),
+              const SizedBox(width: AdminSpacing.sm),
+              Text(
+                _loadingQuestions
+                    ? 'Loading…'
+                    : '${visible.length} of ${_questions.length}',
+                key: const ValueKey('question-list-result-count'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AdminColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              if (_error != null) ...[
-                const SizedBox(height: AdminSpacing.md),
-                AdminSurface(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AdminSpacing.lg,
-                    vertical: AdminSpacing.md,
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
+            ],
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: AdminSpacing.md),
+            AdminSurface(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AdminSpacing.lg,
+                vertical: AdminSpacing.md,
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: AdminColors.danger),
+                  const SizedBox(width: AdminSpacing.md),
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AdminColors.danger,
                       ),
-                      const SizedBox(width: AdminSpacing.md),
-                      Expanded(
-                        child: Text(
-                          _error!,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AdminColors.danger),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _loadQuestions,
-                        child: const Text('Retry'),
-                      ),
-                    ],
+                    ),
                   ),
+                  TextButton(
+                    onPressed: _loadQuestions,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: AdminSpacing.md),
+          if (_loadingQuestions)
+            ..._inlineLoadingRows()
+          else if (visible.isEmpty)
+            _buildEmptyState()
+          else
+            for (var i = 0; i < visible.length; i++) ...[
+              AdminQuestionRow(
+                question: visible[i],
+                onEdit: () => _openEdit(visible[i]),
+                onRequestStatus: (status) =>
+                    _requestLifecycleStatus(visible[i], status),
+              ),
+              if (i != visible.length - 1)
+                const SizedBox(height: AdminSpacing.md),
+            ],
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _inlineLoadingRows({int rows = 3}) {
+    return [
+      for (var i = 0; i < rows; i++) ...[
+        AdminSurface(
+          padding: const EdgeInsets.all(AdminSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 72,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: AdminColors.surfaceMuted,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    width: 64,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: AdminColors.surfaceMuted,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AdminSpacing.md),
+              Container(
+                width: double.infinity,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AdminColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(6),
                 ),
-              ],
+              ),
+              const SizedBox(height: AdminSpacing.sm),
+              Container(
+                width: 280,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AdminColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
             ],
           ),
         ),
-        Expanded(
-          child: _loadingQuestions
-              ? const AdminLoadingSurface(rows: 3)
-              : visible.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AdminSpacing.pagePadding,
-                    0,
-                    AdminSpacing.pagePadding,
-                    AdminSpacing.pagePadding,
-                  ),
-                  child: _buildEmptyState(),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(
-                    AdminSpacing.pagePadding,
-                    AdminSpacing.sm,
-                    AdminSpacing.pagePadding,
-                    AdminSpacing.pagePadding,
-                  ),
-                  itemCount: visible.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: AdminSpacing.md),
-                  itemBuilder: (context, index) {
-                    final question = visible[index];
-                    return AdminQuestionRow(
-                      question: question,
-                      onEdit: () => _openEdit(question),
-                      onRequestStatus: (status) =>
-                          _requestLifecycleStatus(question, status),
-                    );
-                  },
-                ),
-        ),
+        if (i != rows - 1) const SizedBox(height: AdminSpacing.md),
       ],
-    );
+    ];
   }
 
   Widget _buildEmptyState() {
@@ -482,7 +576,7 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
         action: FilledButton.icon(
           onPressed: _courseId == null ? null : _openCreate,
           icon: const Icon(Icons.add, size: 18),
-          label: const Text('+ Create Question'),
+          label: const Text('Create Question'),
         ),
       );
     }
@@ -495,7 +589,7 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
       action: FilledButton.icon(
         onPressed: _courseId == null ? null : _openCreate,
         icon: const Icon(Icons.add, size: 18),
-        label: const Text('+ Create Question'),
+        label: const Text('Create Question'),
       ),
     );
   }
@@ -514,6 +608,9 @@ class _FilterWorkspace extends StatelessWidget {
     required this.topicFilter,
     required this.lessonFilter,
     required this.syllabusUnitFilter,
+    required this.searchController,
+    required this.hasActiveFilters,
+    required this.onClearFilters,
     required this.onCourseChanged,
     required this.onSearchChanged,
     required this.onStatusChanged,
@@ -537,6 +634,9 @@ class _FilterWorkspace extends StatelessWidget {
   final String? topicFilter;
   final String? lessonFilter;
   final String? syllabusUnitFilter;
+  final TextEditingController searchController;
+  final bool hasActiveFilters;
+  final VoidCallback onClearFilters;
   final ValueChanged<String?> onCourseChanged;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<QuestionPublicationStatus?> onStatusChanged;
@@ -574,27 +674,86 @@ class _FilterWorkspace extends StatelessWidget {
   Widget build(BuildContext context) {
     final papers = _course?.papers ?? const <SyllabusPaper>[];
     final paper = _paper;
+    final theme = Theme.of(context);
 
     return AdminSurface(
-      padding: const EdgeInsets.all(AdminSpacing.md),
+      key: const ValueKey('question-list-filter-panel'),
+      padding: const EdgeInsets.all(AdminSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Filters',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: AdminColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Refine the questions shown below',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AdminColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (hasActiveFilters)
+                TextButton(
+                  key: const ValueKey('question-list-clear-filters'),
+                  onPressed: onClearFilters,
+                  child: const Text('Clear filters'),
+                ),
+            ],
+          ),
+          const SizedBox(height: AdminSpacing.lg),
           TextField(
             key: const ValueKey('question-list-search'),
-            decoration: const InputDecoration(
+            controller: searchController,
+            decoration: InputDecoration(
               isDense: true,
               labelText: 'Search',
               hintText: 'Search questions by text, ID, or syllabus…',
-              prefixIcon: Icon(Icons.search, size: 20),
-              border: OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              filled: true,
+              fillColor: AdminColors.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AdminColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AdminColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: AdminColors.primary,
+                  width: 1.4,
+                ),
+              ),
             ),
             onChanged: onSearchChanged,
           ),
+          const SizedBox(height: AdminSpacing.lg),
+          Text(
+            'Course & status',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: AdminColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: AdminSpacing.sm),
           Wrap(
-            spacing: AdminSpacing.sm,
-            runSpacing: AdminSpacing.sm,
+            spacing: AdminSpacing.md,
+            runSpacing: AdminSpacing.md,
             children: [
               _dropdown<String>(
                 key: const ValueKey('question-list-course'),
@@ -633,6 +792,21 @@ class _FilterWorkspace extends StatelessWidget {
                 ],
                 onChanged: onStatusChanged,
               ),
+            ],
+          ),
+          const SizedBox(height: AdminSpacing.lg),
+          Text(
+            'Syllabus hierarchy',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: AdminColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AdminSpacing.sm),
+          Wrap(
+            spacing: AdminSpacing.md,
+            runSpacing: AdminSpacing.md,
+            children: [
               _dropdown<String?>(
                 key: const ValueKey('question-list-paper'),
                 rebuildKey: ValueKey('rebuild-paper-$paperFilter'),
@@ -867,7 +1041,22 @@ class _FilterWorkspace extends StatelessWidget {
           decoration: InputDecoration(
             isDense: true,
             labelText: label,
-            border: const OutlineInputBorder(),
+            filled: true,
+            fillColor: AdminColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AdminColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: AdminColors.primary,
+                width: 1.4,
+              ),
+            ),
           ),
           items: items,
           onChanged: onChanged,

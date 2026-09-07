@@ -659,7 +659,7 @@ void main() {
       await settleDirtyTracking(tester);
     }
 
-    testWidgets('clean Question form Sign Out skips dirty confirmation', (
+    testWidgets('clean Question form Sign Out always confirms', (
       tester,
     ) async {
       var signedOut = false;
@@ -670,11 +670,34 @@ void main() {
       await tester.tap(find.text('Sign out').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('You have unsaved changes'), findsNothing);
+      expect(find.byKey(const ValueKey('admin-sign-out-clean-dialog')), findsOneWidget);
+      expect(find.byKey(const ValueKey('sign-out-cancel')), findsOneWidget);
+      expect(find.byKey(const ValueKey('sign-out-confirm')), findsOneWidget);
+      expect(signedOut, isFalse);
+
+      await tester.tap(find.byKey(const ValueKey('sign-out-confirm')));
+      await tester.pumpAndSettle();
       expect(signedOut, isTrue);
     });
 
-    testWidgets('dirty Question Sign Out shows confirmation', (tester) async {
+    testWidgets('clean Question Sign Out Cancel keeps user signed in', (
+      tester,
+    ) async {
+      var signedOut = false;
+      await pumpShellWithQuestion(tester, onSignOut: () async {
+        signedOut = true;
+      });
+
+      await tester.tap(find.text('Sign out').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('sign-out-cancel')));
+      await tester.pumpAndSettle();
+
+      expect(signedOut, isFalse);
+      expect(find.byType(AdminQuestionForm), findsOneWidget);
+    });
+
+    testWidgets('dirty Question Sign Out shows one combined confirmation', (tester) async {
       var signedOut = false;
       await pumpShellWithQuestion(tester, onSignOut: () async {
         signedOut = true;
@@ -689,7 +712,12 @@ void main() {
       await tester.tap(find.text('Sign out').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('You have unsaved changes'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('admin-sign-out-dirty-dialog')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('admin-sign-out-clean-dialog')), findsNothing);
+      expect(find.text('Sign out and discard changes?'), findsOneWidget);
       expect(find.byKey(const ValueKey('dirty-sign-out-stay')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('dirty-sign-out-discard')),
@@ -716,12 +744,12 @@ void main() {
 
       await tester.tap(find.text('Sign out').first);
       await tester.pumpAndSettle();
-      expect(find.text('You have unsaved changes'), findsOneWidget);
+      expect(find.text('Sign out and discard changes?'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('dirty-sign-out-stay')));
       await tester.pumpAndSettle();
 
-      expect(find.text('You have unsaved changes'), findsNothing);
+      expect(find.text('Sign out and discard changes?'), findsNothing);
       expect(signedOut, isFalse);
       expect(find.text('Stay preserves this stem'), findsWidgets);
       expect(find.byType(AdminQuestionForm), findsOneWidget);
@@ -743,16 +771,16 @@ void main() {
 
       await tester.tap(find.text('Sign out').first);
       await tester.pumpAndSettle();
-      expect(find.text('You have unsaved changes'), findsOneWidget);
+      expect(find.text('Sign out and discard changes?'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('dirty-sign-out-discard')));
       await tester.pumpAndSettle();
 
       expect(signedOut, isTrue);
-      expect(find.text('You have unsaved changes'), findsNothing);
+      expect(find.text('Sign out and discard changes?'), findsNothing);
     });
 
-    testWidgets('clean Test form Sign Out skips dirty confirmation', (
+    testWidgets('clean Test form Sign Out always confirms', (
       tester,
     ) async {
       var signedOut = false;
@@ -763,11 +791,15 @@ void main() {
       await tester.tap(find.text('Sign out').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('You have unsaved changes'), findsNothing);
+      expect(find.byKey(const ValueKey('admin-sign-out-clean-dialog')), findsOneWidget);
+      expect(signedOut, isFalse);
+
+      await tester.tap(find.byKey(const ValueKey('sign-out-confirm')));
+      await tester.pumpAndSettle();
       expect(signedOut, isTrue);
     });
 
-    testWidgets('dirty Test Sign Out shows confirmation', (tester) async {
+    testWidgets('dirty Test Sign Out shows one combined confirmation', (tester) async {
       var signedOut = false;
       await pumpShellWithTest(tester, onSignOut: () async {
         signedOut = true;
@@ -782,7 +814,12 @@ void main() {
       await tester.tap(find.text('Sign out').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('You have unsaved changes'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('admin-sign-out-dirty-dialog')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('admin-sign-out-clean-dialog')), findsNothing);
+      expect(find.text('Sign out and discard changes?'), findsOneWidget);
       expect(signedOut, isFalse);
     });
 

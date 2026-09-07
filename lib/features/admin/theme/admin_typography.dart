@@ -36,12 +36,22 @@ abstract final class AdminTypography {
         color: primary,
         fontWeight: FontWeight.w600,
       ),
+      // Body defaults to primary so content is not globally washed out.
+      // Supporting copy should explicitly use textSecondary.
       bodyLarge: base.bodyLarge?.copyWith(color: primary, height: 1.45),
-      bodyMedium: base.bodyMedium?.copyWith(color: secondary, height: 1.45),
+      bodyMedium: base.bodyMedium?.copyWith(color: primary, height: 1.45),
       bodySmall: base.bodySmall?.copyWith(color: secondary, height: 1.4),
       labelLarge: base.labelLarge?.copyWith(
         color: primary,
         fontWeight: FontWeight.w600,
+      ),
+      labelMedium: base.labelMedium?.copyWith(
+        color: primary,
+        fontWeight: FontWeight.w600,
+      ),
+      labelSmall: base.labelSmall?.copyWith(
+        color: secondary,
+        fontWeight: FontWeight.w500,
       ),
     );
   }

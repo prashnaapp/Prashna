@@ -147,11 +147,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('+ Create Test'), findsOneWidget);
+    expect(find.text('Create Test'), findsOneWidget);
     expect(find.text('Group-II Practice Test 1'), findsOneWidget);
     expect(find.textContaining('Draft'), findsOneWidget);
 
-    await tester.tap(find.text('+ Create Test'));
+    await tester.tap(find.text('Create Test'));
     await tester.pumpAndSettle();
 
     expect(find.text('Create route opened'), findsOneWidget);

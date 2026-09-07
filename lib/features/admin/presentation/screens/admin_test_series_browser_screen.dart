@@ -515,7 +515,7 @@ class _AdminTestSeriesBrowserScreenState
             child: FilledButton.icon(
               onPressed: _addYear,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('+ Examination year'),
+              label: const Text('Examination year'),
             ),
           ),
           const SizedBox(height: AdminSpacing.lg),

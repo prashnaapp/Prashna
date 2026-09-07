@@ -112,6 +112,7 @@ class _AdminShellState extends State<AdminShell> {
                       destination: _destination,
                       displayName: displayName,
                       email: widget.user?.email,
+                      initials: widget.user?.initials ?? 'A',
                       onSelect: _go,
                       onSignOut: _requestSignOut,
                     ),
@@ -122,13 +123,23 @@ class _AdminShellState extends State<AdminShell> {
               if (isDesktop)
                 SizedBox(
                   width: AdminSpacing.sidebarWidth,
-                  child: Material(
-                    color: AdminColors.sidebar,
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFF1A2440),
+                          AdminColors.sidebar,
+                        ],
+                      ),
+                    ),
                     child: SafeArea(
                       child: _AdminSidebar(
                         destination: _destination,
                         displayName: displayName,
                         email: widget.user?.email,
+                        initials: widget.user?.initials ?? 'A',
                         onSelect: _go,
                         onSignOut: _requestSignOut,
                       ),
@@ -162,6 +173,7 @@ class _AdminShellState extends State<AdminShell> {
                                 ),
                                 const Spacer(),
                                 TextButton(
+                                  key: const ValueKey('admin-mobile-sign-out'),
                                   onPressed: _requestSignOut,
                                   child: const Text('Sign out'),
                                 ),
@@ -239,10 +251,83 @@ class _AdminShellState extends State<AdminShell> {
       ),
     };
 
-    return MaterialPageRoute<void>(
+    return _AdminWorkspaceRoute<void>(
       settings: settings,
+      coverWithWorkspace: !_isDashboardRoute(name),
       builder: (_) => page,
     );
+  }
+}
+
+bool _isDashboardRoute(String? name) {
+  return switch (name) {
+    AdminRoutes.root ||
+    AdminRoutes.login ||
+    AdminRoutes.dashboard ||
+    '/' ||
+    null => true,
+    _ => false,
+  };
+}
+
+/// Nested Admin workspace route.
+///
+/// Zero-duration and opaque so the Dashboard background cannot fade through
+/// the next screen. Non-dashboard pages get an opaque workspace fill because
+/// several embedded screens do not paint their own full-bleed background.
+@visibleForTesting
+const Duration adminWorkspaceTransitionDuration = Duration.zero;
+
+class _AdminWorkspaceRoute<T> extends PageRoute<T> {
+  _AdminWorkspaceRoute({
+    required this.builder,
+    required this.coverWithWorkspace,
+    super.settings,
+  });
+
+  final WidgetBuilder builder;
+  final bool coverWithWorkspace;
+
+  @override
+  Duration get transitionDuration => adminWorkspaceTransitionDuration;
+
+  @override
+  Duration get reverseTransitionDuration => adminWorkspaceTransitionDuration;
+
+  @override
+  bool get opaque => true;
+
+  @override
+  bool get barrierDismissible => false;
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  String? get barrierLabel => null;
+
+  @override
+  bool get maintainState => false;
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
+    final child = builder(context);
+    if (!coverWithWorkspace) return child;
+    return ColoredBox(color: AdminColors.backgroundTop, child: child);
+  }
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child;
   }
 }
 
@@ -274,21 +359,25 @@ class _AdminSidebar extends StatelessWidget {
     required this.displayName,
     required this.onSelect,
     required this.onSignOut,
+    required this.initials,
     this.email,
   });
 
   final AdminNavDestination destination;
   final String displayName;
   final String? email;
+  final String initials;
   final ValueChanged<AdminNavDestination> onSelect;
   final Future<void> Function() onSignOut;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AdminSpacing.md,
-        vertical: AdminSpacing.lg,
+      padding: const EdgeInsets.fromLTRB(
+        AdminSpacing.md,
+        AdminSpacing.lg,
+        AdminSpacing.md,
+        AdminSpacing.md,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -296,76 +385,175 @@ class _AdminSidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(
               AdminSpacing.sm,
-              AdminSpacing.sm,
+              AdminSpacing.xs,
               AdminSpacing.sm,
               AdminSpacing.xl,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  'PRASHNA',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AdminColors.sidebarText,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AdminColors.sidebarActive,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AdminColors.sidebarBorder),
+                  ),
+                  child: const Icon(
+                    Icons.menu_book_rounded,
+                    size: 20,
+                    color: AdminColors.sidebarAccent,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Admin Console',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AdminColors.sidebarTextMuted,
+                const SizedBox(width: AdminSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'PRASHNA',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: AdminColors.sidebarText,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Admin Console',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AdminColors.sidebarTextMuted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          for (final item in AdminNavDestination.values)
-            _NavTile(
-              destination: item,
-              selected: destination == item,
-              onTap: () => onSelect(item),
+          Expanded(
+            child: ListView(
+              key: const ValueKey('admin-sidebar-nav'),
+              padding: EdgeInsets.zero,
+              children: [
+                for (final item in AdminNavDestination.values)
+                  _NavTile(
+                    destination: item,
+                    selected: destination == item,
+                    onTap: () => onSelect(item),
+                  ),
+              ],
             ),
-          const Spacer(),
+          ),
+          const SizedBox(height: AdminSpacing.md),
           Container(
-            padding: const EdgeInsets.all(AdminSpacing.md),
+            key: const ValueKey('admin-sidebar-utility'),
+            padding: const EdgeInsets.fromLTRB(
+              AdminSpacing.md,
+              AdminSpacing.md,
+              AdminSpacing.md,
+              AdminSpacing.sm,
+            ),
             decoration: BoxDecoration(
-              color: AdminColors.sidebarHover,
-              borderRadius: BorderRadius.circular(14),
+              color: AdminColors.sidebarUtility,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AdminColors.sidebarBorder),
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AdminColors.sidebarActive,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AdminColors.sidebarBorder),
+                      ),
+                      child: Text(
+                        initials,
+                        style: const TextStyle(
+                          color: AdminColors.sidebarText,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AdminSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AdminColors.sidebarText,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (email != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              email!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AdminColors.sidebarTextMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AdminSpacing.sm),
                 Text(
-                  displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AdminColors.sidebarText,
+                  'Administrator',
+                  style: TextStyle(
+                    color: AdminColors.sidebarAccent.withValues(alpha: 0.9),
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
                   ),
                 ),
-                if (email != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    email!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AdminColors.sidebarTextMuted,
-                      fontSize: 12,
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AdminSpacing.sm),
+                  child: Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: AdminColors.sidebarBorder,
+                  ),
+                ),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('admin-sidebar-sign-out'),
+                    onPressed: () => onSignOut(),
+                    icon: const Icon(Icons.logout_rounded, size: 18),
+                    label: const Text('Sign out'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AdminColors.sidebarText,
+                      side: const BorderSide(color: AdminColors.sidebarBorder),
+                      backgroundColor: AdminColors.sidebarHover,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AdminSpacing.md,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
-                ],
-                const SizedBox(height: AdminSpacing.sm),
-                TextButton(
-                  onPressed: () => onSignOut(),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AdminColors.sidebarText,
-                    padding: EdgeInsets.zero,
-                  ),
-                  child: const Text('Sign out'),
                 ),
               ],
             ),
@@ -376,7 +564,7 @@ class _AdminSidebar extends StatelessWidget {
   }
 }
 
-class _NavTile extends StatelessWidget {
+class _NavTile extends StatefulWidget {
   const _NavTile({
     required this.destination,
     required this.selected,
@@ -388,43 +576,103 @@ class _NavTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_NavTile> createState() => _NavTileState();
+}
+
+class _NavTileState extends State<_NavTile> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
+    final selected = widget.selected;
+    final emphasize = selected || _hovered || _focused;
+    final bg = selected
+        ? AdminColors.sidebarActive
+        : (_hovered || _focused)
+            ? AdminColors.sidebarHover
+            : Colors.transparent;
+    final iconColor = selected
+        ? Colors.white
+        : emphasize
+            ? AdminColors.sidebarText
+            : AdminColors.sidebarTextMuted;
+    final textColor = selected
+        ? Colors.white
+        : AdminColors.sidebarText;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Material(
-        color: selected ? AdminColors.sidebarActive : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          hoverColor: AdminColors.sidebarHover,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AdminSpacing.md,
-              vertical: 12,
+      padding: const EdgeInsets.only(bottom: 6),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: FocusableActionDetector(
+          onShowFocusHighlight: (show) => setState(() => _focused = show),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 170),
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(
+              _hovered && !selected ? 2.0 : 0.0,
+              0,
+              0,
             ),
-            child: Row(
-              children: [
-                Icon(
-                  destination.iconData,
-                  size: 20,
-                  color: selected
-                      ? Colors.white
-                      : AdminColors.sidebarTextMuted,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    destination.label,
-                    style: TextStyle(
-                      color: selected
-                          ? Colors.white
-                          : AdminColors.sidebarText,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected
+                    ? AdminColors.sidebarAccent.withValues(alpha: 0.35)
+                    : _focused
+                        ? AdminColors.sidebarAccent.withValues(alpha: 0.45)
+                        : Colors.transparent,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: widget.onTap,
+                hoverColor: Colors.transparent,
+                splashColor: AdminColors.sidebarAccent.withValues(alpha: 0.12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AdminSpacing.sm,
+                    vertical: 11,
+                  ),
+                  child: Row(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 170),
+                        width: 3,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AdminColors.sidebarAccent
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(
+                        widget.destination.iconData,
+                        size: 20,
+                        color: iconColor,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.destination.label,
+                          style: TextStyle(
+                            color: textColor,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
