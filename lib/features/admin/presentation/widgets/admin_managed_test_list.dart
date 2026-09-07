@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../tests/data/models/test_models.dart';
 import '../../admin_routes.dart';
 import '../../services/admin_test_service.dart';
+import '../../theme/admin_spacing.dart';
+import 'admin_ui/admin_empty_state.dart';
+import 'admin_ui/admin_test_row.dart';
 
 /// Shared Admin leaf list: the actual Test documents at the end of a hierarchy.
 class AdminManagedTestList extends StatelessWidget {
@@ -13,6 +16,9 @@ class AdminManagedTestList extends StatelessWidget {
     required this.onChanged,
     required this.onCreate,
     this.emptyLabel = 'No tests in this folder yet.',
+    this.emptyMessage =
+        'Create the first test for this scope to start managing content.',
+    this.scopeLabel,
   });
 
   final List<TestModel> tests;
@@ -20,6 +26,8 @@ class AdminManagedTestList extends StatelessWidget {
   final Future<void> Function() onChanged;
   final VoidCallback onCreate;
   final String emptyLabel;
+  final String emptyMessage;
+  final String? scopeLabel;
 
   Future<void> _openEdit(BuildContext context, TestModel test) async {
     await Navigator.of(context).pushNamed(AdminRoutes.testEdit, arguments: test);
@@ -72,66 +80,64 @@ class AdminManagedTestList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.icon(
-            onPressed: onCreate,
-            icon: const Icon(Icons.add),
-            label: const Text('+ Create Test'),
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Managed Tests',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (scopeLabel != null && scopeLabel!.isNotEmpty) ...[
+                    const SizedBox(height: AdminSpacing.xs),
+                    Text(
+                      scopeLabel!,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('+ Create Test'),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AdminSpacing.lg),
         if (tests.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 24),
-            child: Text(emptyLabel),
+          AdminEmptyState(
+            title: emptyLabel,
+            message: emptyMessage,
+            icon: Icons.assignment_outlined,
           )
         else
           for (final test in tests) ...[
-            Card(
-              child: ListTile(
-                title: Text(
-                  test.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  '${test.questionCount} questions • ${test.marks} marks • '
-                  '${test.durationMinutes} min • ${test.status.name}',
-                ),
-                trailing: Wrap(
-                  spacing: 4,
-                  children: [
-                    IconButton(
-                      tooltip: 'Edit',
-                      onPressed: () => _openEdit(context, test),
-                      icon: const Icon(Icons.edit_outlined),
-                    ),
-                    if (test.status != TestPublicationStatus.published)
-                      IconButton(
-                        tooltip: 'Publish',
-                        onPressed: () => _setStatus(
-                          context,
-                          test,
-                          TestPublicationStatus.published,
-                        ),
-                        icon: const Icon(Icons.visibility_outlined),
-                      ),
-                    if (test.status == TestPublicationStatus.published)
-                      IconButton(
-                        tooltip: 'Unpublish',
-                        onPressed: () => _setStatus(
-                          context,
-                          test,
-                          TestPublicationStatus.draft,
-                        ),
-                        icon: const Icon(Icons.visibility_off_outlined),
-                      ),
-                  ],
-                ),
-              ),
+            AdminTestRow(
+              test: test,
+              onEdit: () => _openEdit(context, test),
+              onPublish: test.status != TestPublicationStatus.published
+                  ? () => _setStatus(
+                      context,
+                      test,
+                      TestPublicationStatus.published,
+                    )
+                  : null,
+              onUnpublish: test.status == TestPublicationStatus.published
+                  ? () => _setStatus(
+                      context,
+                      test,
+                      TestPublicationStatus.draft,
+                    )
+                  : null,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AdminSpacing.md),
           ],
       ],
     );

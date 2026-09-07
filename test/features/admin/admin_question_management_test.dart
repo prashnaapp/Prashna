@@ -196,6 +196,8 @@ void main() {
     await tester.pumpWidget(listApp(service));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Archive'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Archive'));
     await tester.pumpAndSettle();
 
@@ -211,6 +213,8 @@ void main() {
     expect(service.statusUpdates, isEmpty);
     expect(find.text('Archive'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Archive'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Archive'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Archive'));
@@ -242,6 +246,8 @@ void main() {
       expect(find.text('Restore'), findsOneWidget);
       expect(find.text('Archive Question?'), findsNothing);
 
+      await tester.ensureVisible(find.text('Restore'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Restore'));
       await tester.pumpAndSettle();
 
@@ -272,6 +278,8 @@ void main() {
     expect(find.text('Publish'), findsOneWidget);
     expect(find.text('Draft'), findsWidgets);
 
+    await tester.ensureVisible(find.text('Publish'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Publish'));
     await tester.pumpAndSettle();
 
@@ -312,7 +320,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('question-edit-q-edit-row')));
+    final edit = find.byKey(const ValueKey('question-edit-q-edit-row'));
+    await tester.ensureVisible(edit);
+    await tester.pumpAndSettle();
+    await tester.tap(edit);
     await tester.pumpAndSettle();
 
     expect(find.text('Edit route opened'), findsOneWidget);
@@ -338,6 +349,72 @@ void main() {
     expect(find.text('Remove'), findsNothing);
     expect(find.byIcon(Icons.delete), findsNothing);
     expect(find.byIcon(Icons.delete_outline), findsNothing);
+  });
+
+  testWidgets('11: Question Bank header and filter controls remain available', (
+    tester,
+  ) async {
+    final service = _FakeAdminQuestionService(
+      courses: const [course],
+      questions: [question],
+    );
+
+    await tester.pumpWidget(listApp(service));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Question Bank'), findsWidgets);
+    expect(
+      find.textContaining('Manage, review, publish, archive'),
+      findsOneWidget,
+    );
+    expect(find.text('+ Create Question'), findsOneWidget);
+    expect(find.text('Import Questions'), findsOneWidget);
+    expect(find.byKey(const ValueKey('question-list-search')), findsOneWidget);
+    expect(find.byKey(const ValueKey('question-list-course')), findsOneWidget);
+    expect(find.byKey(const ValueKey('question-list-status')), findsOneWidget);
+    expect(find.text('Paper'), findsOneWidget);
+    expect(find.text('Part'), findsOneWidget);
+    expect(find.text('Topic'), findsOneWidget);
+    expect(find.text('Lesson'), findsOneWidget);
+    expect(find.text('What is the capital of Telangana?'), findsOneWidget);
+  });
+
+  testWidgets('12: empty course shows meaningful empty state', (tester) async {
+    final service = _FakeAdminQuestionService(
+      courses: const [course],
+      questions: const [],
+    );
+
+    await tester.pumpWidget(listApp(service));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No questions yet'), findsOneWidget);
+    expect(find.textContaining('Create your first question'), findsOneWidget);
+    expect(find.text('+ Create Question'), findsWidgets);
+  });
+
+  testWidgets('13: filtered empty results show adjust-filters guidance', (
+    tester,
+  ) async {
+    final service = _FakeAdminQuestionService(
+      courses: const [course],
+      questions: [question],
+    );
+
+    await tester.pumpWidget(listApp(service));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('question-list-search')),
+      'zzzz-no-match',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No questions found'), findsOneWidget);
+    expect(
+      find.textContaining('Try adjusting your filters'),
+      findsOneWidget,
+    );
   });
 }
 

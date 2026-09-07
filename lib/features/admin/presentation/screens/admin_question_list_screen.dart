@@ -4,11 +4,23 @@ import '../../../course_enrollment/model/course.dart';
 import '../../../question_bank/data/models/question_models.dart';
 import '../../admin_routes.dart';
 import '../../services/admin_question_service.dart';
+import '../../theme/admin_colors.dart';
+import '../../theme/admin_spacing.dart';
+import '../widgets/admin_ui/admin_empty_state.dart';
+import '../widgets/admin_ui/admin_loading_surface.dart';
+import '../widgets/admin_ui/admin_page_header.dart';
+import '../widgets/admin_ui/admin_question_row.dart';
+import '../widgets/admin_ui/admin_surface.dart';
 
 class AdminQuestionListScreen extends StatefulWidget {
-  const AdminQuestionListScreen({super.key, this.service});
+  const AdminQuestionListScreen({
+    super.key,
+    this.service,
+    this.embeddedInShell = false,
+  });
 
   final AdminQuestionService? service;
+  final bool embeddedInShell;
 
   @override
   State<AdminQuestionListScreen> createState() =>
@@ -138,6 +150,15 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
     }
   }
 
+  bool get _hasActiveFilters {
+    return _search.trim().isNotEmpty ||
+        _statusFilter != null ||
+        _paperFilter.trim().isNotEmpty ||
+        _partFilter.trim().isNotEmpty ||
+        _topicFilter.trim().isNotEmpty ||
+        _lessonFilter.trim().isNotEmpty;
+  }
+
   List<Question> get _visibleQuestions {
     final query = _search.trim().toLowerCase();
     return _questions
@@ -171,131 +192,187 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
         (value ?? '').toLowerCase().contains(normalized);
   }
 
+  List<Widget> get _headerActions => [
+    FilledButton.icon(
+      key: const ValueKey('question-list-create'),
+      onPressed: _courseId == null ? null : _openCreate,
+      icon: const Icon(Icons.add, size: 18),
+      label: const Text('+ Create Question'),
+    ),
+    OutlinedButton.icon(
+      key: const ValueKey('question-list-import'),
+      onPressed: () =>
+          Navigator.of(context).pushNamed(AdminRoutes.questionImport),
+      icon: const Icon(Icons.upload_file_outlined, size: 18),
+      label: const Text('Import Questions'),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Questions')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
-          child: SizedBox(
-            width: MediaQuery.sizeOf(context).width,
-            height: double.infinity,
-            child: _buildBody(context),
+    final body = LayoutBuilder(
+      builder: (context, constraints) {
+        final maxW = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final maxH = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : MediaQuery.sizeOf(context).height;
+        final contentW = maxW < AdminSpacing.contentMaxWidth
+            ? maxW
+            : AdminSpacing.contentMaxWidth;
+
+        return SizedBox(
+          width: maxW,
+          height: maxH,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: contentW,
+              height: maxH,
+              child: _buildBody(context),
+            ),
           ),
-        ),
-      ),
+        );
+      },
+    );
+
+    if (widget.embeddedInShell) return body;
+
+    return Scaffold(
+      backgroundColor: AdminColors.backgroundTop,
+      appBar: AppBar(title: const Text('Question Bank')),
+      body: body,
     );
   }
 
   Widget _buildBody(BuildContext context) {
     if (_loadingCourses) {
-      return const Center(child: CircularProgressIndicator());
+      return const AdminLoadingSurface();
     }
     if (_error != null && _courses.isEmpty) {
-      return Center(child: Text(_error!));
+      return AdminEmptyState(
+        title: 'Unable to load courses',
+        message: _error!,
+        icon: Icons.error_outline,
+        action: FilledButton.tonal(
+          onPressed: () {
+            setState(() {
+              _loadingCourses = true;
+              _error = null;
+            });
+            _loadCourses();
+          },
+          child: const Text('Retry'),
+        ),
+      );
     }
     if (_courses.isEmpty) {
-      return const Center(child: Text('No published courses are available.'));
+      return const AdminEmptyState(
+        title: 'No courses available',
+        message: 'No published courses are available for question management.',
+        icon: Icons.school_outlined,
+      );
     }
+
+    final visible = _visibleQuestions;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
+          padding: const EdgeInsets.fromLTRB(
+            AdminSpacing.pagePadding,
+            AdminSpacing.pagePadding,
+            AdminSpacing.pagePadding,
+            AdminSpacing.sm,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 200, maxWidth: 600),
-                child: DropdownButtonFormField<String>(
-                  initialValue: _courseId,
-                  decoration: const InputDecoration(
-                    labelText: 'Course',
-                    border: OutlineInputBorder(),
+              AdminPageHeader(
+                title: 'Question Bank',
+                subtitle:
+                    'Manage, review, publish, archive, and organize your exam questions.',
+                actions: _headerActions,
+              ),
+              _FilterWorkspace(
+                courses: _courses,
+                courseId: _courseId,
+                statusFilter: _statusFilter,
+                onCourseChanged: (value) async {
+                  setState(() => _courseId = value);
+                  await _loadQuestions();
+                },
+                onSearchChanged: (value) => setState(() => _search = value),
+                onStatusChanged: (value) =>
+                    setState(() => _statusFilter = value),
+                onPaperChanged: (value) =>
+                    setState(() => _paperFilter = value),
+                onPartChanged: (value) => setState(() => _partFilter = value),
+                onTopicChanged: (value) =>
+                    setState(() => _topicFilter = value),
+                onLessonChanged: (value) =>
+                    setState(() => _lessonFilter = value),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: AdminSpacing.md),
+                AdminSurface(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AdminSpacing.lg,
+                    vertical: AdminSpacing.md,
                   ),
-                  items: [
-                    for (final course in _courses)
-                      DropdownMenuItem(
-                        value: course.courseId,
-                        child: Text('${course.title} (${course.courseId})'),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: AdminColors.danger,
                       ),
-                  ],
-                  onChanged: (value) async {
-                    setState(() => _courseId = value);
-                    await _loadQuestions();
-                  },
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: _courseId == null ? null : _openCreate,
-                icon: const Icon(Icons.add),
-                label: const Text('+ Create Question'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed(AdminRoutes.questionImport),
-                icon: const Icon(Icons.upload_file_outlined),
-                label: const Text('Import Questions'),
-              ),
-              SizedBox(
-                width: 220,
-                child: TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Search',
-                    border: OutlineInputBorder(),
+                      const SizedBox(width: AdminSpacing.md),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AdminColors.danger),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _loadQuestions,
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
-                  onChanged: (value) => setState(() => _search = value),
                 ),
-              ),
-              SizedBox(
-                width: 180,
-                child: DropdownButtonFormField<QuestionPublicationStatus?>(
-                  initialValue: _statusFilter,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Status',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('All statuses'),
-                    ),
-                    for (final status in QuestionPublicationStatus.values)
-                      DropdownMenuItem(value: status, child: Text(status.name)),
-                  ],
-                  onChanged: (value) => setState(() => _statusFilter = value),
-                ),
-              ),
-              _filterField('Paper', (value) => _paperFilter = value),
-              _filterField('Part', (value) => _partFilter = value),
-              _filterField('Topic', (value) => _topicFilter = value),
-              _filterField('Lesson', (value) => _lessonFilter = value),
+              ],
             ],
           ),
         ),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Text(
-              _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
         Expanded(
           child: _loadingQuestions
-              ? const Center(child: CircularProgressIndicator())
-              : _visibleQuestions.isEmpty
-              ? const Center(child: Text('No questions for this course.'))
+              ? const AdminLoadingSurface(rows: 3)
+              : visible.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AdminSpacing.pagePadding,
+                    0,
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                  ),
+                  child: _buildEmptyState(),
+                )
               : ListView.separated(
-                  padding: const EdgeInsets.all(24),
-                  itemCount: _visibleQuestions.length,
-                  separatorBuilder: (_, index) => const SizedBox(height: 8),
+                  padding: const EdgeInsets.fromLTRB(
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.sm,
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                  ),
+                  itemCount: visible.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: AdminSpacing.md),
                   itemBuilder: (context, index) {
-                    final question = _visibleQuestions[index];
-                    return _QuestionCard(
+                    final question = visible[index];
+                    return AdminQuestionRow(
                       question: question,
                       onEdit: () => _openEdit(question),
                       onRequestStatus: (status) =>
@@ -308,32 +385,160 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
     );
   }
 
-  Widget _filterField(String label, ValueChanged<String> onChanged) {
-    return SizedBox(
-      width: 140,
-      child: TextField(
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
+  Widget _buildEmptyState() {
+    if (_questions.isEmpty) {
+      return AdminEmptyState(
+        title: 'No questions yet',
+        message:
+            'Create your first question for this course, or import a bilingual JSON batch.',
+        icon: Icons.quiz_outlined,
+        action: FilledButton.icon(
+          onPressed: _courseId == null ? null : _openCreate,
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('+ Create Question'),
         ),
-        onChanged: (value) => setState(() => onChanged(value)),
+      );
+    }
+    return AdminEmptyState(
+      title: 'No questions found',
+      message: _hasActiveFilters
+          ? 'Try adjusting your filters or create a new question.'
+          : 'No questions match the current view.',
+      icon: Icons.filter_alt_outlined,
+      action: FilledButton.icon(
+        onPressed: _courseId == null ? null : _openCreate,
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('+ Create Question'),
       ),
     );
   }
 }
 
-class _QuestionCard extends StatelessWidget {
-  const _QuestionCard({
-    required this.question,
-    required this.onEdit,
-    required this.onRequestStatus,
+class _FilterWorkspace extends StatelessWidget {
+  const _FilterWorkspace({
+    required this.courses,
+    required this.courseId,
+    required this.statusFilter,
+    required this.onCourseChanged,
+    required this.onSearchChanged,
+    required this.onStatusChanged,
+    required this.onPaperChanged,
+    required this.onPartChanged,
+    required this.onTopicChanged,
+    required this.onLessonChanged,
   });
 
-  final Question question;
-  final VoidCallback onEdit;
-  final ValueChanged<QuestionPublicationStatus> onRequestStatus;
+  final List<Course> courses;
+  final String? courseId;
+  final QuestionPublicationStatus? statusFilter;
+  final ValueChanged<String?> onCourseChanged;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<QuestionPublicationStatus?> onStatusChanged;
+  final ValueChanged<String> onPaperChanged;
+  final ValueChanged<String> onPartChanged;
+  final ValueChanged<String> onTopicChanged;
+  final ValueChanged<String> onLessonChanged;
 
-  static String statusLabel(QuestionPublicationStatus status) {
+  @override
+  Widget build(BuildContext context) {
+    return AdminSurface(
+      padding: const EdgeInsets.all(AdminSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('question-list-search'),
+            decoration: const InputDecoration(
+              isDense: true,
+              labelText: 'Search',
+              hintText: 'Search questions by text, ID, or syllabus…',
+              prefixIcon: Icon(Icons.search, size: 20),
+              border: OutlineInputBorder(),
+            ),
+            onChanged: onSearchChanged,
+          ),
+          const SizedBox(height: AdminSpacing.sm),
+          Wrap(
+            spacing: AdminSpacing.sm,
+            runSpacing: AdminSpacing.sm,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 180, maxWidth: 280),
+                child: DropdownButtonFormField<String>(
+                  key: const ValueKey('question-list-course'),
+                  initialValue: courseId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Course',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    for (final course in courses)
+                      DropdownMenuItem(
+                        value: course.courseId,
+                        child: Text(
+                          '${course.title} (${course.courseId})',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: onCourseChanged,
+                ),
+              ),
+              SizedBox(
+                width: 160,
+                child: DropdownButtonFormField<QuestionPublicationStatus?>(
+                  key: const ValueKey('question-list-status'),
+                  initialValue: statusFilter,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Status',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('All statuses'),
+                    ),
+                    for (final status in QuestionPublicationStatus.values)
+                      DropdownMenuItem(
+                        value: status,
+                        child: Text(_statusLabel(status)),
+                      ),
+                  ],
+                  onChanged: onStatusChanged,
+                ),
+              ),
+              _FilterField(
+                key: const ValueKey('question-list-paper'),
+                label: 'Paper',
+                onChanged: onPaperChanged,
+              ),
+              _FilterField(
+                key: const ValueKey('question-list-part'),
+                label: 'Part',
+                onChanged: onPartChanged,
+              ),
+              _FilterField(
+                key: const ValueKey('question-list-topic'),
+                label: 'Topic',
+                onChanged: onTopicChanged,
+              ),
+              _FilterField(
+                key: const ValueKey('question-list-lesson'),
+                label: 'Lesson',
+                onChanged: onLessonChanged,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _statusLabel(QuestionPublicationStatus status) {
     switch (status) {
       case QuestionPublicationStatus.draft:
         return 'Draft';
@@ -343,92 +548,29 @@ class _QuestionCard extends StatelessWidget {
         return 'Archived';
     }
   }
+}
 
-  static QuestionPublicationStatus effectiveStatus(Question question) {
-    return question.status ??
-        (question.isActive
-            ? QuestionPublicationStatus.published
-            : QuestionPublicationStatus.archived);
-  }
+class _FilterField extends StatelessWidget {
+  const _FilterField({
+    super.key,
+    required this.label,
+    required this.onChanged,
+  });
+
+  final String label;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final updated = question.updatedAt.millisecondsSinceEpoch == 0
-        ? '—'
-        : '${question.updatedAt.year}-${question.updatedAt.month.toString().padLeft(2, '0')}-${question.updatedAt.day.toString().padLeft(2, '0')}';
-    final status = effectiveStatus(question);
-    final colorScheme = Theme.of(context).colorScheme;
-    final (lifecycleLabel, lifecycleIcon, nextStatus) = switch (status) {
-      QuestionPublicationStatus.published => (
-        'Archive',
-        Icons.archive_outlined,
-        QuestionPublicationStatus.archived,
-      ),
-      QuestionPublicationStatus.archived => (
-        'Restore',
-        Icons.unarchive_outlined,
-        QuestionPublicationStatus.published,
-      ),
-      QuestionPublicationStatus.draft => (
-        'Publish',
-        Icons.publish_outlined,
-        QuestionPublicationStatus.published,
-      ),
-    };
-
-    return Card(
-      child: ListTile(
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Text(
-                question.question,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Chip(
-              key: ValueKey('question-status-${question.id}'),
-              label: Text(statusLabel(status)),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              padding: EdgeInsets.zero,
-              labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-          ],
+    return SizedBox(
+      width: 130,
+      child: TextField(
+        decoration: InputDecoration(
+          isDense: true,
+          labelText: label,
+          border: const OutlineInputBorder(),
         ),
-        subtitle: Text(
-          '${question.id} • ${question.topicId.isEmpty ? 'No topic' : question.topicId}\n'
-          '${question.difficulty.name} • ${question.questionType.name}'
-          ' • Updated $updated',
-        ),
-        isThreeLine: true,
-        leading: Icon(
-          question.isActive ? Icons.check_circle : Icons.pause_circle,
-          color: question.isActive
-              ? colorScheme.primary
-              : colorScheme.outline,
-        ),
-        trailing: Wrap(
-          spacing: 4,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            IconButton(
-              key: ValueKey('question-edit-${question.id}'),
-              tooltip: 'Edit',
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            TextButton.icon(
-              key: ValueKey('question-lifecycle-${question.id}'),
-              onPressed: () => onRequestStatus(nextStatus),
-              icon: Icon(lifecycleIcon, size: 18),
-              label: Text(lifecycleLabel),
-            ),
-          ],
-        ),
+        onChanged: onChanged,
       ),
     );
   }

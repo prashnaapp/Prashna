@@ -2,12 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/question_import_models.dart';
 import '../../services/question_import_service.dart';
+import '../../theme/admin_colors.dart';
+import '../../theme/admin_spacing.dart';
+import '../widgets/admin_ui/admin_page_header.dart';
+import '../widgets/admin_ui/admin_surface.dart';
 
-/// Minimal admin UI: paste JSON → validate → confirm import as drafts.
+/// Premium Admin UI: paste JSON → validate → confirm import as drafts.
+///
+/// Import contract (parser, validator, draft-only atomic batch) is unchanged.
 class AdminQuestionImportScreen extends StatefulWidget {
-  const AdminQuestionImportScreen({super.key, this.service});
+  const AdminQuestionImportScreen({
+    super.key,
+    this.service,
+    this.embeddedInShell = false,
+  });
 
   final QuestionImportService? service;
+  final bool embeddedInShell;
 
   @override
   State<AdminQuestionImportScreen> createState() =>
@@ -109,130 +120,354 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
   Widget build(BuildContext context) {
     final validation = _validation;
     final report = _importReport;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Import Questions')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 960),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
+    final theme = Theme.of(context);
+
+    final content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 960),
+        child: ListView(
+          padding: const EdgeInsets.all(AdminSpacing.pagePadding),
+          children: [
+            if (widget.embeddedInShell)
+              const AdminPageHeader(
+                title: 'Import Questions',
+                subtitle:
+                    'Validate bilingual JSON batches, then import only when every '
+                    'record is valid. Imported questions always start as drafts.',
+              )
+            else ...[
               Text(
-                'Paste a JSON import file, validate the entire batch, then '
-                'import only when every record is valid. Imported questions '
-                'always start as drafts.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                key: const ValueKey('import-json'),
-                controller: _jsonController,
-                maxLines: 18,
-                decoration: const InputDecoration(
-                  labelText: 'Import JSON',
-                  alignLabelWithHint: true,
-                  border: OutlineInputBorder(),
+                'Validate bilingual JSON batches, then import only when every '
+                'record is valid. Imported questions always start as drafts.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: AdminColors.textSecondary,
                 ),
               ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  FilledButton(
-                    key: const ValueKey('validate-import'),
-                    onPressed: _busy ? null : _validate,
-                    child: const Text('Validate'),
-                  ),
-                  FilledButton.tonal(
-                    key: const ValueKey('confirm-import'),
-                    onPressed: _busy || validation?.canImport != true
-                        ? null
-                        : _import,
-                    child: const Text('Import as drafts'),
-                  ),
-                ],
-              ),
-              if (_busy) ...[
-                const SizedBox(height: 24),
-                const Center(child: CircularProgressIndicator()),
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-              if (validation != null) ...[
-                const SizedBox(height: 24),
-                Text(
-                  'Validation',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text('Total records: ${validation.totalRecords}'),
-                Text('Valid records: ${validation.validRecords}'),
-                Text('Invalid records: ${validation.invalidRecords}'),
-                Text('Warnings: ${validation.warnings.length}'),
-                Text(
-                  'Duplicate/collision records: '
-                  '${validation.duplicateOrCollisionRecords.length}',
-                ),
-                if (validation.errors.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text('Errors', style: Theme.of(context).textTheme.titleSmall),
-                  for (final issue in validation.errors)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(issue.display),
-                    ),
-                ],
-                if (validation.warnings.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Warnings',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  for (final issue in validation.warnings)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(issue.display),
-                    ),
-                ],
-              ],
-              if (report != null) ...[
-                const SizedBox(height: 24),
-                Text(
-                  'Import report',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text('Records submitted: ${report.recordsSubmitted}'),
-                Text('Records imported: ${report.recordsImported}'),
-                Text('Records rejected: ${report.recordsRejected}'),
-                if (report.createdQuestionIds.isNotEmpty)
-                  Text(
-                    'Question IDs created: ${report.createdQuestionIds.join(', ')}',
-                  ),
-                if (report.failureMessage != null)
-                  Text(
-                    report.failureMessage!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                if (report.succeeded)
-                  Text(
-                    'Import succeeded. All questions are drafts pending human review.',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-              ],
+              const SizedBox(height: AdminSpacing.xl),
             ],
-          ),
+            AdminSurface(
+              padding: const EdgeInsets.all(AdminSpacing.xl),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Import workspace',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AdminSpacing.xs),
+                  Text(
+                    'Paste a complete JSON import file. Validation runs on the '
+                    'entire batch before any write.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AdminColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: AdminSpacing.lg),
+                  TextField(
+                    key: const ValueKey('import-json'),
+                    controller: _jsonController,
+                    maxLines: 16,
+                    minLines: 10,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontFamily: 'monospace',
+                      color: AdminColors.textPrimary,
+                      height: 1.4,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Import JSON',
+                      alignLabelWithHint: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: AdminSpacing.lg),
+                  Wrap(
+                    spacing: AdminSpacing.md,
+                    runSpacing: AdminSpacing.md,
+                    children: [
+                      FilledButton(
+                        key: const ValueKey('validate-import'),
+                        onPressed: _busy ? null : _validate,
+                        child: const Text('Validate'),
+                      ),
+                      FilledButton.tonal(
+                        key: const ValueKey('confirm-import'),
+                        onPressed: _busy || validation?.canImport != true
+                            ? null
+                            : _import,
+                        child: const Text('Import as drafts'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AdminSpacing.lg),
+            AdminSurface(
+              padding: const EdgeInsets.all(AdminSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Format guidance',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AdminSpacing.sm),
+                  Text(
+                    '• Submit a JSON array or documented batch envelope.\n'
+                    '• Every record must validate before import proceeds.\n'
+                    '• Successful import creates draft/inactive questions only.\n'
+                    '• Nothing is published automatically.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AdminColors.textSecondary,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_busy) ...[
+              const SizedBox(height: AdminSpacing.lg),
+              AdminSurface(
+                padding: const EdgeInsets.all(AdminSpacing.xl),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: AdminSpacing.md),
+                    Text(
+                      'Working…',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: AdminColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: AdminSpacing.lg),
+              AdminSurface(
+                padding: const EdgeInsets.all(AdminSpacing.lg),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.error_outline, color: AdminColors.danger),
+                    const SizedBox(width: AdminSpacing.md),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: AdminColors.danger,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (validation != null) ...[
+              const SizedBox(height: AdminSpacing.lg),
+              AdminSurface(
+                padding: const EdgeInsets.all(AdminSpacing.xl),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Validation',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AdminSpacing.md),
+                    _StatLine(
+                      label: 'Total records',
+                      value: '${validation.totalRecords}',
+                    ),
+                    _StatLine(
+                      label: 'Valid records',
+                      value: '${validation.validRecords}',
+                    ),
+                    _StatLine(
+                      label: 'Invalid records',
+                      value: '${validation.invalidRecords}',
+                    ),
+                    _StatLine(
+                      label: 'Warnings',
+                      value: '${validation.warnings.length}',
+                    ),
+                    _StatLine(
+                      label: 'Duplicate/collision records',
+                      value:
+                          '${validation.duplicateOrCollisionRecords.length}',
+                    ),
+                    if (validation.canImport) ...[
+                      const SizedBox(height: AdminSpacing.md),
+                      Text(
+                        'Batch is ready to import as drafts.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AdminColors.success,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    if (validation.errors.isNotEmpty) ...[
+                      const SizedBox(height: AdminSpacing.lg),
+                      Text(
+                        'Errors',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AdminColors.danger,
+                        ),
+                      ),
+                      for (final issue in validation.errors)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AdminSpacing.sm),
+                          child: Text(
+                            issue.display,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AdminColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                    ],
+                    if (validation.warnings.isNotEmpty) ...[
+                      const SizedBox(height: AdminSpacing.lg),
+                      Text(
+                        'Warnings',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AdminColors.warning,
+                        ),
+                      ),
+                      for (final issue in validation.warnings)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AdminSpacing.sm),
+                          child: Text(
+                            issue.display,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            if (report != null) ...[
+              const SizedBox(height: AdminSpacing.lg),
+              AdminSurface(
+                padding: const EdgeInsets.all(AdminSpacing.xl),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Import report',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AdminSpacing.md),
+                    _StatLine(
+                      label: 'Records submitted',
+                      value: '${report.recordsSubmitted}',
+                    ),
+                    _StatLine(
+                      label: 'Records imported',
+                      value: '${report.recordsImported}',
+                    ),
+                    _StatLine(
+                      label: 'Records rejected',
+                      value: '${report.recordsRejected}',
+                    ),
+                    if (report.createdQuestionIds.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AdminSpacing.sm),
+                        child: Text(
+                          'Question IDs created: '
+                          '${report.createdQuestionIds.join(', ')}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    if (report.failureMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AdminSpacing.md),
+                        child: Text(
+                          report.failureMessage!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AdminColors.danger,
+                          ),
+                        ),
+                      ),
+                    if (report.succeeded)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AdminSpacing.md),
+                        child: Text(
+                          'Import succeeded. All questions are drafts '
+                          'pending human review.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AdminColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
+      ),
+    );
+
+    if (widget.embeddedInShell) {
+      // Shell already supplies Scaffold; Material keeps TextField ink/theme safe.
+      return Material(
+        color: AdminColors.backgroundTop,
+        child: content,
+      );
+    }
+    return Scaffold(
+      backgroundColor: AdminColors.backgroundTop,
+      appBar: AppBar(title: const Text('Import Questions')),
+      body: content,
+    );
+  }
+}
+
+class _StatLine extends StatelessWidget {
+  const _StatLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AdminSpacing.xs),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AdminColors.textSecondary,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AdminColors.textPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }

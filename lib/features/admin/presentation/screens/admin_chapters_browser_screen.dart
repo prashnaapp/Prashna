@@ -8,7 +8,15 @@ import '../../admin_routes.dart';
 import '../../data/admin_test_hierarchy.dart';
 import '../../data/admin_test_scope.dart';
 import '../../services/admin_test_service.dart';
+import '../../theme/admin_colors.dart';
+import '../../theme/admin_spacing.dart';
 import '../widgets/admin_managed_test_list.dart';
+import '../widgets/admin_ui/admin_empty_state.dart';
+import '../widgets/admin_ui/admin_hierarchy_header.dart';
+import '../widgets/admin_ui/admin_loading_surface.dart';
+import '../widgets/admin_ui/admin_nav_tile.dart';
+import '../widgets/admin_ui/admin_page_header.dart';
+import '../widgets/admin_ui/admin_surface.dart';
 
 /// Admin CHAPTERS browser.
 ///
@@ -22,6 +30,7 @@ class AdminChaptersBrowserScreen extends StatefulWidget {
     this.paperId,
     this.partId,
     this.unitId,
+    this.embeddedInShell = false,
   });
 
   final AdminTestService? service;
@@ -30,6 +39,7 @@ class AdminChaptersBrowserScreen extends StatefulWidget {
   final String? paperId;
   final String? partId;
   final String? unitId;
+  final bool embeddedInShell;
 
   @override
   State<AdminChaptersBrowserScreen> createState() =>
@@ -95,6 +105,7 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
           paperId: paperId,
           partId: partId,
           unitId: unitId,
+          embeddedInShell: widget.embeddedInShell,
         ),
       ),
     );
@@ -137,22 +148,113 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
     return syllabus != null && syllabus.papers.isNotEmpty;
   }
 
+  String? get _contextPath {
+    final parts = <String>[];
+    final courseId = widget.courseId;
+    if (courseId == null) return null;
+    final course = _syllabus.getCourseById(courseId);
+    parts.add(course?.name ?? courseId);
+    final paperId = widget.paperId;
+    if (paperId != null) {
+      final paper = _syllabus.getPaper(courseId: courseId, paperId: paperId);
+      parts.add(paper?.title ?? paperId);
+    }
+    final partId = widget.partId;
+    if (partId != null) {
+      final part = _syllabus.getPart(
+        courseId: courseId,
+        paperId: paperId ?? '',
+        partId: partId,
+      );
+      parts.add(part?.displayName ?? partId);
+    }
+    final unitId = widget.unitId;
+    if (unitId != null) {
+      final units = () {
+        final paper = paperId == null
+            ? null
+            : _syllabus.getPaper(courseId: courseId, paperId: paperId);
+        if (paper == null) return const <SyllabusUnit>[];
+        if (paper.hasCanonicalParts) {
+          return _syllabus
+                  .getPart(
+                    courseId: courseId,
+                    paperId: paperId!,
+                    partId: partId ?? '',
+                  )
+                  ?.syllabusUnits ??
+              const <SyllabusUnit>[];
+        }
+        return paper.syllabusUnits;
+      }();
+      final match = units.where((unit) => unit.id == unitId);
+      parts.add(match.isEmpty ? unitId : match.first.displayName);
+    }
+    return parts.join('  ›  ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final embedded = widget.embeddedInShell;
+    final atRoot = widget.courseId == null;
     return Scaffold(
-      appBar: AppBar(title: Text(_title)),
+      backgroundColor: AdminColors.backgroundTop,
+      // When embedded, shell chrome owns top navigation — avoid nested AppBar.
+      appBar: embedded ? null : AppBar(title: Text(_title)),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
-          child: _buildBody(),
+          constraints: const BoxConstraints(maxWidth: 960),
+          child: Column(
+            children: [
+              if (embedded && atRoot)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                    0,
+                  ),
+                  child: AdminPageHeader(
+                    title: 'Chapters',
+                    subtitle:
+                        'Browse syllabus hierarchy and manage chapter tests',
+                  ),
+                ),
+              if (embedded && !atRoot)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                    0,
+                  ),
+                  child: AdminHierarchyHeader(
+                    title: _title,
+                    contextPath: _contextPath,
+                    onBack: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              Expanded(child: _buildBody()),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildBody() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(child: Text(_error!));
+    if (_loading) return const AdminLoadingSurface();
+    if (_error != null) {
+      return AdminEmptyState(
+        title: 'Unable to load Chapters',
+        message: _error!,
+        icon: Icons.error_outline,
+        action: FilledButton.tonal(
+          onPressed: _load,
+          child: const Text('Retry'),
+        ),
+      );
+    }
 
     final courseId = widget.courseId;
     if (courseId == null) {
@@ -163,6 +265,7 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
               _NavItem(
                 title: course.title,
                 subtitle: course.courseId,
+                icon: Icons.school_outlined,
                 onTap: () => _open(courseId: course.courseId),
               ),
         ],
@@ -171,7 +274,11 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
 
     final course = _syllabus.getCourseById(courseId);
     if (course == null) {
-      return const Center(child: Text('Course is not in the syllabus catalog.'));
+      return const AdminEmptyState(
+        title: 'Course unavailable',
+        message: 'Course is not in the syllabus catalog.',
+        icon: Icons.school_outlined,
+      );
     }
 
     final paperId = widget.paperId;
@@ -184,6 +291,7 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
               subtitle: paper.hasCanonicalParts
                   ? '${paper.parts.length} parts'
                   : '${paper.syllabusUnits.length} chapters',
+              icon: Icons.description_outlined,
               onTap: () => _open(courseId: courseId, paperId: paper.id),
             ),
         ],
@@ -192,7 +300,11 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
 
     final paper = _syllabus.getPaper(courseId: courseId, paperId: paperId);
     if (paper == null) {
-      return const Center(child: Text('Paper was not found.'));
+      return const AdminEmptyState(
+        title: 'Paper not found',
+        message: 'Paper was not found.',
+        icon: Icons.description_outlined,
+      );
     }
 
     if (paper.hasCanonicalParts && widget.partId == null) {
@@ -202,6 +314,7 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
             _NavItem(
               title: part.displayName,
               subtitle: '${part.syllabusUnits.length} chapters',
+              icon: Icons.folder_outlined,
               onTap: () => _open(
                 courseId: courseId,
                 paperId: paperId,
@@ -229,6 +342,7 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
             _NavItem(
               title: unit.displayName,
               subtitle: 'Tests',
+              icon: Icons.menu_book_outlined,
               onTap: () => _open(
                 courseId: courseId,
                 paperId: paperId,
@@ -248,13 +362,14 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
       syllabusUnitId: widget.unitId!,
     );
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AdminSpacing.pagePadding),
       children: [
         AdminManagedTestList(
           tests: tests,
           service: _service,
           onChanged: _load,
           onCreate: _create,
+          scopeLabel: _contextPath,
         ),
       ],
     );
@@ -262,21 +377,37 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
 
   Widget _tileList({required List<_NavItem> items}) {
     if (items.isEmpty) {
-      return const Center(child: Text('Nothing to show at this level.'));
+      return const AdminEmptyState(
+        title: 'Nothing to show',
+        message: 'Nothing to show at this level.',
+        icon: Icons.inbox_outlined,
+      );
     }
+    // Context path is shown in AdminHierarchyHeader when embedded.
+    final showCrumb = !widget.embeddedInShell && _contextPath != null;
+    final path = _contextPath;
     return ListView.separated(
-      padding: const EdgeInsets.all(24),
-      itemCount: items.length,
-      separatorBuilder: (_, index) => const SizedBox(height: 8),
+      padding: const EdgeInsets.all(AdminSpacing.pagePadding),
+      itemCount: items.length + (showCrumb ? 1 : 0),
+      separatorBuilder: (_, index) => const SizedBox(height: AdminSpacing.md),
       itemBuilder: (context, index) {
-        final item = items[index];
-        return Card(
-          child: ListTile(
-            title: Text(item.title),
-            subtitle: item.subtitle == null ? null : Text(item.subtitle!),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: item.onTap,
-          ),
+        if (showCrumb && index == 0) {
+          return AdminSurface(
+            padding: const EdgeInsets.all(AdminSpacing.lg),
+            child: Text(
+              path!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AdminColors.textSecondary,
+              ),
+            ),
+          );
+        }
+        final item = items[showCrumb ? index - 1 : index];
+        return AdminNavTile(
+          title: item.title,
+          subtitle: item.subtitle,
+          icon: item.icon,
+          onTap: item.onTap,
         );
       },
     );
@@ -284,9 +415,15 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
 }
 
 class _NavItem {
-  const _NavItem({required this.title, required this.onTap, this.subtitle});
+  const _NavItem({
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.icon = Icons.folder_outlined,
+  });
 
   final String title;
   final String? subtitle;
+  final IconData icon;
   final VoidCallback onTap;
 }

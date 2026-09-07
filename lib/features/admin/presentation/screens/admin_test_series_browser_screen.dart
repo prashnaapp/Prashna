@@ -9,7 +9,15 @@ import '../../admin_routes.dart';
 import '../../data/admin_test_hierarchy.dart';
 import '../../data/admin_test_scope.dart';
 import '../../services/admin_test_service.dart';
+import '../../theme/admin_colors.dart';
+import '../../theme/admin_spacing.dart';
 import '../widgets/admin_managed_test_list.dart';
+import '../widgets/admin_ui/admin_empty_state.dart';
+import '../widgets/admin_ui/admin_hierarchy_header.dart';
+import '../widgets/admin_ui/admin_loading_surface.dart';
+import '../widgets/admin_ui/admin_nav_tile.dart';
+import '../widgets/admin_ui/admin_page_header.dart';
+import '../widgets/admin_ui/admin_surface.dart';
 
 enum AdminTestSeriesMode { home, categories, paperWise, grandTests, previousPapers }
 
@@ -27,6 +35,7 @@ class AdminTestSeriesBrowserScreen extends StatefulWidget {
     this.partId,
     this.seriesId,
     this.year,
+    this.embeddedInShell = false,
   });
 
   final AdminTestService? service;
@@ -37,6 +46,7 @@ class AdminTestSeriesBrowserScreen extends StatefulWidget {
   final String? partId;
   final String? seriesId;
   final int? year;
+  final bool embeddedInShell;
 
   @override
   State<AdminTestSeriesBrowserScreen> createState() =>
@@ -107,6 +117,7 @@ class _AdminTestSeriesBrowserScreenState
           partId: partId,
           seriesId: seriesId,
           year: year,
+          embeddedInShell: widget.embeddedInShell,
         ),
       ),
     );
@@ -182,22 +193,124 @@ class _AdminTestSeriesBrowserScreenState
     };
   }
 
+  String? get _contextPath {
+    final parts = <String>[];
+    final courseId = widget.courseId;
+    if (courseId != null) {
+      final course = _syllabus.getCourseById(courseId);
+      parts.add(course?.name ?? courseId);
+    }
+    switch (widget.mode) {
+      case AdminTestSeriesMode.home:
+        break;
+      case AdminTestSeriesMode.categories:
+        parts.add('Modes');
+      case AdminTestSeriesMode.paperWise:
+        parts.add('Paper-wise Tests');
+        if (widget.paperId != null) {
+          final paper = _syllabus.getPaper(
+            courseId: courseId ?? '',
+            paperId: widget.paperId!,
+          );
+          parts.add(paper?.title ?? widget.paperId!);
+        }
+        if (widget.partId != null) {
+          final part = _syllabus.getPart(
+            courseId: courseId ?? '',
+            paperId: widget.paperId ?? '',
+            partId: widget.partId!,
+          );
+          parts.add(part?.displayName ?? widget.partId!);
+        }
+      case AdminTestSeriesMode.grandTests:
+        parts.add('Grand Tests');
+        if (widget.seriesId != null) parts.add(widget.seriesId!);
+        if (widget.paperId != null) {
+          final paper = _syllabus.getPaper(
+            courseId: courseId ?? '',
+            paperId: widget.paperId!,
+          );
+          parts.add(paper?.title ?? widget.paperId!);
+        }
+      case AdminTestSeriesMode.previousPapers:
+        parts.add('Previous Papers');
+        if (widget.year != null) parts.add('${widget.year}');
+        if (widget.paperId != null) {
+          final paper = _syllabus.getPaper(
+            courseId: courseId ?? '',
+            paperId: widget.paperId!,
+          );
+          parts.add(paper?.title ?? widget.paperId!);
+        }
+    }
+    if (parts.isEmpty) return null;
+    return parts.join('  ›  ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final embedded = widget.embeddedInShell;
+    final atRoot =
+        widget.courseId == null && widget.mode == AdminTestSeriesMode.home;
+    final showDepthHeader = embedded && !atRoot;
     return Scaffold(
-      appBar: AppBar(title: Text(_title)),
+      backgroundColor: AdminColors.backgroundTop,
+      // When embedded, shell chrome owns top navigation — avoid nested AppBar.
+      appBar: embedded ? null : AppBar(title: Text(_title)),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
-          child: _buildBody(),
+          constraints: const BoxConstraints(maxWidth: 960),
+          child: Column(
+            children: [
+              if (embedded && atRoot)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                    0,
+                  ),
+                  child: AdminPageHeader(
+                    title: 'Test Series',
+                    subtitle:
+                        'Manage paper-wise, grand tests and previous papers',
+                  ),
+                ),
+              if (showDepthHeader)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                    0,
+                  ),
+                  child: AdminHierarchyHeader(
+                    title: _title,
+                    contextPath: _contextPath,
+                    onBack: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              Expanded(child: _buildBody()),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildBody() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return Center(child: Text(_error!));
+    if (_loading) return const AdminLoadingSurface();
+    if (_error != null) {
+      return AdminEmptyState(
+        title: 'Unable to load Test Series',
+        message: _error!,
+        icon: Icons.error_outline,
+        action: FilledButton.tonal(
+          onPressed: _load,
+          child: const Text('Retry'),
+        ),
+      );
+    }
 
     if (widget.courseId == null) {
       return _tileList([
@@ -206,6 +319,7 @@ class _AdminTestSeriesBrowserScreenState
             _NavItem(
               title: course.title,
               subtitle: course.courseId,
+              icon: Icons.school_outlined,
               onTap: () => _open(
                 courseId: course.courseId,
                 mode: AdminTestSeriesMode.categories,
@@ -216,7 +330,11 @@ class _AdminTestSeriesBrowserScreenState
 
     final course = _syllabus.getCourseById(widget.courseId!);
     if (course == null) {
-      return const Center(child: Text('Course is not in the syllabus catalog.'));
+      return const AdminEmptyState(
+        title: 'Course unavailable',
+        message: 'Course is not in the syllabus catalog.',
+        icon: Icons.school_outlined,
+      );
     }
 
     return switch (widget.mode) {
@@ -224,16 +342,19 @@ class _AdminTestSeriesBrowserScreenState
         _NavItem(
           title: 'Paper-wise Tests',
           subtitle: 'Paper → Part → Test',
+          icon: Icons.article_outlined,
           onTap: () => _open(mode: AdminTestSeriesMode.paperWise),
         ),
         _NavItem(
           title: 'Grand Tests',
           subtitle: 'Grand Test → Paper → Test',
+          icon: Icons.emoji_events_outlined,
           onTap: () => _open(mode: AdminTestSeriesMode.grandTests),
         ),
         _NavItem(
           title: 'Previous Papers',
           subtitle: 'Examination year → Paper → Test',
+          icon: Icons.history_edu_outlined,
           onTap: () => _open(mode: AdminTestSeriesMode.previousPapers),
         ),
       ]),
@@ -252,6 +373,7 @@ class _AdminTestSeriesBrowserScreenState
             subtitle: paper.hasCanonicalParts
                 ? '${paper.parts.length} parts'
                 : 'Tests',
+            icon: Icons.description_outlined,
             onTap: () => _open(
               mode: AdminTestSeriesMode.paperWise,
               paperId: paper.id,
@@ -265,7 +387,11 @@ class _AdminTestSeriesBrowserScreenState
       paperId: widget.paperId!,
     );
     if (paper == null) {
-      return const Center(child: Text('Paper was not found.'));
+      return const AdminEmptyState(
+        title: 'Paper not found',
+        message: 'Paper was not found.',
+        icon: Icons.description_outlined,
+      );
     }
 
     if (paper.hasCanonicalParts && widget.partId == null) {
@@ -274,6 +400,7 @@ class _AdminTestSeriesBrowserScreenState
           _NavItem(
             title: part.displayName,
             subtitle: 'Actual test',
+            icon: Icons.folder_outlined,
             onTap: () => _open(
               mode: AdminTestSeriesMode.paperWise,
               paperId: paper.id,
@@ -289,23 +416,16 @@ class _AdminTestSeriesBrowserScreenState
       paperId: paper.id,
       partId: widget.partId,
     );
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        AdminManagedTestList(
-          tests: tests,
-          service: _service,
-          onChanged: _load,
-          onCreate: () => _create(
-            AdminTestScope(
-              category: TestCategoryType.partTests,
-              courseId: course.id,
-              paperId: paper.id,
-              partId: widget.partId,
-            ),
-          ),
+    return _managedList(
+      tests: tests,
+      onCreate: () => _create(
+        AdminTestScope(
+          category: TestCategoryType.partTests,
+          courseId: course.id,
+          paperId: paper.id,
+          partId: widget.partId,
         ),
-      ],
+      ),
     );
   }
 
@@ -322,25 +442,18 @@ class _AdminTestSeriesBrowserScreenState
           if (!GrandTestSeries.isApproved(id)) id,
       ];
       final ids = [...GrandTestSeries.ids, ...legacy];
-      return ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          for (final id in ids) ...[
-            Card(
-              child: ListTile(
-                title: Text(id),
-                subtitle: const Text('Paper → Actual test'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _open(
-                  mode: AdminTestSeriesMode.grandTests,
-                  seriesId: id,
-                ),
-              ),
+      return _tileList([
+        for (final id in ids)
+          _NavItem(
+            title: id,
+            subtitle: 'Paper → Actual test',
+            icon: Icons.emoji_events_outlined,
+            onTap: () => _open(
+              mode: AdminTestSeriesMode.grandTests,
+              seriesId: id,
             ),
-            const SizedBox(height: 8),
-          ],
-        ],
-      );
+          ),
+      ]);
     }
 
     if (widget.paperId == null) {
@@ -349,6 +462,7 @@ class _AdminTestSeriesBrowserScreenState
           _NavItem(
             title: AdminTestHierarchy.paperLabel(paper),
             subtitle: 'Actual test',
+            icon: Icons.description_outlined,
             onTap: () => _open(
               mode: AdminTestSeriesMode.grandTests,
               seriesId: widget.seriesId,
@@ -364,23 +478,16 @@ class _AdminTestSeriesBrowserScreenState
       seriesId: widget.seriesId!,
       paperId: widget.paperId!,
     );
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        AdminManagedTestList(
-          tests: tests,
-          service: _service,
-          onChanged: _load,
-          onCreate: () => _create(
-            AdminTestScope(
-              category: TestCategoryType.mockTests,
-              courseId: course.id,
-              paperId: widget.paperId,
-              seriesId: widget.seriesId,
-            ),
-          ),
+    return _managedList(
+      tests: tests,
+      onCreate: () => _create(
+        AdminTestScope(
+          category: TestCategoryType.mockTests,
+          courseId: course.id,
+          paperId: widget.paperId,
+          seriesId: widget.seriesId,
         ),
-      ],
+      ),
     );
   }
 
@@ -391,36 +498,37 @@ class _AdminTestSeriesBrowserScreenState
         courseId: course.id,
       );
       return ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AdminSpacing.pagePadding),
         children: [
           Align(
             alignment: Alignment.centerLeft,
             child: FilledButton.icon(
               onPressed: _addYear,
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add, size: 18),
               label: const Text('+ Examination year'),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AdminSpacing.lg),
           if (years.isEmpty)
-            const Text(
-              'No examination years yet. Add the year the exam was conducted, '
-              'then add one test per paper.',
+            const AdminEmptyState(
+              title: 'No examination years yet',
+              message:
+                  'Add the year the exam was conducted, then add one test '
+                  'per paper.',
+              icon: Icons.history_edu_outlined,
             )
           else
             for (final year in years) ...[
-              Card(
-                child: ListTile(
-                  title: Text('$year'),
-                  subtitle: const Text('Paper → Actual test'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _open(
-                    mode: AdminTestSeriesMode.previousPapers,
-                    year: year,
-                  ),
+              AdminNavTile(
+                title: '$year',
+                subtitle: 'Paper → Actual test',
+                icon: Icons.calendar_today_outlined,
+                onTap: () => _open(
+                  mode: AdminTestSeriesMode.previousPapers,
+                  year: year,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AdminSpacing.md),
             ],
         ],
       );
@@ -432,6 +540,7 @@ class _AdminTestSeriesBrowserScreenState
           _NavItem(
             title: AdminTestHierarchy.paperLabel(paper),
             subtitle: 'Actual test',
+            icon: Icons.description_outlined,
             onTap: () => _open(
               mode: AdminTestSeriesMode.previousPapers,
               year: widget.year,
@@ -447,21 +556,32 @@ class _AdminTestSeriesBrowserScreenState
       year: widget.year!,
       paperId: widget.paperId!,
     );
+    return _managedList(
+      tests: tests,
+      onCreate: () => _create(
+        AdminTestScope(
+          category: TestCategoryType.previousYear,
+          courseId: course.id,
+          paperId: widget.paperId,
+          year: widget.year,
+        ),
+      ),
+    );
+  }
+
+  Widget _managedList({
+    required List<TestModel> tests,
+    required VoidCallback onCreate,
+  }) {
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AdminSpacing.pagePadding),
       children: [
         AdminManagedTestList(
           tests: tests,
           service: _service,
           onChanged: _load,
-          onCreate: () => _create(
-            AdminTestScope(
-              category: TestCategoryType.previousYear,
-              courseId: course.id,
-              paperId: widget.paperId,
-              year: widget.year,
-            ),
-          ),
+          onCreate: onCreate,
+          scopeLabel: _contextPath,
         ),
       ],
     );
@@ -469,21 +589,36 @@ class _AdminTestSeriesBrowserScreenState
 
   Widget _tileList(List<_NavItem> items) {
     if (items.isEmpty) {
-      return const Center(child: Text('Nothing to show at this level.'));
+      return const AdminEmptyState(
+        title: 'Nothing to show',
+        message: 'Nothing to show at this level.',
+        icon: Icons.inbox_outlined,
+      );
     }
+    // Context path is shown in AdminHierarchyHeader when embedded.
+    final showCrumb = !widget.embeddedInShell && _contextPath != null;
     return ListView.separated(
-      padding: const EdgeInsets.all(24),
-      itemCount: items.length,
-      separatorBuilder: (_, index) => const SizedBox(height: 8),
+      padding: const EdgeInsets.all(AdminSpacing.pagePadding),
+      itemCount: items.length + (showCrumb ? 1 : 0),
+      separatorBuilder: (_, index) => const SizedBox(height: AdminSpacing.md),
       itemBuilder: (context, index) {
-        final item = items[index];
-        return Card(
-          child: ListTile(
-            title: Text(item.title),
-            subtitle: item.subtitle == null ? null : Text(item.subtitle!),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: item.onTap,
-          ),
+        if (showCrumb && index == 0) {
+          return AdminSurface(
+            padding: const EdgeInsets.all(AdminSpacing.lg),
+            child: Text(
+              _contextPath!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AdminColors.textSecondary,
+              ),
+            ),
+          );
+        }
+        final item = items[showCrumb ? index - 1 : index];
+        return AdminNavTile(
+          title: item.title,
+          subtitle: item.subtitle,
+          icon: item.icon,
+          onTap: item.onTap,
         );
       },
     );
@@ -491,9 +626,15 @@ class _AdminTestSeriesBrowserScreenState
 }
 
 class _NavItem {
-  const _NavItem({required this.title, required this.onTap, this.subtitle});
+  const _NavItem({
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.icon = Icons.folder_outlined,
+  });
 
   final String title;
   final String? subtitle;
+  final IconData icon;
   final VoidCallback onTap;
 }

@@ -8,6 +8,7 @@ import 'package:telangana_prep/features/admin/presentation/admin_auth_phase_reso
 import 'package:telangana_prep/features/admin/presentation/screens/admin_access_denied_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_dashboard_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_login_screen.dart';
+import 'package:telangana_prep/features/admin/presentation/shell/admin_shell.dart';
 import 'package:telangana_prep/features/authentication/models/auth_user.dart';
 
 void main() {
@@ -105,10 +106,10 @@ void main() {
 
       controller.add(user);
       await tester.pump();
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.byType(AdminDashboardScreen), findsOneWidget);
-      expect(find.text('PRASHNA ADMIN'), findsOneWidget);
+      expect(find.byType(AdminShell), findsOneWidget);
       expect(find.textContaining('Welcome'), findsOneWidget);
     });
 

@@ -8,8 +8,8 @@ import '../services/admin_auth_service.dart';
 import 'admin_auth_phase.dart';
 import 'admin_auth_phase_resolver.dart';
 import 'screens/admin_access_denied_screen.dart';
-import 'screens/admin_dashboard_screen.dart';
 import 'screens/admin_login_screen.dart';
+import 'shell/admin_shell.dart';
 
 /// Gates Admin Web UI on Firebase Auth + `admin: true` custom claim.
 class AdminAuthGate extends StatefulWidget {
@@ -30,6 +30,8 @@ class AdminAuthGate extends StatefulWidget {
 
   /// Test override for claim verification (must mirror token claims).
   final Future<bool> Function({bool forceRefresh})? isAdminChecker;
+
+  /// Optional embedded child for tests. Production uses [AdminShell] nested nav.
   final Widget? authenticatedChild;
 
   @override
@@ -122,11 +124,11 @@ class _AdminAuthGateState extends State<AdminAuthGate> {
           onSignOut: _signOut,
         );
       case AdminAuthPhase.dashboard:
-        return widget.authenticatedChild ??
-            AdminDashboardScreen(
-              user: _user,
-              onSignOut: _signOut,
-            );
+        return AdminShell(
+          user: _user,
+          onSignOut: _signOut,
+          embeddedChild: widget.authenticatedChild,
+        );
     }
   }
 }

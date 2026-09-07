@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/design_system/design_system.dart';
 import '../../../authentication/services/auth_service.dart';
+import '../../theme/admin_colors.dart';
+import '../../theme/admin_spacing.dart';
+import '../widgets/admin_ui/admin_surface.dart';
 
-/// Minimal Admin Web login — Google Sign-In via [AuthService].
+/// Premium Admin Web login — Google Sign-In via [AuthService].
+///
+/// Authentication behavior is unchanged; presentation uses Admin-only tokens.
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({
     super.key,
@@ -66,52 +70,96 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Prashna Admin',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.headline(context),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Sign in with an account that has the admin claim.',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium(context).copyWith(
-                    color: AppColors.textSecondary,
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: const BoxDecoration(gradient: AdminColors.workspaceGradient),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AdminSpacing.pagePadding),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: AdminSurface(
+                  emphasized: true,
+                  padding: const EdgeInsets.all(AdminSpacing.xxl),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: AdminColors.primarySoft,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.admin_panel_settings_outlined,
+                            color: AdminColors.primary,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AdminSpacing.lg),
+                      Text(
+                        'Prashna Admin',
+                        textAlign: TextAlign.center,
+                        key: const ValueKey('admin-login-title'),
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AdminColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: AdminSpacing.sm),
+                      Text(
+                        'Sign in with an account that has the admin claim.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: AdminColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AdminSpacing.xxl),
+                      if (_error != null) ...[
+                        AdminSurface(
+                          padding: const EdgeInsets.all(AdminSpacing.md),
+                          child: Text(
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: AdminColors.danger,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AdminSpacing.lg),
+                      ],
+                      FilledButton(
+                        onPressed: _loading ? null : _signIn,
+                        child: _loading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Sign in'),
+                      ),
+                      const SizedBox(height: AdminSpacing.md),
+                      Text(
+                        'Admin Console · Restricted access',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: AdminColors.textTertiary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xxl),
-                if (_error != null) ...[
-                  Text(
-                    _error!,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyMedium(context).copyWith(
-                      color: AppColors.error,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
-                FilledButton(
-                  onPressed: _loading ? null : _signIn,
-                  child: _loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Sign in'),
-                ),
-              ],
+              ),
             ),
           ),
         ),

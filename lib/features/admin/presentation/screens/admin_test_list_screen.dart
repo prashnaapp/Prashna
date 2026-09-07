@@ -4,6 +4,13 @@ import '../../../course_enrollment/model/course.dart';
 import '../../../tests/data/models/test_models.dart';
 import '../../admin_routes.dart';
 import '../../services/admin_test_service.dart';
+import '../../theme/admin_colors.dart';
+import '../../theme/admin_spacing.dart';
+import '../widgets/admin_ui/admin_empty_state.dart';
+import '../widgets/admin_ui/admin_loading_surface.dart';
+import '../widgets/admin_ui/admin_page_header.dart';
+import '../widgets/admin_ui/admin_surface.dart';
+import '../widgets/admin_ui/admin_test_row.dart';
 
 class AdminTestListScreen extends StatefulWidget {
   const AdminTestListScreen({super.key, this.service});
@@ -124,24 +131,10 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
     }
   }
 
-  String _categoryLabel(TestCategoryType type) {
-    switch (type) {
-      case TestCategoryType.chapterTests:
-        return 'Chapter Tests';
-      case TestCategoryType.partTests:
-        return 'Paper-wise Tests';
-      case TestCategoryType.paperTests:
-        return 'Paper Tests';
-      case TestCategoryType.mockTests:
-        return 'Mock Tests';
-      case TestCategoryType.previousYear:
-        return 'Previous Papers';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AdminColors.backgroundTop,
       appBar: AppBar(title: const Text('Tests')),
       body: Center(
         child: ConstrainedBox(
@@ -158,23 +151,58 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
 
   Widget _buildBody(BuildContext context) {
     if (_loadingCourses) {
-      return const Center(child: CircularProgressIndicator());
+      return const AdminLoadingSurface();
     }
     if (_error != null && _courses.isEmpty) {
-      return Center(child: Text(_error!));
+      return AdminEmptyState(
+        title: 'Unable to load courses',
+        message: _error!,
+        icon: Icons.error_outline,
+        action: FilledButton.tonal(
+          onPressed: () {
+            setState(() {
+              _loadingCourses = true;
+              _error = null;
+            });
+            _loadCourses();
+          },
+          child: const Text('Retry'),
+        ),
+      );
     }
     if (_courses.isEmpty) {
-      return const Center(child: Text('No published courses are available.'));
+      return const AdminEmptyState(
+        title: 'No courses available',
+        message: 'No published courses are available.',
+        icon: Icons.school_outlined,
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
+          padding: const EdgeInsets.fromLTRB(
+            AdminSpacing.pagePadding,
+            AdminSpacing.pagePadding,
+            AdminSpacing.pagePadding,
+            AdminSpacing.sm,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              AdminPageHeader(
+                title: 'Managed Tests',
+                subtitle:
+                    'Flat catalog view across a course. Prefer Test Series or '
+                    'Chapters browsers for scoped workflows.',
+                actions: [
+                  FilledButton.icon(
+                    onPressed: _courseId == null ? null : _openCreate,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('+ Create Test'),
+                  ),
+                ],
+              ),
               ConstrainedBox(
                 constraints: const BoxConstraints(minWidth: 200, maxWidth: 600),
                 child: DropdownButtonFormField<String>(
@@ -196,116 +224,86 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
                   },
                 ),
               ),
-              FilledButton.icon(
-                onPressed: _courseId == null ? null : _openCreate,
-                icon: const Icon(Icons.add),
-                label: const Text('+ Create Test'),
-              ),
+              if (_error != null) ...[
+                const SizedBox(height: AdminSpacing.md),
+                AdminSurface(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AdminSpacing.lg,
+                    vertical: AdminSpacing.md,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: AdminColors.danger,
+                      ),
+                      const SizedBox(width: AdminSpacing.md),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AdminColors.danger),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _loadTests,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Text(
-              _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
         Expanded(
           child: _loadingTests
-              ? const Center(child: CircularProgressIndicator())
+              ? const AdminLoadingSurface()
               : _tests.isEmpty
-              ? const Center(child: Text('No tests for this course.'))
+              ? const AdminEmptyState(
+                  title: 'No tests for this course',
+                  message:
+                      'Create a test or open Test Series / Chapters for scoped '
+                      'management.',
+                  icon: Icons.assignment_outlined,
+                )
               : ListView.separated(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.fromLTRB(
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.sm,
+                    AdminSpacing.pagePadding,
+                    AdminSpacing.pagePadding,
+                  ),
                   itemCount: _tests.length,
-                  separatorBuilder: (_, index) => const SizedBox(height: 8),
+                  separatorBuilder: (_, index) =>
+                      const SizedBox(height: AdminSpacing.md),
                   itemBuilder: (context, index) {
                     final test = _tests[index];
-                    return _TestCard(
+                    return AdminTestRow(
                       test: test,
-                      categoryLabel: _categoryLabel(test.category),
                       onEdit: () => _openEdit(test),
-                      onSetStatus: (status) => _setStatus(test, status),
+                      onPublish: test.status != TestPublicationStatus.published
+                          ? () => _setStatus(
+                              test,
+                              TestPublicationStatus.published,
+                            )
+                          : null,
+                      onUnpublish:
+                          test.status == TestPublicationStatus.published
+                          ? () =>
+                                _setStatus(test, TestPublicationStatus.draft)
+                          : null,
+                      onArchive: test.status != TestPublicationStatus.archived
+                          ? () => _setStatus(
+                              test,
+                              TestPublicationStatus.archived,
+                            )
+                          : null,
                     );
                   },
                 ),
         ),
       ],
-    );
-  }
-}
-
-class _TestCard extends StatelessWidget {
-  const _TestCard({
-    required this.test,
-    required this.categoryLabel,
-    required this.onEdit,
-    required this.onSetStatus,
-  });
-
-  final TestModel test;
-  final String categoryLabel;
-  final VoidCallback onEdit;
-  final ValueChanged<TestPublicationStatus> onSetStatus;
-
-  @override
-  Widget build(BuildContext context) {
-    final status = switch (test.status) {
-      TestPublicationStatus.draft => 'Draft',
-      TestPublicationStatus.published => 'Published',
-      TestPublicationStatus.archived => 'Archived',
-    };
-    return Card(
-      child: ListTile(
-        title: Text(test.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          '${test.id} • $categoryLabel\n'
-          '${test.questionCount} questions • ${test.marks} marks • '
-          '${test.durationMinutes} min • ${test.difficulty} • $status'
-          '${test.questionIds.isEmpty ? '' : ' • ${test.questionIds.length} fixed IDs'}',
-        ),
-        isThreeLine: true,
-        leading: Icon(
-          test.status == TestPublicationStatus.published
-              ? Icons.publish
-              : test.status == TestPublicationStatus.archived
-              ? Icons.archive_outlined
-              : Icons.edit_note,
-          color: test.status == TestPublicationStatus.published
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.outline,
-        ),
-        trailing: Wrap(
-          spacing: 4,
-          children: [
-            IconButton(
-              tooltip: 'Edit',
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            if (test.status != TestPublicationStatus.published)
-              IconButton(
-                tooltip: 'Publish',
-                onPressed: () => onSetStatus(TestPublicationStatus.published),
-                icon: const Icon(Icons.visibility_outlined),
-              ),
-            if (test.status == TestPublicationStatus.published)
-              IconButton(
-                tooltip: 'Unpublish',
-                onPressed: () => onSetStatus(TestPublicationStatus.draft),
-                icon: const Icon(Icons.visibility_off_outlined),
-              ),
-            if (test.status != TestPublicationStatus.archived)
-              IconButton(
-                tooltip: 'Archive',
-                onPressed: () => onSetStatus(TestPublicationStatus.archived),
-                icon: const Icon(Icons.archive_outlined),
-              ),
-          ],
-        ),
-      ),
     );
   }
 }
