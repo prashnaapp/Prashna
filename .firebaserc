@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "prashna-67689"
-  }
+  },
+  "targets": {
+    "prashna-67689": {
+      "hosting": {
+        "student": [
+          "prashna-67689"
+        ],
+        "admin": [
+          "prashna-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
