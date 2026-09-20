@@ -51,11 +51,6 @@ class ProfileHero extends StatelessWidget {
                 child: const _ProfileCardArt(),
               ),
               Positioned(
-                top: topInset + 8,
-                right: 16,
-                child: const _NotificationBell(),
-              ),
-              Positioned(
                 top: topInset + 34,
                 left: SyllabusVisual.pagePadding,
                 right: artWidth + 24,
