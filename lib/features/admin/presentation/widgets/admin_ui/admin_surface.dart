@@ -95,21 +95,31 @@ class AdminSurface extends StatelessWidget {
       ),
       AdminSurfaceVariant.glass => BoxDecoration(
         borderRadius: radius,
-        color: Colors.white.withValues(alpha: 0.62),
+        color: Colors.white.withValues(alpha: 0.58),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.72),
-          width: 1,
+          color: Colors.white.withValues(alpha: 0.78),
+          width: 1.1,
+        ),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.78),
+            Colors.white.withValues(alpha: 0.52),
+            (accentColor ?? AdminColors.primary).withValues(alpha: 0.06),
+          ],
+          stops: const [0.0, 0.62, 1.0],
         ),
         boxShadow: [
           BoxShadow(
-            color: AdminColors.atmosphereDeep.withValues(alpha: 0.10),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
+            color: AdminColors.atmosphereDeep.withValues(alpha: 0.11),
+            blurRadius: 30,
+            offset: const Offset(0, 14),
           ),
           BoxShadow(
-            color: (accentColor ?? AdminColors.primary).withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: (accentColor ?? AdminColors.primary).withValues(alpha: 0.07),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),

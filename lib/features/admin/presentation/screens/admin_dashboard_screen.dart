@@ -34,7 +34,9 @@ class AdminDashboardScreen extends StatelessWidget {
       if (!allowed) return;
     }
     if (!context.mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil(
+    // Prefer the nearest (nested AdminShell) navigator — never the root app
+    // navigator — so Dashboard visuals dispose with the workspace route.
+    Navigator.of(context, rootNavigator: false).pushNamedAndRemoveUntil(
       routeName,
       (route) => false,
     );
@@ -85,14 +87,18 @@ class AdminDashboardScreen extends StatelessWidget {
           ),
         ];
 
-        return Stack(
-          children: [
-            const Positioned.fill(
-              child: _DashboardAtmosphere(
-                key: ValueKey('dashboard-atmosphere'),
+        // Atmosphere is owned by this route only. SizedBox.expand keeps the
+        // photographic stack clipped to Dashboard bounds (not AdminShell).
+        return SizedBox.expand(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const RepaintBoundary(
+                child: _DashboardAtmosphere(
+                  key: ValueKey('dashboard-atmosphere'),
+                ),
               ),
-            ),
-            SingleChildScrollView(
+              SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
                 AdminSpacing.pagePadding,
                 AdminSpacing.xl,
@@ -143,7 +149,8 @@ class AdminDashboardScreen extends StatelessWidget {
                 ),
               ),
             ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -187,16 +194,17 @@ class _DashboardAtmosphere extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           const ColoredBox(color: AdminColors.atmosphereSoft),
+          // Single blur system — background image only; foreground stays sharp.
           Positioned.fill(
             child: ClipRect(
               child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                imageFilter: ImageFilter.blur(sigmaX: 4.5, sigmaY: 4.5),
                 child: const SizedBox.expand(
                   child: Image(
                     key: ValueKey('dashboard-workspace-background'),
                     image: AssetImage(assetPath),
                     fit: BoxFit.cover,
-                    alignment: Alignment(0.45, 0.15),
+                    alignment: Alignment(0.35, 0.05),
                     filterQuality: FilterQuality.medium,
                     gaplessPlayback: true,
                   ),
@@ -204,17 +212,19 @@ class _DashboardAtmosphere extends StatelessWidget {
               ),
             ),
           ),
+          // Light translucent wash: photo remains recognizable but subordinate.
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xF2F8F4EC),
-                  Color(0xC7F4F7FC),
-                  Color(0xD6E8EEF8),
+                  Color(0xD9F7F1E8),
+                  Color(0xB8F4F7FC),
+                  Color(0xC2E8EEF8),
+                  Color(0xCCE6ECF6),
                 ],
-                stops: [0.0, 0.52, 1.0],
+                stops: [0.0, 0.38, 0.72, 1.0],
               ),
             ),
           ),
@@ -290,7 +300,7 @@ class _DestinationGrid extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(child: left),
-            const SizedBox(width: AdminSpacing.lg),
+            const SizedBox(width: AdminSpacing.xl),
             Expanded(child: right),
           ],
         ),
@@ -300,7 +310,7 @@ class _DestinationGrid extends StatelessWidget {
     return Column(
       children: [
         pair(cards[0], cards[1]),
-        const SizedBox(height: AdminSpacing.lg),
+        const SizedBox(height: AdminSpacing.xl),
         pair(cards[2], cards[3]),
       ],
     );
@@ -330,63 +340,83 @@ class _DestinationCard extends StatelessWidget {
         variant: AdminSurfaceVariant.glass,
         accentColor: accent.strong,
         onTap: onTap,
-        padding: const EdgeInsets.all(AdminSpacing.xxl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: accent.soft,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: accent.strong.withValues(alpha: 0.16),
-                    ),
-                  ),
-                  child: Icon(icon, color: accent.strong, size: 26),
-                ),
-                const Spacer(),
-                ExcludeSemantics(
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    alignment: Alignment.center,
+        padding: const EdgeInsets.fromLTRB(
+          AdminSpacing.xxl,
+          AdminSpacing.xxl,
+          AdminSpacing.xxl,
+          AdminSpacing.xxxl,
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 168),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 58,
+                    height: 58,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.78),
-                      shape: BoxShape.circle,
+                      color: Color.alphaBlend(
+                        accent.soft.withValues(alpha: 0.92),
+                        Colors.white.withValues(alpha: 0.55),
+                      ),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: AdminColors.border.withValues(alpha: 0.9),
+                        color: accent.strong.withValues(alpha: 0.18),
                       ),
                     ),
-                    child: Icon(
-                      Icons.arrow_forward_rounded,
-                      color: accent.strong,
-                      size: 18,
+                    child: Icon(icon, color: accent.strong, size: 26),
+                  ),
+                  const Spacer(),
+                  ExcludeSemantics(
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AdminColors.atmosphereDeep.withValues(
+                              alpha: 0.06,
+                            ),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        color: accent.strong,
+                        size: 18,
+                      ),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: AdminSpacing.xl),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AdminColors.textPrimary,
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
-            ),
-            const SizedBox(height: AdminSpacing.xl),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AdminColors.textPrimary,
-                fontWeight: FontWeight.w700,
               ),
-            ),
-            const SizedBox(height: AdminSpacing.sm),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AdminColors.textSecondary,
-                height: 1.4,
+              const SizedBox(height: AdminSpacing.sm),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AdminColors.textSecondary,
+                  height: 1.45,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

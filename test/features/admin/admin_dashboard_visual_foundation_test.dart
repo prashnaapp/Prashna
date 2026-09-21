@@ -98,7 +98,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('dashboard-dest-import')));
+    final importCard = find.byKey(const ValueKey('dashboard-dest-import'));
+    await tester.ensureVisible(importCard);
+    await tester.tap(importCard);
     await tester.pumpAndSettle();
 
     expect(find.text('route:${AdminRoutes.questionImport}'), findsOneWidget);
@@ -125,6 +127,51 @@ void main() {
     expect(find.byKey(const ValueKey('dashboard-dest-questions')), findsNothing);
     expect(find.text('Create Question'), findsWidgets);
     expect(find.text('+ Create Question'), findsNothing);
+  });
+
+  testWidgets('Dashboard → Questions removes Dashboard visual layers', (
+    tester,
+  ) async {
+    final view = tester.view;
+    view.physicalSize = const Size(1400, 900);
+    view.devicePixelRatio = 1.0;
+    addTearDown(view.resetPhysicalSize);
+    addTearDown(view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AdminShell(
+          user: _user,
+          onSignOut: () async {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byKey(const ValueKey('dashboard-atmosphere')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('dashboard-workspace-background')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('admin-sidebar-nav')),
+        matching: find.text('Questions'),
+      ),
+    );
+    // Zero-duration opaque workspace route — one frame must drop Dashboard layers.
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('dashboard-atmosphere')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('dashboard-workspace-background')),
+      findsNothing,
+    );
+    expect(find.text('Quick Stats'), findsNothing);
+    expect(find.text('Recent Activity'), findsNothing);
+    expect(find.text('Search anything...'), findsNothing);
   });
 
   testWidgets('Create Question label has no leading plus duplicate', (

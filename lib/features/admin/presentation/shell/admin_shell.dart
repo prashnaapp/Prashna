@@ -316,8 +316,18 @@ class _AdminWorkspaceRoute<T> extends PageRoute<T> {
     Animation<double> secondaryAnimation,
   ) {
     final child = builder(context);
-    if (!coverWithWorkspace) return child;
-    return ColoredBox(color: AdminColors.backgroundTop, child: child);
+    if (!coverWithWorkspace) {
+      // Dashboard owns its photographic stack; do not wrap with shell fill.
+      return SizedBox.expand(child: child);
+    }
+    // Opaque workspace fill so Dashboard image/blur cannot show through
+    // embedded screens that omit their own Scaffold background.
+    return SizedBox.expand(
+      child: ColoredBox(
+        color: AdminColors.backgroundTop,
+        child: child,
+      ),
+    );
   }
 
   @override
