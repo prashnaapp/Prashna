@@ -545,35 +545,30 @@ class QuestionImportValidator {
       );
       return;
     }
-    if (topic.lessons.isNotEmpty) {
-      if (lessonId == null || lessonId.isEmpty) {
+    if (lessonId != null && lessonId.isNotEmpty) {
+      if (topic.lessons.isEmpty) {
         errors.add(
           QuestionImportIssue(
             recordIndex: index,
             field: 'lessonId',
-            message: 'Lesson is required for this Topic.',
+            message: 'Lesson is not applicable for this Topic.',
           ),
         );
-        return;
-      }
-      final lessonExists = topic.lessons.any((lesson) => lesson.id == lessonId);
-      if (!lessonExists) {
-        errors.add(
-          QuestionImportIssue(
-            recordIndex: index,
-            field: 'lessonId',
-            message: 'Unknown Lesson "$lessonId".',
-          ),
+      } else {
+        final lessonExists = topic.lessons.any(
+          (lesson) => lesson.id == lessonId,
         );
+
+        if (!lessonExists) {
+          errors.add(
+            QuestionImportIssue(
+              recordIndex: index,
+              field: 'lessonId',
+              message: 'Unknown Lesson "$lessonId".',
+            ),
+          );
+        }
       }
-    } else if (lessonId != null && lessonId.isNotEmpty) {
-      errors.add(
-        QuestionImportIssue(
-          recordIndex: index,
-          field: 'lessonId',
-          message: 'Lesson is not applicable for this Topic.',
-        ),
-      );
     }
   }
 
@@ -632,7 +627,8 @@ class QuestionImportValidator {
         paperId: record.paperId.trim(),
         majorStudyAreaId: isPaperI ? record.majorStudyAreaId?.trim() : null,
         contentTopicId: isPaperI ? record.contentTopicId?.trim() : null,
-        partId: isPaperI || (isGroupIii && paper?.hasDirectSyllabusUnits == true)
+        partId:
+            isPaperI || (isGroupIii && paper?.hasDirectSyllabusUnits == true)
             ? null
             : record.partId?.trim(),
         topicId: isPaperI || isGroupIii ? null : record.topicId?.trim(),
