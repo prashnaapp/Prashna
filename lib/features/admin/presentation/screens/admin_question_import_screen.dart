@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../data/admin_question_scope.dart';
+import '../../data/admin_test_hierarchy.dart';
 import '../../data/models/question_import_models.dart';
 import '../../services/question_import_service.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
+import '../../../syllabus/services/syllabus_service.dart';
+import '../widgets/admin_ui/admin_nav_tile.dart';
 import '../widgets/admin_ui/admin_page_header.dart';
 import '../widgets/admin_ui/admin_surface.dart';
+import 'admin_test_series_questions_browser_screen.dart';
 
 /// Premium Admin UI: paste JSON → validate → confirm import as drafts.
 ///
@@ -14,10 +19,12 @@ class AdminQuestionImportScreen extends StatefulWidget {
   const AdminQuestionImportScreen({
     super.key,
     this.service,
+    this.scope,
     this.embeddedInShell = false,
   });
 
   final QuestionImportService? service;
+  final AdminQuestionScope? scope;
   final bool embeddedInShell;
 
   @override
@@ -40,13 +47,53 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
   @override
   void initState() {
     super.initState();
-    _service = widget.service ?? QuestionImportService();
+    _service = widget.service ?? QuestionImportService(scope: widget.scope);
   }
 
   @override
   void dispose() {
     _jsonController.dispose();
     super.dispose();
+  }
+
+  Widget _lockedContext(ThemeData theme) {
+    final scope = widget.scope!;
+    final syllabus = SyllabusService.instance;
+    final course = syllabus.getCourseById(scope.courseId ?? '');
+    final lines = <String>[
+      course?.name ?? scope.courseId ?? '',
+      scope.categoryLabel,
+    ];
+    switch (scope.testSeriesCategory) {
+      case AdminQuestionScope.categoryPart:
+        final paper = syllabus.getPaper(
+          courseId: scope.courseId ?? '',
+          paperId: scope.paperId ?? '',
+        );
+        lines.add(
+          paper == null
+              ? (scope.paperId ?? '')
+              : AdminTestHierarchy.paperLabel(paper),
+        );
+      case AdminQuestionScope.categoryMock:
+        lines.add(scope.seriesId ?? '');
+      case AdminQuestionScope.categoryPreviousYear:
+        lines.add('${scope.year ?? ''}');
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AdminSpacing.lg),
+      child: Column(
+        key: const ValueKey('import-locked-ownership'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final line in lines)
+            Text(
+              line,
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+        ],
+      ),
+    );
   }
 
   void _leave() {
@@ -115,12 +162,13 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
       if (!mounted) return;
       if (report.succeeded) {
         _dataChanged = true;
-        // When opened from Question Bank (or any caller), return immediately
-        // so the list can reload. Standalone/shell-root Import keeps the report.
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop(true);
           return;
         }
+      } else if (report.questionsCreated && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(report);
+        return;
       }
       setState(() {
         _importReport = report;
@@ -177,13 +225,15 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
                   ),
                   const SizedBox(height: AdminSpacing.xs),
                   Text(
-                    'Paste a complete JSON import file. Validation runs on the '
-                    'entire batch before any write.',
+                    'Paste a complete JSON object with a "questions" array. '
+                    'Validation runs on the entire batch before any write.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: AdminColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: AdminSpacing.lg),
+                  if (widget.scope?.isQuestionBank == true)
+                    _lockedContext(theme),
                   TextField(
                     key: const ValueKey('import-json'),
                     controller: _jsonController,
@@ -236,10 +286,15 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
                   ),
                   const SizedBox(height: AdminSpacing.sm),
                   Text(
-                    '• Submit a JSON array or documented batch envelope.\n'
-                    '• Every record must validate before import proceeds.\n'
-                    '• Successful import creates draft/inactive questions only.\n'
-                    '• Nothing is published automatically.',
+                    '• JSON object: { "questions": [ ... ] }.\n'
+                    '• Standard MCQ uses itemFormat "standard_mcq" or omits it, '
+                    'with four bilingual options.\n'
+                    '• Statement MCQ uses itemFormat "statement_mcq" and a '
+                    'statements array of { "en", "te" }.\n'
+                    '• Optional testId assigns a Test Series question after '
+                    'create. Omit it to leave the question unassigned.\n'
+                    '• Chapter import keeps the existing syllabus fields.\n'
+                    '• Successful import creates draft/inactive questions only.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: AdminColors.textSecondary,
                       height: 1.45,
@@ -323,8 +378,7 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
                     ),
                     _StatLine(
                       label: 'Duplicate/collision records',
-                      value:
-                          '${validation.duplicateOrCollisionRecords.length}',
+                      value: '${validation.duplicateOrCollisionRecords.length}',
                     ),
                     if (validation.canImport) ...[
                       const SizedBox(height: AdminSpacing.md),
@@ -433,6 +487,17 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
                           style: theme.textTheme.bodySmall,
                         ),
                       ),
+                    if (report.assignmentFailureMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AdminSpacing.md),
+                        child: Text(
+                          report.assignmentFailureMessage!,
+                          key: const ValueKey('import-assignment-partial'),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AdminColors.warning,
+                          ),
+                        ),
+                      ),
                     if (report.failureMessage != null)
                       Padding(
                         padding: const EdgeInsets.only(top: AdminSpacing.md),
@@ -465,10 +530,7 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
 
     if (widget.embeddedInShell) {
       // Shell already supplies Scaffold; Material keeps TextField ink/theme safe.
-      return Material(
-        color: AdminColors.backgroundTop,
-        child: body,
-      );
+      return Material(color: AdminColors.backgroundTop, child: body);
     }
     return Scaffold(
       backgroundColor: AdminColors.backgroundTop,
@@ -480,6 +542,63 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
           onPressed: _leave,
         ),
       ),
+      body: body,
+    );
+  }
+}
+
+/// Sidebar Import Questions entry. Chapter import stays on the existing
+/// screen. Test Series import is reached only after a bank is selected.
+class AdminQuestionImportEntryScreen extends StatelessWidget {
+  const AdminQuestionImportEntryScreen({
+    super.key,
+    this.embeddedInShell = false,
+  });
+
+  final bool embeddedInShell;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = ListView(
+      padding: const EdgeInsets.all(AdminSpacing.pagePadding),
+      children: [
+        if (embeddedInShell)
+          const AdminPageHeader(
+            title: 'Import Questions',
+            subtitle:
+                'Choose Chapter Questions or open a Test Series bank before importing.',
+          ),
+        AdminNavTile(
+          key: const ValueKey('import-entry-chapter'),
+          title: 'Chapter Questions',
+          icon: Icons.menu_book_outlined,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const AdminQuestionImportScreen(),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: AdminSpacing.md),
+        AdminNavTile(
+          key: const ValueKey('import-entry-test-series'),
+          title: 'Test Series Questions',
+          icon: Icons.quiz_outlined,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const AdminTestSeriesQuestionsBrowserScreen(),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+    if (embeddedInShell) return body;
+    return Scaffold(
+      backgroundColor: AdminColors.backgroundTop,
+      appBar: AppBar(title: const Text('Import Questions')),
       body: body,
     );
   }

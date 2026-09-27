@@ -358,7 +358,10 @@ class QuestionCloudRepository {
   /// create-only API, so a transaction reads every ID first and writes only
   /// when none exist. A concurrent import that created the same ID fails the
   /// whole batch instead of overwriting. Capped at [maxBatchSize].
-  Future<List<String>> createQuestionsBatch(List<Question> questions) async {
+  Future<List<String>> createQuestionsBatch(
+    List<Question> questions, {
+    AdminQuestionScope? ownership,
+  }) async {
     if (questions.isEmpty) return const [];
     if (questions.length > maxBatchSize) {
       throw FormatException(
@@ -381,6 +384,7 @@ class QuestionCloudRepository {
         question,
         includeCreatedAt: true,
         documentId: questionId,
+        ownership: ownership,
       );
       if (question.status == null) data['isActive'] = true;
       items.add((questionId: questionId, data: data));

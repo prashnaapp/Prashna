@@ -10,6 +10,8 @@ import '../data/admin_question_scope.dart';
 /// the Question, and does not set Question status. The callable transaction
 /// owns assignment and status coupling.
 class AdminQuestionTestAssignment {
+  static const maxAssignedQuestionsPerTest = 160;
+
   AdminQuestionTestAssignment({TestCloudRepository? tests})
     : _tests = tests ?? TestCloudRepository();
 

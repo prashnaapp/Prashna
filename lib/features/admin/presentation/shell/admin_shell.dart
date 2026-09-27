@@ -231,7 +231,7 @@ class _AdminShellState extends State<AdminShell> {
             ? AdminQuestionFormScreen(question: question)
             : const AdminQuestionListScreen(embeddedInShell: true);
       }(),
-      AdminRoutes.questionImport => const AdminQuestionImportScreen(
+      AdminRoutes.questionImport => const AdminQuestionImportEntryScreen(
         embeddedInShell: true,
       ),
       AdminRoutes.chapters => const AdminChaptersBrowserScreen(

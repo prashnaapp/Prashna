@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:telangana_prep/features/admin/services/question_import_parser.dart';
 import 'package:telangana_prep/features/admin/services/question_import_service.dart';
 import 'package:telangana_prep/features/question_bank/data/models/question_models.dart';
 import 'package:telangana_prep/features/question_bank/repository/question_cloud_repository.dart';
@@ -279,6 +280,24 @@ void main() {
     expect(created, hasLength(2));
     expect(created.every((row) => row['status'] == 'draft'), isTrue);
     expect(created.every((row) => row['isActive'] == false), isTrue);
+    final expected = QuestionImportParser.parseJson(
+      wrap([validPaperIRecord(), validPaperIIRecord()]),
+    );
+    expect(created[0]['contentFingerprint'], expected[0].contentFingerprint);
+    expect(created[1]['contentFingerprint'], expected[1].contentFingerprint);
+  });
+
+  test('chapter import rejects testId before write', () async {
+    final created = <Map<String, dynamic>>[];
+    final svc = service(created: created);
+    final result = await svc.validateJson(
+      wrap([validPaperIRecord()..['testId'] = 'any-test']),
+    );
+    expect(result.canImport, isFalse);
+    expect(result.errors.any((e) => e.field == 'testId'), isTrue);
+    final report = await svc.importValidatedBatch(result);
+    expect(report.recordsImported, 0);
+    expect(created, isEmpty);
   });
 
   test('14: invalid batch imports nothing', () async {

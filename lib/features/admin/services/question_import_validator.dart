@@ -2,18 +2,28 @@ import '../../question_bank/data/models/question_models.dart';
 import '../../question_bank/repository/question_cloud_repository.dart';
 import '../../syllabus/data/models/syllabus_models.dart';
 import '../../syllabus/services/syllabus_service.dart';
+import '../../tests/data/models/test_models.dart';
+import '../data/admin_compatible_test_query.dart';
+import '../data/admin_question_scope.dart';
 import '../data/models/question_import_models.dart';
+import 'admin_question_test_assignment.dart';
 
 /// Pure validation for bulk question import. Performs no Firestore writes.
 class QuestionImportValidator {
   QuestionImportValidator({
     QuestionCloudRepository? questionRepository,
     SyllabusService? syllabusService,
+    this.scope,
+    this.loadTest,
   }) : _questions = questionRepository,
        _syllabus = syllabusService ?? SyllabusService.instance;
 
   final QuestionCloudRepository? _questions;
   final SyllabusService _syllabus;
+  final AdminQuestionScope? scope;
+  final Future<TestModel?> Function(String testId)? loadTest;
+
+  bool get _lockedBank => scope?.isQuestionBank ?? false;
 
   Future<QuestionImportValidationResult> validate(
     List<QuestionImportRecord> records,
@@ -22,6 +32,8 @@ class QuestionImportValidator {
     final warnings = <QuestionImportIssue>[];
     final duplicateOrCollision = <int>{};
     final validated = <Question>[];
+    final assignTestIds = <String?>[];
+    final sourceIndexes = <int>[];
     final seenIds = <String, int>{};
     final seenFingerprints = <String, int>{};
 
@@ -37,7 +49,12 @@ class QuestionImportValidator {
       final recordErrors = <QuestionImportIssue>[];
 
       _validateContent(record, i, recordErrors);
-      _validateSyllabus(record, i, recordErrors);
+      if (_lockedBank) {
+        _validateLockedOwnership(record, i, recordErrors);
+      } else {
+        _validateChapterOwnership(record, i, recordErrors);
+        _validateSyllabus(record, i, recordErrors);
+      }
 
       final id = record.id?.trim();
       if (id != null && id.isNotEmpty) {
@@ -87,9 +104,20 @@ class QuestionImportValidator {
 
       if (recordErrors.isEmpty) {
         validated.add(_toQuestion(record));
+        assignTestIds.add(_lockedBank ? record.testId?.trim() : null);
+        sourceIndexes.add(i);
       } else {
         errors.addAll(recordErrors);
       }
+    }
+
+    if (_lockedBank) {
+      await _validateTestAssignments(
+        errors,
+        validated,
+        assignTestIds,
+        sourceIndexes,
+      );
     }
 
     final invalidCount = records.length - validated.length;
@@ -102,6 +130,7 @@ class QuestionImportValidator {
       duplicateOrCollisionRecords: duplicateOrCollision.toList(growable: false)
         ..sort(),
       validatedQuestions: List.unmodifiable(validated),
+      assignTestIds: List.unmodifiable(assignTestIds),
     );
   }
 
@@ -156,7 +185,9 @@ class QuestionImportValidator {
           ),
         );
       }
-      if (option.te.trim().isEmpty) {
+      final requireTelugu =
+          !record.isStatementMcq || _statementHasTeluguOptions(record);
+      if (requireTelugu && option.te.trim().isEmpty) {
         errors.add(
           QuestionImportIssue(
             recordIndex: index,
@@ -164,6 +195,41 @@ class QuestionImportValidator {
             message: 'Missing Telugu option',
           ),
         );
+      }
+    }
+    final format = record.itemFormat ?? 'standard_mcq';
+    if (format != 'standard_mcq' && format != 'statement_mcq') {
+      errors.add(
+        QuestionImportIssue(
+          recordIndex: index,
+          field: 'itemFormat',
+          message: 'Unsupported question format "$format".',
+        ),
+      );
+    }
+    if (record.isStatementMcq) {
+      if (record.statements.isEmpty) {
+        errors.add(
+          QuestionImportIssue(
+            recordIndex: index,
+            field: 'statements',
+            message:
+                'Statement-based questions require at least one statement.',
+          ),
+        );
+      }
+      for (var i = 0; i < record.statements.length; i++) {
+        final statement = record.statements[i];
+        if (statement.en.trim().isEmpty || statement.te.trim().isEmpty) {
+          errors.add(
+            QuestionImportIssue(
+              recordIndex: index,
+              field: 'statements[$i]',
+              message:
+                  'English and Telugu text are required for every statement.',
+            ),
+          );
+        }
       }
     }
     final correct = record.correctOption.trim().toUpperCase();
@@ -572,12 +638,208 @@ class QuestionImportValidator {
     }
   }
 
+  bool _statementHasTeluguOptions(QuestionImportRecord record) {
+    return record.options.any((option) => option.te.trim().isNotEmpty);
+  }
+
+  void _validateChapterOwnership(
+    QuestionImportRecord record,
+    int index,
+    List<QuestionImportIssue> errors,
+  ) {
+    if (record.contentArea != null ||
+        record.testSeriesCategory != null ||
+        record.seriesId != null ||
+        record.year != null) {
+      errors.add(
+        QuestionImportIssue(
+          recordIndex: index,
+          field: 'contentArea',
+          message:
+              'Test Series ownership is only allowed from a Test Series question bank.',
+        ),
+      );
+    }
+    if (record.testId != null && record.testId!.trim().isNotEmpty) {
+      errors.add(
+        QuestionImportIssue(
+          recordIndex: index,
+          field: 'testId',
+          message:
+              'testId assignment is supported only from a Test Series question bank.',
+        ),
+      );
+    }
+  }
+
+  void _validateLockedOwnership(
+    QuestionImportRecord record,
+    int index,
+    List<QuestionImportIssue> errors,
+  ) {
+    final bank = scope!;
+    void conflict(String field, String message) {
+      errors.add(
+        QuestionImportIssue(recordIndex: index, field: field, message: message),
+      );
+    }
+
+    if (record.contentArea != null &&
+        record.contentArea != AdminQuestionScope.contentAreaTestSeries) {
+      conflict(
+        'contentArea',
+        'JSON cannot override the selected question bank.',
+      );
+    }
+    if (record.testSeriesCategory != null &&
+        record.testSeriesCategory != bank.testSeriesCategory) {
+      conflict(
+        'testSeriesCategory',
+        'JSON cannot override the selected question bank.',
+      );
+    }
+    if (record.courseId.trim().isNotEmpty &&
+        record.courseId.trim() != bank.courseId) {
+      conflict('courseId', 'JSON cannot override the selected question bank.');
+    }
+    switch (bank.testSeriesCategory) {
+      case AdminQuestionScope.categoryPart:
+        if (record.paperId.trim().isNotEmpty &&
+            record.paperId.trim() != bank.paperId) {
+          conflict(
+            'paperId',
+            'JSON cannot override the selected question bank.',
+          );
+        }
+        if (record.seriesId != null || record.year != null) {
+          conflict(
+            'seriesId',
+            'JSON cannot override the selected question bank.',
+          );
+        }
+      case AdminQuestionScope.categoryMock:
+        if (record.paperId.trim().isNotEmpty || record.year != null) {
+          conflict(
+            'paperId',
+            'JSON cannot override the selected question bank.',
+          );
+        }
+        if (record.seriesId != null && record.seriesId != bank.seriesId) {
+          conflict(
+            'seriesId',
+            'JSON cannot override the selected question bank.',
+          );
+        }
+      case AdminQuestionScope.categoryPreviousYear:
+        if (record.paperId.trim().isNotEmpty || record.seriesId != null) {
+          conflict(
+            'paperId',
+            'JSON cannot override the selected question bank.',
+          );
+        }
+        if (record.year != null && record.year != bank.year) {
+          conflict('year', 'JSON cannot override the selected question bank.');
+        }
+    }
+  }
+
+  Future<void> _validateTestAssignments(
+    List<QuestionImportIssue> errors,
+    List<Question> validated,
+    List<String?> assignTestIds,
+    List<int> sourceIndexes,
+  ) async {
+    final query = AdminCompatibleTestQuery.fromScope(scope!);
+    final grouped = <String, List<int>>{};
+    for (var i = 0; i < assignTestIds.length; i++) {
+      final testId = assignTestIds[i]?.trim() ?? '';
+      if (testId.isEmpty) {
+        assignTestIds[i] = null;
+        continue;
+      }
+      grouped.putIfAbsent(testId, () => []).add(i);
+    }
+    final drop = <int>{};
+    for (final entry in grouped.entries) {
+      final test = await loadTest?.call(entry.key);
+      if (test == null) {
+        for (final slot in entry.value) {
+          errors.add(
+            QuestionImportIssue(
+              recordIndex: sourceIndexes[slot],
+              field: 'testId',
+              message: 'Unknown test "${entry.key}".',
+            ),
+          );
+          drop.add(slot);
+        }
+        continue;
+      }
+      if (!query.matches(test)) {
+        for (final slot in entry.value) {
+          errors.add(
+            QuestionImportIssue(
+              recordIndex: sourceIndexes[slot],
+              field: 'testId',
+              message: 'Test "${entry.key}" is not compatible with this bank.',
+            ),
+          );
+          drop.add(slot);
+        }
+        continue;
+      }
+      final room =
+          AdminQuestionTestAssignment.maxAssignedQuestionsPerTest -
+          test.questionIds.length;
+      if (entry.value.length > room) {
+        final overflow = entry.value.skip(room < 0 ? 0 : room);
+        for (final slot in overflow) {
+          errors.add(
+            QuestionImportIssue(
+              recordIndex: sourceIndexes[slot],
+              field: 'testId',
+              message:
+                  'Test "${entry.key}" can assign at most '
+                  '${AdminQuestionTestAssignment.maxAssignedQuestionsPerTest} questions.',
+            ),
+          );
+          drop.add(slot);
+        }
+      }
+    }
+    if (drop.isEmpty) return;
+    final keptQuestions = <Question>[];
+    final keptIds = <String?>[];
+    for (var i = 0; i < validated.length; i++) {
+      if (drop.contains(i)) continue;
+      keptQuestions.add(validated[i]);
+      keptIds.add(assignTestIds[i]);
+    }
+    validated
+      ..clear()
+      ..addAll(keptQuestions);
+    assignTestIds
+      ..clear()
+      ..addAll(keptIds);
+  }
+
   Question _toQuestion(QuestionImportRecord record) {
     final now = DateTime.now();
     final correct = record.correctOption.trim().toUpperCase();
     final englishOptions = [
       for (final option in record.options) option.en.trim(),
     ];
+    final statement = record.isStatementMcq;
+    final omitTeluguOptions = statement && !_statementHasTeluguOptions(record);
+    final bank = _lockedBank ? scope! : null;
+    final courseId = bank?.courseId?.trim().isNotEmpty == true
+        ? bank!.courseId!.trim()
+        : record.courseId.trim();
+    final paperId = bank == null
+        ? record.paperId.trim()
+        : (bank.testSeriesCategory == AdminQuestionScope.categoryPart
+              ? (bank.paperId ?? '')
+              : '');
     final content = QuestionContent(
       en: QuestionLocalizedContent(
         question: record.question.en.trim(),
@@ -586,26 +848,31 @@ class QuestionImportValidator {
             QuestionOption(text: option.en.trim()),
         ],
         explanation: record.explanation.en.trim(),
+        statements: statement
+            ? [for (final item in record.statements) item.en.trim()]
+            : const [],
       ),
       te: QuestionLocalizedContent(
         question: record.question.te.trim(),
-        options: [
-          for (final option in record.options)
-            QuestionOption(text: option.te.trim()),
-        ],
+        options: omitTeluguOptions
+            ? const []
+            : [
+                for (final option in record.options)
+                  QuestionOption(text: option.te.trim()),
+              ],
         explanation: record.explanation.te.trim(),
+        statements: statement
+            ? [for (final item in record.statements) item.te.trim()]
+            : const [],
       ),
     );
-    final paper = _syllabus.getPaper(
-      courseId: record.courseId.trim(),
-      paperId: record.paperId.trim(),
-    );
-    final isGroupIii = record.courseId.trim() == 'group-iii';
+    final paper = _syllabus.getPaper(courseId: courseId, paperId: paperId);
+    final isGroupIii = courseId == 'group-iii';
     final isPaperI = !isGroupIii && paper?.hasCanonicalPaperIContent == true;
     return Question(
       id: record.id?.trim() ?? '',
-      courseId: record.courseId.trim(),
-      paperId: record.paperId.trim(),
+      courseId: courseId,
+      paperId: paperId,
       question: record.question.en.trim(),
       options: englishOptions,
       correctOption: correct,
@@ -621,20 +888,32 @@ class QuestionImportValidator {
       updatedAt: now,
       isActive: false,
       status: QuestionPublicationStatus.draft,
+      year: bank?.testSeriesCategory == AdminQuestionScope.categoryPreviousYear
+          ? bank!.year
+          : null,
+      itemFormat: statement
+          ? QuestionItemFormat.statementMcq
+          : QuestionItemFormat.standardMcq,
       content: content,
-      syllabus: QuestionSyllabusAttribution(
-        courseId: record.courseId.trim(),
-        paperId: record.paperId.trim(),
-        majorStudyAreaId: isPaperI ? record.majorStudyAreaId?.trim() : null,
-        contentTopicId: isPaperI ? record.contentTopicId?.trim() : null,
-        partId:
-            isPaperI || (isGroupIii && paper?.hasDirectSyllabusUnits == true)
-            ? null
-            : record.partId?.trim(),
-        topicId: isPaperI || isGroupIii ? null : record.topicId?.trim(),
-        lessonId: isPaperI || isGroupIii ? null : record.lessonId?.trim(),
-        syllabusUnitId: isGroupIii ? record.syllabusUnitId?.trim() : null,
-      ),
+      syllabus: bank != null
+          ? null
+          : QuestionSyllabusAttribution(
+              courseId: courseId,
+              paperId: paperId,
+              majorStudyAreaId: isPaperI
+                  ? record.majorStudyAreaId?.trim()
+                  : null,
+              contentTopicId: isPaperI ? record.contentTopicId?.trim() : null,
+              partId:
+                  isPaperI ||
+                      (isGroupIii && paper?.hasDirectSyllabusUnits == true)
+                  ? null
+                  : record.partId?.trim(),
+              topicId: isPaperI || isGroupIii ? null : record.topicId?.trim(),
+              lessonId: isPaperI || isGroupIii ? null : record.lessonId?.trim(),
+              syllabusUnitId: isGroupIii ? record.syllabusUnitId?.trim() : null,
+            ),
+      contentFingerprint: record.contentFingerprint,
     );
   }
 }

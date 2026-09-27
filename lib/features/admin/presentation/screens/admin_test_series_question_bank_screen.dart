@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../question_bank/data/models/question_models.dart';
 import '../../data/admin_question_scope.dart';
 import '../../data/question_create_outcome.dart';
+import '../../data/models/question_import_models.dart';
 import '../../services/admin_question_service.dart';
 import '../../services/admin_question_test_assignment.dart';
+import '../../services/question_import_service.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
 import '../widgets/admin_ui/admin_empty_state.dart';
@@ -13,6 +15,7 @@ import '../widgets/admin_ui/admin_question_row.dart';
 import '../widgets/admin_ui/admin_status_badge.dart';
 import '../widgets/admin_ui/admin_surface.dart';
 import 'admin_question_form_screen.dart';
+import 'admin_question_import_screen.dart';
 
 /// Test Series Question Bank for one [AdminQuestionScope].
 ///
@@ -24,11 +27,13 @@ class AdminTestSeriesQuestionBankScreen extends StatefulWidget {
     required this.scope,
     this.service,
     this.assignment,
+    this.importService,
   });
 
   final AdminQuestionScope scope;
   final AdminQuestionService? service;
   final AdminQuestionTestAssignment? assignment;
+  final QuestionImportService? importService;
 
   @override
   State<AdminTestSeriesQuestionBankScreen> createState() =>
@@ -90,6 +95,30 @@ class _AdminTestSeriesQuestionBankScreenState
     );
   }
 
+  Future<void> _import() async {
+    final result = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute(
+        builder: (_) => AdminQuestionImportScreen(
+          scope: widget.scope,
+          service:
+              widget.importService ??
+              QuestionImportService(
+                scope: widget.scope,
+                assignment: widget.assignment,
+              ),
+        ),
+      ),
+    );
+    if (!mounted || result == null || result == false) return;
+    await _load();
+    if (!mounted || result is! QuestionImportReport) return;
+    final message = result.assignmentFailureMessage;
+    if (message == null) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -102,14 +131,23 @@ class _AdminTestSeriesQuestionBankScreenState
             AdminSpacing.pagePadding,
             0,
           ),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              key: const ValueKey('test-series-question-bank-create'),
-              onPressed: _loading ? null : _create,
-              icon: const Icon(Icons.add),
-              label: const Text('Create Question'),
-            ),
+          child: Wrap(
+            spacing: AdminSpacing.md,
+            alignment: WrapAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                key: const ValueKey('test-series-question-bank-import'),
+                onPressed: _loading ? null : _import,
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Import Questions'),
+              ),
+              FilledButton.icon(
+                key: const ValueKey('test-series-question-bank-create'),
+                onPressed: _loading ? null : _create,
+                icon: const Icon(Icons.add),
+                label: const Text('Create Question'),
+              ),
+            ],
           ),
         ),
         Expanded(child: _body(context)),

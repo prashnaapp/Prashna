@@ -85,6 +85,7 @@ abstract final class QuestionCloudMapper {
       ),
       status: parsePublicationStatus(data['status'] as String?),
       itemFormat: parseItemFormat(data['itemFormat'] as String?),
+      contentFingerprint: (data['contentFingerprint'] as String?)?.trim(),
     );
   }
 
@@ -224,6 +225,10 @@ abstract final class QuestionCloudMapper {
     final itemFormatValue = _itemFormatFirestoreValue(question.itemFormat);
     if (itemFormatValue != null) {
       data['itemFormat'] = itemFormatValue;
+    }
+    final fingerprint = question.contentFingerprint?.trim();
+    if (fingerprint != null && fingerprint.isNotEmpty) {
+      data['contentFingerprint'] = fingerprint;
     }
     if (forUpdate) {
       _writeOptionalSyllabusField(

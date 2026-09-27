@@ -32,6 +32,13 @@ class QuestionImportRecord {
     required this.options,
     required this.correctOption,
     required this.explanation,
+    this.itemFormat,
+    this.statements = const [],
+    this.testId,
+    this.contentArea,
+    this.testSeriesCategory,
+    this.seriesId,
+    this.year,
   });
 
   final String? id;
@@ -48,18 +55,43 @@ class QuestionImportRecord {
   final String correctOption;
   final QuestionImportLocalizedText explanation;
 
+  /// `standard_mcq` when omitted. Unsupported values are rejected in validation.
+  final String? itemFormat;
+  final List<QuestionImportLocalizedText> statements;
+
+  /// Optional Test Series assignment target. Ignored for Chapter import.
+  final String? testId;
+
+  /// Supplied ownership metadata. A locked bank rejects conflicts.
+  final String? contentArea;
+  final String? testSeriesCategory;
+  final String? seriesId;
+  final int? year;
+
+  bool get isStatementMcq => itemFormat == 'statement_mcq';
+
   /// Fingerprint used only for within-file content duplicate warnings.
+  ///
+  /// Keeps the existing courseId and paperId segments. Adds statement text
+  /// so two Statement MCQs are not treated as the same item. Does not include
+  /// testId.
   String get contentFingerprint {
     final optionText = [
       for (final option in options) '${option.en.trim()}|${option.te.trim()}',
     ].join('||');
+    final statementText = [
+      for (final statement in statements)
+        '${statement.en.trim()}|${statement.te.trim()}',
+    ].join('||');
     return [
       courseId.trim().toLowerCase(),
       paperId.trim().toLowerCase(),
+      (itemFormat ?? 'standard_mcq').trim().toLowerCase(),
       question.en.trim().toLowerCase(),
       question.te.trim(),
       correctOption.trim().toUpperCase(),
       optionText.toLowerCase(),
+      statementText.toLowerCase(),
     ].join('::');
   }
 }
@@ -92,6 +124,7 @@ class QuestionImportValidationResult {
     required this.warnings,
     required this.duplicateOrCollisionRecords,
     required this.validatedQuestions,
+    this.assignTestIds = const [],
   });
 
   final int totalRecords;
@@ -101,6 +134,9 @@ class QuestionImportValidationResult {
   final List<QuestionImportIssue> warnings;
   final List<int> duplicateOrCollisionRecords;
   final List<Question> validatedQuestions;
+
+  /// Parallel to [validatedQuestions]. Empty or null means unassigned.
+  final List<String?> assignTestIds;
 
   bool get canImport =>
       totalRecords > 0 &&
@@ -117,6 +153,7 @@ class QuestionImportReport {
     required this.duplicates,
     required this.warnings,
     this.failureMessage,
+    this.assignmentFailureMessage,
   });
 
   final int recordsSubmitted;
@@ -127,8 +164,14 @@ class QuestionImportReport {
   final List<QuestionImportIssue> warnings;
   final String? failureMessage;
 
+  /// Questions were created, then one or more assignments failed.
+  final String? assignmentFailureMessage;
+
   bool get succeeded =>
       failureMessage == null &&
+      assignmentFailureMessage == null &&
       recordsImported == recordsSubmitted &&
       recordsRejected == 0;
+
+  bool get questionsCreated => createdQuestionIds.isNotEmpty;
 }

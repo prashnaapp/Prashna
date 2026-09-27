@@ -131,6 +131,7 @@ class Question {
     this.aiExplanation,
     this.isActive = true,
     this.itemFormat,
+    this.contentFingerprint,
   });
 
   final String id;
@@ -159,8 +160,13 @@ class Question {
   final QuestionContent? content;
   final QuestionSyllabusAttribution? syllabus;
   final QuestionPublicationStatus? status;
+
   /// Absent on legacy documents; treat as [QuestionItemFormat.standardMcq].
   final QuestionItemFormat? itemFormat;
+
+  /// Normalized content fingerprint. Written by JSON import; Manual Create
+  /// currently does not set this field.
+  final String? contentFingerprint;
 
   QuestionItemFormat get resolvedItemFormat =>
       itemFormat ?? QuestionItemFormat.standardMcq;

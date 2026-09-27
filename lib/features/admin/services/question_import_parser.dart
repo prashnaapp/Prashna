@@ -54,8 +54,8 @@ abstract final class QuestionImportParser {
     final map = Map<String, dynamic>.from(raw);
     return QuestionImportRecord(
       id: _optionalString(map['id']),
-      courseId: _string(map['courseId'], 'courseId', index),
-      paperId: _string(map['paperId'], 'paperId', index),
+      courseId: _optionalText(map['courseId'], 'courseId', index),
+      paperId: _optionalText(map['paperId'], 'paperId', index),
       majorStudyAreaId: _optionalString(map['majorStudyAreaId']),
       contentTopicId: _optionalString(map['contentTopicId']),
       partId: _optionalString(map['partId']),
@@ -66,6 +66,13 @@ abstract final class QuestionImportParser {
       options: _options(map['options'], index),
       correctOption: _string(map['correctOption'], 'correctOption', index),
       explanation: _localized(map['explanation'], 'explanation', index),
+      itemFormat: _optionalString(map['itemFormat']),
+      statements: _statements(map['statements'], index),
+      testId: _optionalString(map['testId']),
+      contentArea: _optionalString(map['contentArea']),
+      testSeriesCategory: _optionalString(map['testSeriesCategory']),
+      seriesId: _optionalString(map['seriesId']),
+      year: _optionalYear(map['year'], index),
     );
   }
 
@@ -100,8 +107,21 @@ abstract final class QuestionImportParser {
     final map = Map<String, dynamic>.from(raw);
     return QuestionImportOption(
       en: _string(map['en'], 'options[$optionIndex].en', index),
-      te: _string(map['te'], 'options[$optionIndex].te', index),
+      te: _optionalText(map['te'], 'options[$optionIndex].te', index),
     );
+  }
+
+  static List<QuestionImportLocalizedText> _statements(Object? raw, int index) {
+    if (raw == null) return const [];
+    if (raw is! List) {
+      throw FormatException(
+        'Record ${index + 1}\nstatements\nMust be an array.',
+      );
+    }
+    return [
+      for (var i = 0; i < raw.length; i++)
+        _localized(raw[i], 'statements[$i]', index),
+    ];
   }
 
   static String _string(Object? raw, String field, int index) {
@@ -116,5 +136,21 @@ abstract final class QuestionImportParser {
     if (raw is! String) return null;
     final value = raw.trim();
     return value.isEmpty ? null : value;
+  }
+
+  static String _optionalText(Object? raw, String field, int index) {
+    if (raw == null) return '';
+    if (raw is! String) {
+      throw FormatException('Record ${index + 1}\n$field\nMust be a string.');
+    }
+    return raw;
+  }
+
+  static int? _optionalYear(Object? raw, int index) {
+    if (raw == null) return null;
+    if (raw is! int) {
+      throw FormatException('Record ${index + 1}\nyear\nMust be an integer.');
+    }
+    return raw;
   }
 }
