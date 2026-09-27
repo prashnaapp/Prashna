@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../admin/data/admin_content_callable_client.dart';
+import '../../admin/data/admin_test_series_question_query.dart';
 import '../data/models/question_models.dart';
 import '../data/question_cloud_mapper.dart';
 
@@ -17,6 +18,7 @@ class QuestionCloudRepository {
        _contentCallables =
            contentCallables, // ignore: prefer_initializing_formals
        _loadQuestionsForTest = null,
+       _loadTestSeriesForTest = null,
        _getByIdForTest = null,
        _getByIdsForTest = null,
        _createForTest = null,
@@ -29,6 +31,8 @@ class QuestionCloudRepository {
   @visibleForTesting
   QuestionCloudRepository.withHandlers({
     Future<List<Question>> Function(QuestionFilter? filter)? loadQuestions,
+    Future<List<Question>> Function(AdminTestSeriesQuestionQuery query)?
+    loadTestSeriesQuestions,
     Future<Question?> Function(String id)? getById,
     Future<List<Question>> Function(List<String> ids)? getByIds,
     Future<void> Function({
@@ -51,6 +55,7 @@ class QuestionCloudRepository {
   }) : _firestore = null,
        _contentCallables = null,
        _loadQuestionsForTest = loadQuestions,
+       _loadTestSeriesForTest = loadTestSeriesQuestions,
        _getByIdForTest = getById,
        _getByIdsForTest = getByIds,
        _createForTest = create,
@@ -66,6 +71,8 @@ class QuestionCloudRepository {
   final AdminContentCallableClient? _contentCallables;
   final Future<List<Question>> Function(QuestionFilter? filter)?
   _loadQuestionsForTest;
+  final Future<List<Question>> Function(AdminTestSeriesQuestionQuery query)?
+  _loadTestSeriesForTest;
   final Future<Question?> Function(String id)? _getByIdForTest;
   final Future<List<Question>> Function(List<String> ids)? _getByIdsForTest;
   final Future<void> Function({
@@ -204,6 +211,48 @@ class QuestionCloudRepository {
       rethrow;
     } catch (error, stack) {
       debugPrint('QuestionCloudRepository.loadQuestions: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Test Series Question Bank. Equality filters plus [AdminTestSeriesQuestionQuery.pageSize].
+  ///
+  /// Does not load the course and filter in memory.
+  Future<List<Question>> loadTestSeriesQuestions(
+    AdminTestSeriesQuestionQuery spec,
+  ) async {
+    final testLoader = _loadTestSeriesForTest;
+    if (testLoader != null) return testLoader(spec);
+    if (_firestore == null) {
+      throw StateError(
+        'QuestionCloudRepository.loadTestSeriesQuestions has no Firestore.',
+      );
+    }
+
+    try {
+      Query<Map<String, dynamic>> query = _questions;
+      for (final filter in spec.equalityFilters) {
+        query = query.where(filter.field, isEqualTo: filter.value);
+      }
+      query = query.limit(AdminTestSeriesQuestionQuery.pageSize);
+      final snapshot = await query.get();
+      final results = <Question>[];
+      for (final doc in snapshot.docs) {
+        final mapped = QuestionCloudMapper.fromFirestore(doc.id, doc.data());
+        if (mapped == null) continue;
+        results.add(mapped);
+      }
+      return results;
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in QuestionCloudRepository.loadTestSeriesQuestions: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint(
+        'QuestionCloudRepository.loadTestSeriesQuestions: $error\n$stack',
+      );
       rethrow;
     }
   }

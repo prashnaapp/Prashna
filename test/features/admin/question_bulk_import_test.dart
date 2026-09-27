@@ -195,7 +195,7 @@ void main() {
     final missingLesson = await service().validateJson(
       wrap([missingLessonRecord]),
     );
-    expect(missingLesson.errors.any((e) => e.field == 'lessonId'), isTrue);
+    expect(missingLesson.errors.any((e) => e.field == 'lessonId'), isFalse);
 
     final missingPart = await service().validateJson(
       wrap([

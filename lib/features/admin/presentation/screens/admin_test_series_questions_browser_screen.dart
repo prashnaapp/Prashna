@@ -2,31 +2,43 @@ import 'package:flutter/material.dart';
 
 import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
+import '../../../tests/data/grand_test_series.dart';
+import '../../../tests/data/previous_paper_years.dart';
 import '../../data/admin_question_scope.dart';
+import '../../data/admin_test_hierarchy.dart';
+import '../../services/admin_question_service.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
 import '../widgets/admin_ui/admin_empty_state.dart';
 import '../widgets/admin_ui/admin_hierarchy_header.dart';
 import '../widgets/admin_ui/admin_nav_tile.dart';
 import '../widgets/admin_ui/admin_page_header.dart';
-import '../widgets/admin_ui/admin_surface.dart';
+import 'admin_test_series_question_bank_screen.dart';
 
-/// Test Series Questions navigation foundation.
+/// Test Series Questions browser.
 ///
-/// Course → Paper-wise | Grand Tests | Previous Papers.
-/// Does not load Questions.
+/// Course → Paper-wise | Grand Tests | Previous Papers
+/// → Paper | Grand container | Year → Question Bank.
 class AdminTestSeriesQuestionsBrowserScreen extends StatelessWidget {
   const AdminTestSeriesQuestionsBrowserScreen({
     super.key,
     this.syllabusService,
+    this.questionService,
     this.courseId,
     this.testSeriesCategory,
+    this.paperId,
+    this.seriesId,
+    this.year,
     this.embeddedInShell = false,
   });
 
   final SyllabusService? syllabusService;
+  final AdminQuestionService? questionService;
   final String? courseId;
   final String? testSeriesCategory;
+  final String? paperId;
+  final String? seriesId;
+  final int? year;
   final bool embeddedInShell;
 
   SyllabusService get _syllabus => syllabusService ?? SyllabusService.instance;
@@ -35,6 +47,9 @@ class AdminTestSeriesQuestionsBrowserScreen extends StatelessWidget {
     contentArea: AdminQuestionScope.contentAreaTestSeries,
     courseId: courseId,
     testSeriesCategory: testSeriesCategory,
+    paperId: paperId,
+    seriesId: seriesId,
+    year: year,
   );
 
   List<SyllabusCourse> get _courses => [
@@ -46,13 +61,20 @@ class AdminTestSeriesQuestionsBrowserScreen extends StatelessWidget {
     BuildContext context, {
     String? courseId,
     String? testSeriesCategory,
+    String? paperId,
+    String? seriesId,
+    int? year,
   }) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => AdminTestSeriesQuestionsBrowserScreen(
           syllabusService: _syllabus,
+          questionService: questionService,
           courseId: courseId ?? this.courseId,
-          testSeriesCategory: testSeriesCategory,
+          testSeriesCategory: testSeriesCategory ?? this.testSeriesCategory,
+          paperId: paperId,
+          seriesId: seriesId,
+          year: year,
           embeddedInShell: embeddedInShell,
         ),
       ),
@@ -60,10 +82,10 @@ class AdminTestSeriesQuestionsBrowserScreen extends StatelessWidget {
   }
 
   String get _title {
+    if (scope.isQuestionBank) return 'Question Bank';
     if (testSeriesCategory != null) {
       return AdminQuestionScope.labelForCategory(testSeriesCategory);
     }
-    if (courseId != null) return 'Test Series Questions';
     return 'Test Series Questions';
   }
 
@@ -71,10 +93,27 @@ class AdminTestSeriesQuestionsBrowserScreen extends StatelessWidget {
     final id = courseId;
     if (id == null) return null;
     final course = _syllabus.getCourseById(id);
-    final name = course?.name ?? id;
+    final parts = <String>[course?.name ?? id];
     final category = AdminQuestionScope.labelForCategory(testSeriesCategory);
-    if (category.isEmpty) return name;
-    return '$name  ›  $category';
+    final selectedPaper = paperId;
+    final selectedSeries = seriesId?.trim();
+    final hasDiscriminator =
+        (selectedPaper != null && selectedPaper.isNotEmpty) ||
+        (selectedSeries != null && selectedSeries.isNotEmpty) ||
+        year != null;
+    if (!hasDiscriminator) return course?.name ?? id;
+    if (category.isNotEmpty) parts.add(category);
+    if (selectedPaper != null && selectedPaper.isNotEmpty) {
+      final paper = _syllabus.getPaper(courseId: id, paperId: selectedPaper);
+      parts.add(
+        paper == null ? selectedPaper : AdminTestHierarchy.paperLabel(paper),
+      );
+    }
+    if (selectedSeries != null && selectedSeries.isNotEmpty) {
+      parts.add(selectedSeries);
+    }
+    if (year != null) parts.add('$year');
+    return parts.join('  ›  ');
   }
 
   @override
@@ -179,34 +218,59 @@ class AdminTestSeriesQuestionsBrowserScreen extends StatelessWidget {
       ]);
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(AdminSpacing.pagePadding),
-      children: [
-        AdminSurface(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                course.name,
-                key: const ValueKey('test-series-questions-course-name'),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AdminColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: AdminSpacing.xs),
-              Text(
-                AdminQuestionScope.labelForCategory(testSeriesCategory),
-                key: const ValueKey('test-series-questions-category-label'),
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AdminColors.textSecondary,
-                ),
-              ),
-            ],
+    if (scope.isQuestionBank) {
+      return AdminTestSeriesQuestionBankScreen(
+        scope: scope,
+        service: questionService,
+      );
+    }
+
+    return switch (testSeriesCategory) {
+      AdminQuestionScope.categoryPart => _tileList([
+        for (final paper in course.papers)
+          AdminNavTile(
+            key: ValueKey('test-series-questions-paper-${paper.id}'),
+            title: AdminTestHierarchy.paperLabel(paper),
+            icon: Icons.description_outlined,
+            onTap: () => _open(context, paperId: paper.id),
           ),
+      ]),
+      AdminQuestionScope.categoryMock => _tileList([
+        for (final seriesId in GrandTestSeries.ids)
+          AdminNavTile(
+            key: ValueKey('test-series-questions-series-$seriesId'),
+            title: seriesId,
+            icon: Icons.emoji_events_outlined,
+            onTap: () => _open(context, seriesId: seriesId),
+          ),
+      ]),
+      AdminQuestionScope.categoryPreviousYear => _yearTiles(context, course),
+      _ => const AdminEmptyState(
+        title: 'Unknown category',
+        message: 'This Test Series category is not supported.',
+        icon: Icons.folder_off_outlined,
+      ),
+    };
+  }
+
+  Widget _yearTiles(BuildContext context, SyllabusCourse course) {
+    final years = PreviousPaperYears.forExam(course.id);
+    if (years.isEmpty) {
+      return const AdminEmptyState(
+        title: 'No examination years',
+        message: 'No Previous Paper years are defined for this course.',
+        icon: Icons.history_edu_outlined,
+      );
+    }
+    return _tileList([
+      for (final year in years)
+        AdminNavTile(
+          key: ValueKey('test-series-questions-year-$year'),
+          title: '$year',
+          icon: Icons.history_edu_outlined,
+          onTap: () => _open(context, year: year),
         ),
-      ],
-    );
+    ]);
   }
 
   Widget _tileList(List<Widget> tiles) {

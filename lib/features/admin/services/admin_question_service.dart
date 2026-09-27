@@ -1,3 +1,5 @@
+import '../data/admin_question_scope.dart';
+import '../data/admin_test_series_question_query.dart';
 import '../../course_enrollment/model/course.dart';
 import '../../course_enrollment/service/course_catalog_service.dart';
 import '../../question_bank/data/models/question_models.dart';
@@ -34,6 +36,12 @@ class AdminQuestionService {
     return _questions.loadQuestions(
       filter: QuestionFilter(courseId: id, activeOnly: false),
     );
+  }
+
+  /// Bounded Test Series bank. Does not call [loadQuestions].
+  Future<List<Question>> loadTestSeriesQuestions(AdminQuestionScope scope) {
+    final query = AdminTestSeriesQuestionQuery.fromScope(scope);
+    return _questions.loadTestSeriesQuestions(query);
   }
 
   Future<Question?> getQuestion(String questionId) {
