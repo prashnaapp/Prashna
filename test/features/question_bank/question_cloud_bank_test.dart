@@ -68,6 +68,18 @@ void main() {
       expect(question.examName, 'Group-II');
     });
 
+    test('missing difficulty still maps with a medium default', () {
+      final data = firestoreDoc();
+      data.remove('difficulty');
+      final question = QuestionCloudMapper.fromFirestore(
+        'q-no-difficulty',
+        data,
+      );
+      expect(question, isNotNull);
+      expect(question!.difficulty, QuestionDifficulty.medium);
+      expect(question.questionType, QuestionType.practice);
+    });
+
     test('7/8/9: numeric safety, correctOption, option order', () {
       final question = QuestionCloudMapper.fromFirestore(
         'q1',
@@ -110,10 +122,7 @@ void main() {
         )!,
         QuestionCloudMapper.fromFirestore(
           'q-group-iii-001',
-          firestoreDoc(
-            id: 'q-group-iii-001',
-            courseId: 'group-iii',
-          ),
+          firestoreDoc(id: 'q-group-iii-001', courseId: 'group-iii'),
         )!,
         QuestionCloudMapper.fromFirestore(
           'q-inactive',
@@ -175,10 +184,7 @@ void main() {
       expect(questions, hasLength(1));
       expect(questions.single.id, 'q-test-group-ii-001');
       expect(questions.single.courseId, 'group-ii');
-      expect(
-        questions.single.question,
-        'What is the capital of Telangana?',
-      );
+      expect(questions.single.question, 'What is the capital of Telangana?');
     });
 
     test('3: Group-III question NOT returned for group-ii', () async {

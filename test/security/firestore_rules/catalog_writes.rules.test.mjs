@@ -78,5 +78,21 @@ describe('Firestore rules — catalog writes are server-only', () => {
       updateDoc(doc(db, 'tests', 't-pub'), { title: 'direct write' }),
     );
     await assertFails(deleteDoc(doc(db, 'questions', 'q-pub')));
+    await assertFails(
+      setDoc(doc(db, 'question_assignments', 'q-pub'), {
+        questionId: 'q-pub',
+        testId: 't-pub',
+        courseId: PAID_COURSE_ID,
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'question_assignments', 'q-pub'), { testId: 'other' }),
+    );
+    await assertFails(deleteDoc(doc(db, 'question_assignments', 'q-pub')));
+  });
+
+  it('students cannot read question assignment reservations', async () => {
+    const db = studentA().firestore();
+    await assertFails(getDoc(doc(db, 'question_assignments', 'q-pub')));
   });
 });

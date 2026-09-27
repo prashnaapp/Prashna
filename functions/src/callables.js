@@ -369,20 +369,32 @@ export const adminSetQuestionActive = onCall(
 
 export const adminCreateTest = onCall(
   { region: 'asia-south1' },
-  (request) => withAdminContent(request, (content, data) => content.createTest(data)),
+  (request) => withAdminContent(request, (content, data) => content.createTest(
+    data,
+    { assignedBy: request.auth?.uid },
+  )),
 );
 
 export const adminUpdateTest = onCall(
   { region: 'asia-south1' },
-  (request) => withAdminContent(request, (content, data) => content.updateTest(data)),
+  (request) => withAdminContent(request, (content, data) => content.updateTest(
+    data,
+    { assignedBy: request.auth?.uid },
+  )),
 );
 
 export const adminPublishTest = onCall(
   { region: 'asia-south1' },
-  (request) => withAdminContent(request, (content, data) => content.publishTest(data)),
+  (request) => withAdminContent(request, (content, data) => content.publishTest(
+    data,
+    { assignedBy: request.auth?.uid },
+  )),
 );
 
 export const adminSetTestStatus = onCall(
   { region: 'asia-south1' },
-  (request) => withAdminContent(request, (content, data) => content.setTestStatus(data)),
+  (request) => withAdminContent(request, (content, data) => content.setTestStatus(
+    data,
+    { assignedBy: request.auth?.uid },
+  )),
 );

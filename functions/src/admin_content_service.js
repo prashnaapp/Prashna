@@ -6,6 +6,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 import {
   MAX_QUESTION_BATCH,
+  QUESTION_ASSIGNMENTS_COLLECTION,
   fail,
   prepareQuestionWrite,
   prepareTestWrite,
@@ -13,6 +14,7 @@ import {
   validateQuestionPayload,
   validateTestPayload,
   assertQuestionCompatibleWithTest,
+  orderedUniqueQuestionIds,
 } from './content_validation_service.js';
 
 function questionsCol(db) {
@@ -21,6 +23,145 @@ function questionsCol(db) {
 
 function testsCol(db) {
   return db.collection('tests');
+}
+
+function assignmentsCol(db) {
+  return db.collection(QUESTION_ASSIGNMENTS_COLLECTION);
+}
+
+function actorId(assignedBy) {
+  return trimToNull(assignedBy) || 'server';
+}
+
+function questionPublicationForTestStatus(status) {
+  if (status === 'published') return { status: 'published', isActive: true };
+  if (status === 'archived') return { status: 'archived', isActive: false };
+  return { status: 'draft', isActive: false };
+}
+
+function marksValue(data) {
+  const marks = Number(data?.marks);
+  return Number.isFinite(marks) && marks > 0 ? marks : 1;
+}
+
+function sumMarks(questionDocs) {
+  return questionDocs.reduce((total, doc) => total + marksValue(doc?.data), 0);
+}
+
+function rejectAssignedStatusChange(questionId) {
+  fail(
+    'failed-precondition',
+    `Question "${questionId}" is assigned to a test. Change the test status, or remove the question from the test, before changing its status.`,
+  );
+}
+
+/**
+ * Claim/release assignment docs, align assigned question status, and return
+ * server aggregates. Every read happens before any write. Must run inside the
+ * same transaction as the test write. Does not delete Question documents and
+ * does not change contentArea. Released questions are left unchanged.
+ */
+async function syncAssignmentsInTransaction(db, tx, {
+  testId,
+  courseId,
+  testData,
+  previousIds,
+  nextIds,
+  assignedBy,
+  targetStatus,
+}) {
+  const loaded = [];
+  for (const questionId of nextIds) {
+    const question = await readQuestion(db, questionId, tx);
+    assertQuestionCompatibleWithTest(question.data, testData, questionId);
+    if (targetStatus === 'published') {
+      validateQuestionPayload(
+        { ...question.data, status: 'published', isActive: true },
+        { documentId: questionId },
+      );
+    }
+    loaded.push(question);
+  }
+
+  const assignmentIds = [];
+  const seenAssignments = new Set();
+  for (const questionId of [...previousIds, ...nextIds]) {
+    if (seenAssignments.has(questionId)) continue;
+    seenAssignments.add(questionId);
+    assignmentIds.push(questionId);
+  }
+  const assignments = new Map();
+  for (const questionId of assignmentIds) {
+    const ref = assignmentsCol(db).doc(questionId);
+    assignments.set(questionId, { ref, snap: await tx.get(ref) });
+  }
+
+  const nextSet = new Set(nextIds);
+  for (const questionId of previousIds) {
+    if (nextSet.has(questionId)) continue;
+    const { ref, snap } = assignments.get(questionId);
+    if (!snap.exists) continue;
+    const owner = trimToNull(snap.data()?.testId);
+    if (owner === testId) tx.delete(ref);
+  }
+
+  for (const questionId of nextIds) {
+    const { ref, snap } = assignments.get(questionId);
+    if (!snap.exists) {
+      tx.set(ref, {
+        questionId,
+        testId,
+        courseId,
+        assignedAt: FieldValue.serverTimestamp(),
+        assignedBy,
+      });
+      continue;
+    }
+    const owner = trimToNull(snap.data()?.testId);
+    if (owner !== testId) {
+      fail(
+        'failed-precondition',
+        `Question "${questionId}" is already assigned to another test.`,
+      );
+    }
+  }
+
+  const publication = questionPublicationForTestStatus(targetStatus);
+  for (const question of loaded) {
+    tx.update(question.ref, {
+      status: publication.status,
+      isActive: publication.isActive,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  return {
+    questionCount: nextIds.length,
+    totalMarks: sumMarks(loaded),
+    durationMinutes: nextIds.length,
+  };
+}
+
+async function recomputeAssignedTestAggregates(db, testId, changedQuestionId, changedMarks) {
+  await db.runTransaction(async (tx) => {
+    const test = await readTest(db, testId, tx);
+    if (!test.snap.exists) return;
+    const ids = orderedUniqueQuestionIds(test.data?.questionIds);
+    let totalMarks = 0;
+    for (const questionId of ids) {
+      if (questionId === changedQuestionId) {
+        totalMarks += changedMarks;
+        continue;
+      }
+      const question = await readQuestion(db, questionId, tx);
+      totalMarks += marksValue(question.data);
+    }
+    tx.update(test.ref, {
+      questionCount: ids.length,
+      totalMarks,
+      durationMinutes: ids.length,
+    });
+  });
 }
 
 async function readQuestion(db, questionId, tx) {
@@ -33,13 +174,6 @@ async function readTest(db, testId, tx) {
   const ref = testsCol(db).doc(testId);
   const snap = tx ? await tx.get(ref) : await ref.get();
   return { ref, snap, data: snap.exists ? snap.data() : null };
-}
-
-async function assertAssignedQuestions(db, testData, questionIds, tx) {
-  for (const questionId of questionIds) {
-    const { data } = await readQuestion(db, questionId, tx);
-    assertQuestionCompatibleWithTest(data, testData, questionId);
-  }
 }
 
 export function createAdminContentService(db) {
@@ -60,14 +194,32 @@ export function createAdminContentService(db) {
     async updateQuestion({ questionId, data } = {}) {
       const id = trimToNull(questionId) || trimToNull(data?.id);
       if (!id) fail('invalid-argument', 'Question ID is required.');
-      const { snap, data: existing } = await readQuestion(db, id);
-      if (!snap.exists) fail('not-found', 'Question was not found.');
-      const payload = prepareQuestionWrite(data || {}, {
-        documentId: id,
-        forUpdate: true,
-        existing,
+      let assignedTestId = null;
+      let nextMarks = null;
+      await db.runTransaction(async (tx) => {
+        const { snap, data: existing, ref } = await readQuestion(db, id, tx);
+        if (!snap.exists) fail('not-found', 'Question was not found.');
+        const payload = prepareQuestionWrite(data || {}, {
+          documentId: id,
+          forUpdate: true,
+          existing,
+        });
+        const assignment = await tx.get(assignmentsCol(db).doc(id));
+        const nextStatus = trimToNull(payload.status);
+        const statusChanging = (nextStatus != null && nextStatus !== trimToNull(existing?.status))
+          || (typeof payload.isActive === 'boolean' && payload.isActive !== existing?.isActive);
+        if (assignment.exists && statusChanging) {
+          rejectAssignedStatusChange(id);
+        }
+        tx.update(ref, payload);
+        if (!assignment.exists) return;
+        if (Number(existing?.marks) === Number(payload.marks)) return;
+        assignedTestId = trimToNull(assignment.data()?.testId);
+        nextMarks = Number(payload.marks);
       });
-      await questionsCol(db).doc(id).update(payload);
+      if (assignedTestId && Number.isFinite(nextMarks)) {
+        await recomputeAssignedTestAggregates(db, assignedTestId, id, nextMarks);
+      }
       return { questionId: id };
     },
 
@@ -121,23 +273,26 @@ export function createAdminContentService(db) {
       if (!id) fail('invalid-argument', 'Question ID is required.');
       if (!nextStatus) fail('invalid-argument', 'Question status is required.');
 
-      const { snap, data } = await readQuestion(db, id);
-      if (!snap.exists) fail('not-found', 'Question was not found.');
-
-      const next = {
-        ...data,
-        status: nextStatus,
-        isActive: nextStatus === 'published',
-      };
-      if (nextStatus === 'published') {
-        validateQuestionPayload(next, { documentId: id });
-      } else if (!['draft', 'archived'].includes(nextStatus)) {
-        fail('invalid-argument', `Invalid question status "${nextStatus}".`);
-      }
-      await questionsCol(db).doc(id).update({
-        status: nextStatus,
-        isActive: nextStatus === 'published',
-        updatedAt: FieldValue.serverTimestamp(),
+      await db.runTransaction(async (tx) => {
+        const { snap, data, ref } = await readQuestion(db, id, tx);
+        if (!snap.exists) fail('not-found', 'Question was not found.');
+        const next = {
+          ...data,
+          status: nextStatus,
+          isActive: nextStatus === 'published',
+        };
+        if (nextStatus === 'published') {
+          validateQuestionPayload(next, { documentId: id });
+        } else if (!['draft', 'archived'].includes(nextStatus)) {
+          fail('invalid-argument', `Invalid question status "${nextStatus}".`);
+        }
+        const assignment = await tx.get(assignmentsCol(db).doc(id));
+        if (assignment.exists) rejectAssignedStatusChange(id);
+        tx.update(ref, {
+          status: nextStatus,
+          isActive: nextStatus === 'published',
+          updatedAt: FieldValue.serverTimestamp(),
+        });
       });
       return { questionId: id, status: nextStatus };
     },
@@ -148,86 +303,143 @@ export function createAdminContentService(db) {
       if (typeof isActive !== 'boolean') {
         fail('invalid-argument', 'isActive must be a boolean.');
       }
-      const { snap, data } = await readQuestion(db, id);
-      if (!snap.exists) fail('not-found', 'Question was not found.');
+      let result;
+      await db.runTransaction(async (tx) => {
+        const { snap, data, ref } = await readQuestion(db, id, tx);
+        if (!snap.exists) fail('not-found', 'Question was not found.');
+        const assignment = await tx.get(assignmentsCol(db).doc(id));
+        if (assignment.exists) rejectAssignedStatusChange(id);
 
-      if (isActive) {
-        const next = {
-          ...data,
-          status: 'published',
-          isActive: true,
-        };
-        validateQuestionPayload(next, { documentId: id });
-        await questionsCol(db).doc(id).update({
-          status: 'published',
-          isActive: true,
+        if (isActive) {
+          const next = {
+            ...data,
+            status: 'published',
+            isActive: true,
+          };
+          validateQuestionPayload(next, { documentId: id });
+          tx.update(ref, {
+            status: 'published',
+            isActive: true,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          result = { questionId: id, isActive: true, status: 'published' };
+          return;
+        }
+
+        const currentStatus = trimToNull(data.status);
+        const patch = {
+          isActive: false,
           updatedAt: FieldValue.serverTimestamp(),
-        });
-        return { questionId: id, isActive: true, status: 'published' };
-      }
-
-      const currentStatus = trimToNull(data.status);
-      const patch = {
-        isActive: false,
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-      // Keep published => active. Deactivate availability without publishing.
-      if (currentStatus === 'published') {
-        patch.status = 'archived';
-      }
-      await questionsCol(db).doc(id).update(patch);
-      return {
-        questionId: id,
-        isActive: false,
-        status: patch.status || currentStatus,
-      };
+        };
+        // Keep published => active. Deactivate availability without publishing.
+        if (currentStatus === 'published') {
+          patch.status = 'archived';
+        }
+        tx.update(ref, patch);
+        result = {
+          questionId: id,
+          isActive: false,
+          status: patch.status || currentStatus,
+        };
+      });
+      return result;
     },
 
-    async createTest({ testId, data } = {}) {
+    async createTest({ testId, data } = {}, options = {}) {
       const id = trimToNull(testId) || trimToNull(data?.id);
       if (!id) fail('invalid-argument', 'Test ID is required.');
+      const assignedBy = actorId(options.assignedBy);
       const payload = prepareTestWrite(
         { ...(data || {}), status: 'draft', isPublished: false, id },
         { documentId: id },
       );
       payload.status = 'draft';
       payload.isPublished = false;
-      if (payload.questionIds?.length) {
-        await assertAssignedQuestions(db, payload, payload.questionIds);
-      }
+      delete payload.assignedBy;
+      if (payload.negativeMarks == null) payload.negativeMarks = 0;
+      const nextIds = orderedUniqueQuestionIds(payload.questionIds);
       const ref = testsCol(db).doc(id);
-      const existing = await ref.get();
-      if (existing.exists) fail('already-exists', `Test already exists: ${id}.`);
-      await ref.create(payload);
-      return { testId: id };
+
+      const aggregates = await db.runTransaction(async (tx) => {
+        const existing = await tx.get(ref);
+        if (existing.exists) fail('already-exists', `Test already exists: ${id}.`);
+        const totals = await syncAssignmentsInTransaction(db, tx, {
+          testId: id,
+          courseId: payload.courseId,
+          testData: { ...payload, questionIds: nextIds },
+          previousIds: [],
+          nextIds,
+          assignedBy,
+          targetStatus: 'draft',
+        });
+        tx.set(ref, {
+          ...payload,
+          questionIds: nextIds,
+          ...totals,
+        });
+        return totals;
+      });
+
+      return { testId: id, ...aggregates, status: 'draft', isPublished: false };
     },
 
-    async updateTest({ testId, data } = {}) {
+    async updateTest({ testId, data } = {}, options = {}) {
       const id = trimToNull(testId) || trimToNull(data?.id);
       if (!id) fail('invalid-argument', 'Test ID is required.');
+      const assignedBy = actorId(options.assignedBy);
       const payload = prepareTestWrite(data || {}, { documentId: id, forUpdate: true });
-      const { snap } = await readTest(db, id);
-      if (!snap.exists) fail('not-found', 'Test was not found.');
-      if (payload.questionIds?.length) {
-        await assertAssignedQuestions(db, payload, payload.questionIds);
-      }
-      await testsCol(db).doc(id).update(payload);
-      return { testId: id };
+      delete payload.assignedBy;
+      if (payload.negativeMarks == null) payload.negativeMarks = 0;
+      const nextIds = orderedUniqueQuestionIds(payload.questionIds);
+      const ref = testsCol(db).doc(id);
+      let writtenStatus = payload.status;
+
+      const aggregates = await db.runTransaction(async (tx) => {
+        const current = await readTest(db, id, tx);
+        if (!current.snap.exists) fail('not-found', 'Test was not found.');
+        const previousIds = orderedUniqueQuestionIds(current.data?.questionIds);
+        const totals = await syncAssignmentsInTransaction(db, tx, {
+          testId: id,
+          courseId: payload.courseId,
+          testData: { ...payload, questionIds: nextIds },
+          previousIds,
+          nextIds,
+          assignedBy,
+          targetStatus: payload.status,
+        });
+        tx.update(ref, {
+          ...payload,
+          questionIds: nextIds,
+          ...totals,
+        });
+        writtenStatus = payload.status;
+        return totals;
+      });
+
+      return {
+        testId: id,
+        ...aggregates,
+        status: writtenStatus,
+        isPublished: writtenStatus === 'published',
+      };
     },
 
-    async publishTest({ testId } = {}) {
+    async publishTest({ testId } = {}, options = {}) {
       const id = trimToNull(testId);
       if (!id) fail('invalid-argument', 'Test ID is required.');
+      const assignedBy = actorId(options.assignedBy);
+      const ref = testsCol(db).doc(id);
+      let nextIds = [];
 
-      await db.runTransaction(async (tx) => {
-        const { snap, data, ref } = await readTest(db, id, tx);
-        if (!snap.exists) fail('not-found', 'Test was not found.');
-        if (trimToNull(data.status) === 'archived') {
+      const aggregates = await db.runTransaction(async (tx) => {
+        const current = await readTest(db, id, tx);
+        if (!current.snap.exists) fail('not-found', 'Test was not found.');
+        if (trimToNull(current.data?.status) === 'archived') {
           fail('failed-precondition', 'Archived tests cannot be published.');
         }
-
         const authoritative = {
-          ...data,
+          ...current.data,
+          id,
           status: 'published',
           isPublished: true,
         };
@@ -235,35 +447,76 @@ export function createAdminContentService(db) {
           documentId: id,
           requireExistingId: true,
         });
-        if (validated.questionIds.length) {
-          await assertAssignedQuestions(db, authoritative, validated.questionIds, tx);
-        }
+        nextIds = validated.questionIds;
+        const previousIds = orderedUniqueQuestionIds(current.data?.questionIds);
+        const totals = await syncAssignmentsInTransaction(db, tx, {
+          testId: id,
+          courseId: validated.courseId,
+          testData: authoritative,
+          previousIds,
+          nextIds,
+          assignedBy,
+          targetStatus: 'published',
+        });
         tx.update(ref, {
           status: 'published',
           isPublished: true,
+          questionIds: nextIds,
+          ...totals,
         });
+        return totals;
       });
 
-      return { testId: id, status: 'published', isPublished: true };
+      return { testId: id, status: 'published', isPublished: true, ...aggregates };
     },
 
-    async setTestStatus({ testId, status } = {}) {
+    async setTestStatus({ testId, status } = {}, options = {}) {
       const id = trimToNull(testId);
       const nextStatus = trimToNull(status);
       if (!id) fail('invalid-argument', 'Test ID is required.');
       if (!nextStatus) fail('invalid-argument', 'Test status is required.');
       if (nextStatus === 'published') {
-        return this.publishTest({ testId: id });
+        return this.publishTest({ testId: id }, options);
       }
       if (!['draft', 'archived'].includes(nextStatus)) {
         fail('invalid-argument', `Invalid test status "${nextStatus}".`);
       }
-      const { snap } = await readTest(db, id);
-      if (!snap.exists) fail('not-found', 'Test was not found.');
-      await testsCol(db).doc(id).update({
-        status: nextStatus,
-        isPublished: false,
+      const assignedBy = actorId(options.assignedBy);
+      const ref = testsCol(db).doc(id);
+      let nextIds = [];
+
+      await db.runTransaction(async (tx) => {
+        const current = await readTest(db, id, tx);
+        if (!current.snap.exists) fail('not-found', 'Test was not found.');
+        nextIds = orderedUniqueQuestionIds(current.data?.questionIds);
+        const authoritative = {
+          ...current.data,
+          id,
+          status: nextStatus,
+          isPublished: false,
+          questionIds: nextIds,
+        };
+        validateTestPayload(authoritative, {
+          documentId: id,
+          requireExistingId: true,
+        });
+        const totals = await syncAssignmentsInTransaction(db, tx, {
+          testId: id,
+          courseId: authoritative.courseId,
+          testData: authoritative,
+          previousIds: nextIds,
+          nextIds,
+          assignedBy,
+          targetStatus: nextStatus,
+        });
+        tx.update(ref, {
+          status: nextStatus,
+          isPublished: false,
+          questionIds: nextIds,
+          ...totals,
+        });
       });
+
       return { testId: id, status: nextStatus, isPublished: false };
     },
   };

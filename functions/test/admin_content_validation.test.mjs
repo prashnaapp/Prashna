@@ -602,9 +602,14 @@ test('test: invalid metadata, category, status, and questionCount are rejected',
     () => validateTestPayload(validTest({ status: 'published', isPublished: false })),
     (err) => /isPublished/.test(err.message),
   );
-  assert.throws(
-    () => validateTestPayload(validTest({ questionCount: 2, questionIds: ['q-valid-1'] })),
-    (err) => /Question count/.test(err.message),
+  assert.equal(
+    validateTestPayload(validTest({
+      questionCount: 2,
+      totalMarks: 99,
+      durationMinutes: 30,
+      questionIds: ['q-valid-1'],
+    }), { documentId: 't-valid-1' }).questionIds.length,
+    1,
   );
   assert.throws(
     () => validateTestPayload(validTest({ paperId: 'group-iii-paper-i' })),
@@ -705,12 +710,13 @@ test('test service: assigned question invariants', async () => {
   await isolated.collection('questions').doc('q-inactive').set(
     publishedQuestion({ id: 'q-inactive', isActive: false, status: 'draft' }),
   );
-  await assert.rejects(
-    () => svc.createTest({
-      testId: 't-inactive',
-      data: validTest({ id: 't-inactive', questionIds: ['q-inactive'] }),
-    }),
-    (err) => /inactive/.test(err.message),
+  await svc.createTest({
+    testId: 't-inactive',
+    data: validTest({ id: 't-inactive', questionIds: ['q-inactive'] }),
+  });
+  assert.equal(
+    (await isolated.collection('question_assignments').doc('q-inactive').get()).exists,
+    true,
   );
 
   await svc.createQuestion({
@@ -757,12 +763,12 @@ test('publication re-reads the authoritative test and referenced questions', asy
     (err) => /Archived/.test(err.message),
   );
 
-  await isolated.collection('questions').doc('q-valid-1').update({ isActive: false });
+  await isolated.collection('questions').doc('q-valid-1').update({ isActive: false, status: 'draft' });
   await isolated.collection('tests').doc('t-stale').set(
     validTest({ id: 't-stale', status: 'draft', isPublished: false }),
   );
   await assert.rejects(
     () => svc.publishTest({ testId: 't-stale' }),
-    (err) => /inactive/.test(err.message),
+    (err) => /already assigned/.test(err.message),
   );
 });

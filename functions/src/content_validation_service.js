@@ -21,6 +21,36 @@ export const QUESTION_ITEM_FORMATS = Object.freeze(['standard_mcq', 'statement_m
 export const MAX_QUESTION_BATCH = 500;
 export const FIELD_DELETE_SENTINEL = '_fieldDelete';
 
+/** Authoritative question pool. Distinct from legacy `questionType`. */
+export const CONTENT_AREAS = Object.freeze(['chapter', 'testSeries']);
+/**
+ * Test-series pool subtype. Wire values match Test `category`:
+ * part = Paper-wise, mock = Grand Test, previousyear = Previous Paper.
+ */
+export const TEST_SERIES_CATEGORIES = Object.freeze(['part', 'mock', 'previousyear']);
+export const APPROVED_GRAND_SERIES_IDS = Object.freeze([
+  'Grand Test - I',
+  'Grand Test - II',
+  'Grand Test - III',
+  'Old Grand Tests',
+]);
+export const QUESTION_ASSIGNMENTS_COLLECTION = 'question_assignments';
+/**
+ * Firestore allows 500 document writes per transaction commit.
+ * Question status is written in the same transaction as the test.
+ *
+ * Status-only (membership unchanged, assignments already owned):
+ *   N question updates + 1 test update. N=160 → 161 writes.
+ *   Legacy first claim adds up to N assignment creates: 2N+1 → 321.
+ *
+ * Assignment replacement, including a status change on the new set:
+ *   N deletes + N creates + N question updates + 1 test write = 3N+1.
+ *   N=160 → 481 writes. Removed questions are not status-written.
+ *
+ * 150- and 160-question tests stay inside this cap. 161 is rejected.
+ */
+export const MAX_ASSIGNED_QUESTIONS_PER_TEST = 160;
+
 const papersByCourse = new Map();
 const partsByPaper = new Map();
 const unitsByPart = new Map();
@@ -84,6 +114,22 @@ function asNumber(value) {
 function readStringList(value) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item ?? ''));
+}
+
+/** Ordered question ids. Rejects duplicates. Does not reorder. */
+export function orderedUniqueQuestionIds(value) {
+  const ids = [];
+  const seen = new Set();
+  for (const item of readStringList(value)) {
+    const id = item.trim();
+    if (!id) continue;
+    if (seen.has(id)) {
+      fail('invalid-argument', 'Fixed question IDs must be unique.');
+    }
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
 }
 
 function localizedStatements(block) {
@@ -450,6 +496,68 @@ function validatePublishedBilingualContent(data) {
   }
 }
 
+/**
+ * Authoritative Chapter vs Test Series context.
+ * Missing fields are legacy-unspecified and remain valid.
+ * Does not read `questionType`.
+ */
+export function validateQuestionContentContext(data = {}) {
+  const contentArea = trimToNull(data.contentArea);
+  const testSeriesCategory = trimToNull(data.testSeriesCategory);
+  if (!contentArea && !testSeriesCategory) {
+    return { legacy: true, contentArea: null, testSeriesCategory: null };
+  }
+  if (!contentArea) {
+    fail('invalid-argument', 'testSeriesCategory requires contentArea.');
+  }
+  if (!CONTENT_AREAS.includes(contentArea)) {
+    fail('invalid-argument', `Invalid contentArea "${contentArea}".`);
+  }
+  if (contentArea === 'chapter') {
+    if (testSeriesCategory) {
+      fail('invalid-argument', 'Chapter Questions must not set testSeriesCategory.');
+    }
+    return { legacy: false, contentArea, testSeriesCategory: null };
+  }
+
+  if (!testSeriesCategory || !TEST_SERIES_CATEGORIES.includes(testSeriesCategory)) {
+    fail(
+      'invalid-argument',
+      'Test Series Questions require testSeriesCategory part, mock, or previousyear.',
+    );
+  }
+
+  const courseId = trimToNull(data.courseId);
+  if (!courseId) fail('invalid-argument', 'Course is required.');
+  assertKnownCourse(courseId);
+
+  if (testSeriesCategory === 'part') {
+    const paperId = trimToNull(data.paperId);
+    if (!paperId) {
+      fail('invalid-argument', 'Paper is required for Paper-wise Questions.');
+    }
+    assertKnownPaper(courseId, paperId);
+    const partId = trimToNull(data.partId);
+    if (partId) assertKnownPart(courseId, paperId, partId);
+    return { legacy: false, contentArea, testSeriesCategory };
+  }
+
+  if (testSeriesCategory === 'mock') {
+    const seriesId = trimToNull(data.seriesId);
+    if (!seriesId) fail('invalid-argument', 'Grand Test group is required.');
+    if (!APPROVED_GRAND_SERIES_IDS.includes(seriesId)) {
+      fail('invalid-argument', `Unknown Grand Test group "${seriesId}".`);
+    }
+    return { legacy: false, contentArea, testSeriesCategory };
+  }
+
+  const year = asNumber(data.year);
+  if (!Number.isInteger(year) || year < 1900 || year > 2100) {
+    fail('invalid-argument', 'A valid exam year is required.');
+  }
+  return { legacy: false, contentArea, testSeriesCategory };
+}
+
 export function validateQuestionPayload(data = {}, { documentId, existing } = {}) {
   const id = trimToNull(data.id) || trimToNull(documentId);
   const expectedId = trimToNull(documentId);
@@ -528,7 +636,10 @@ export function validateQuestionPayload(data = {}, { documentId, existing } = {}
   if (isPublishedCanonical) {
     validatePublishedBilingualContent(data);
   }
-  validateQuestionSyllabus(data, { requireCanonical: isPublishedCanonical, existing });
+  const contentContext = validateQuestionContentContext(data);
+  if (contentContext.contentArea !== 'testSeries') {
+    validateQuestionSyllabus(data, { requireCanonical: isPublishedCanonical, existing });
+  }
 
   return {
     id,
@@ -560,16 +671,16 @@ export function validateTestPayload(data = {}, { documentId, requireExistingId =
   }
 
   const questionCount = asNumber(data.questionCount);
-  if (!Number.isFinite(questionCount) || questionCount <= 0) {
-    fail('invalid-argument', 'Question count must be greater than zero.');
+  if (!Number.isFinite(questionCount) || questionCount < 0) {
+    fail('invalid-argument', 'Question count must be zero or greater.');
   }
   const totalMarks = asNumber(data.totalMarks ?? data.marks ?? 0);
   if (!Number.isFinite(totalMarks) || totalMarks < 0) {
     fail('invalid-argument', 'Total marks must be zero or greater.');
   }
   const durationMinutes = asNumber(data.durationMinutes);
-  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
-    fail('invalid-argument', 'Duration must be greater than zero.');
+  if (!Number.isFinite(durationMinutes) || durationMinutes < 0) {
+    fail('invalid-argument', 'Duration must be zero or greater.');
   }
   const negativeMarks = asNumber(data.negativeMarks ?? 0);
   if (!Number.isFinite(negativeMarks) || negativeMarks < 0) {
@@ -588,18 +699,15 @@ export function validateTestPayload(data = {}, { documentId, requireExistingId =
     fail('invalid-argument', 'status and isPublished must stay consistent.');
   }
 
-  const questionIds = [
-    ...new Set(
-      readStringList(data.questionIds)
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  ];
-  if (readStringList(data.questionIds).filter((item) => item.trim()).length !== questionIds.length) {
-    fail('invalid-argument', 'Fixed question IDs must be unique.');
+  const questionIds = orderedUniqueQuestionIds(data.questionIds);
+  if (questionIds.length > MAX_ASSIGNED_QUESTIONS_PER_TEST) {
+    fail(
+      'invalid-argument',
+      `A test can assign at most ${MAX_ASSIGNED_QUESTIONS_PER_TEST} questions.`,
+    );
   }
-  if (questionIds.length > 0 && questionIds.length !== questionCount) {
-    fail('invalid-argument', 'Question count must match assigned question IDs.');
+  if (status === 'published' && questionIds.length === 0) {
+    fail('failed-precondition', 'A test with no questions cannot be published.');
   }
 
   validateTestCategoryLocation(data, courseId, category);
@@ -706,26 +814,42 @@ export function assertQuestionCompatibleWithTest(questionData, testData, questio
   if (!questionData) {
     fail('failed-precondition', `Question "${questionId}" does not exist.`);
   }
-  if (questionData.isActive !== true) {
-    fail('failed-precondition', `Question "${questionId}" is inactive.`);
-  }
   const questionCourse = trimToNull(questionData.courseId);
   const testCourse = trimToNull(testData.courseId);
   if (questionCourse !== testCourse) {
     fail('failed-precondition', `Question "${questionId}" belongs to another course.`);
   }
+
+  const area = trimToNull(questionData.contentArea);
+  const testCategory = trimToNull(testData.category);
+  if (area === 'chapter' && testCategory && testCategory !== 'chapter' && testCategory !== 'paper') {
+    fail(
+      'failed-precondition',
+      `Question "${questionId}" is a Chapter Question and cannot be assigned to this test.`,
+    );
+  }
+  if (area === 'testSeries' && testCategory) {
+    const sub = trimToNull(questionData.testSeriesCategory);
+    if (sub && sub !== testCategory) {
+      fail(
+        'failed-precondition',
+        `Question "${questionId}" does not match the test category.`,
+      );
+    }
+  }
+
   const testPaper = trimToNull(testData.paperId);
   const questionPaper = trimToNull(questionData.paperId);
-  if (testPaper && questionPaper !== testPaper) {
+  if (testPaper && questionPaper && questionPaper !== testPaper) {
     fail('failed-precondition', `Question "${questionId}" does not match the test paper.`);
   }
   const testPart = trimToNull(testData.partId);
   const questionPart = trimToNull(questionData.partId);
-  if (testPart && questionPart !== testPart) {
+  if (testPart && questionPart && questionPart !== testPart) {
     fail('failed-precondition', `Question "${questionId}" does not match the test part.`);
   }
   const testUnit = trimToNull(testData.syllabusUnitId);
-  if (testUnit) {
+  if (testUnit && area !== 'testSeries') {
     const questionUnit = trimToNull(questionData.syllabusUnitId);
     const topicId = trimToNull(questionData.topicId);
     const areaId = trimToNull(questionData.majorStudyAreaId);

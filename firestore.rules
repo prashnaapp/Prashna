@@ -246,6 +246,11 @@ service cloud.firestore {
     }
 
 
+    // One-question-one-test reservation. Admin SDK only.
+    match /question_assignments/{questionId} {
+      allow read, create, update, delete: if false;
+    }
+
     // ============================================================
     // TESTS (Test Series definitions)
     // ============================================================

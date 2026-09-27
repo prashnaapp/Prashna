@@ -30,9 +30,13 @@ abstract final class QuestionCloudMapper {
     final correctOption = data['correctOption'] as String?;
     if (correctOption == null || correctOption.isEmpty) return null;
 
-    final difficulty = parseDifficulty(data['difficulty'] as String?);
+    // Missing difficulty stays readable. Writers still persist difficulty until
+    // the dedicated removal phase. Unknown questionType still cannot map.
+    final difficulty =
+        parseDifficulty(data['difficulty'] as String?) ??
+        QuestionDifficulty.medium;
     final questionType = parseQuestionType(data['questionType'] as String?);
-    if (difficulty == null || questionType == null) return null;
+    if (questionType == null) return null;
 
     final createdAt =
         readTimestamp(data['createdAt']) ??
@@ -378,9 +382,7 @@ abstract final class QuestionCloudMapper {
         for (final statement in value.statements)
           if (statement.trim().isNotEmpty) statement.trim(),
       ];
-      final options = [
-        for (final option in value.options) option.text.trim(),
-      ];
+      final options = [for (final option in value.options) option.text.trim()];
       final hasOptionText = options.any((option) => option.isNotEmpty);
       return {
         'question': value.question.trim(),
@@ -393,10 +395,7 @@ abstract final class QuestionCloudMapper {
     return {
       'en': localized(content.en),
       if (content.te != null)
-        'te': localized(
-          content.te!,
-          omitEmptyOptions: omitEmptyTeluguOptions,
-        ),
+        'te': localized(content.te!, omitEmptyOptions: omitEmptyTeluguOptions),
     };
   }
 
@@ -496,8 +495,7 @@ abstract final class QuestionCloudMapper {
       }
     } else if (enStatements.isNotEmpty ||
         (teStatements != null && teStatements.isNotEmpty)) {
-      if (teStatements != null &&
-          teStatements.length != enStatements.length) {
+      if (teStatements != null && teStatements.length != enStatements.length) {
         errors.add('English and Telugu statement counts must match.');
       }
     }

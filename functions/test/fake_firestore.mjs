@@ -118,6 +118,10 @@ class FakeDocSnapshot {
   get path() {
     return this.ref.path;
   }
+  get id() {
+    const parts = this.ref.path.split('/');
+    return parts[parts.length - 1];
+  }
 }
 
 class FakeDocRef {
@@ -174,6 +178,17 @@ class FakeCollectionRef {
   doc(id) {
     return new FakeDocRef(this.db, `${this.path}/${id}`);
   }
+  async get() {
+    const prefix = `${this.path}/`;
+    const docs = [];
+    for (const [path, data] of this.db._store.entries()) {
+      if (!path.startsWith(prefix)) continue;
+      const rest = path.slice(prefix.length);
+      if (!rest || rest.includes('/')) continue;
+      docs.push(new FakeDocSnapshot(new FakeDocRef(this.db, path), data));
+    }
+    return { size: docs.length, docs, empty: docs.length === 0 };
+  }
 }
 
 class FakeTransaction {
@@ -192,6 +207,9 @@ class FakeTransaction {
   update(ref, data) {
     this._writes.push({ type: 'update', ref, data });
   }
+  delete(ref) {
+    this._writes.push({ type: 'delete', ref });
+  }
   /**
    * Apply buffered writes. Must be called under the store commit lock.
    * @returns {boolean} true if committed; false if read-set conflict
@@ -204,6 +222,11 @@ class FakeTransaction {
     }
     for (const write of this._writes) {
       const now = this.db._now();
+      if (write.type === 'delete') {
+        this.db._store.delete(write.ref.path);
+        this.db._bumpVersion(write.ref.path);
+        continue;
+      }
       if (write.type === 'update') {
         const existing = this.db._store.get(write.ref.path);
         if (!existing) return false;
