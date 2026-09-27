@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:telangana_prep/features/admin/data/admin_question_scope.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_question_form_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/shell/admin_dirty_scope.dart';
 import 'package:telangana_prep/features/admin/presentation/shell/admin_shell.dart';
@@ -145,7 +146,9 @@ void main() {
   }
 
   group('Question form dirty coverage', () {
-    testWidgets('edit load stays clean after defaults populate', (tester) async {
+    testWidgets('edit load stays clean after defaults populate', (
+      tester,
+    ) async {
       var dirty = false;
       await tester.pumpWidget(
         MaterialApp(
@@ -292,7 +295,9 @@ void main() {
   });
 
   group('Test form dirty coverage', () {
-    testWidgets('edit load stays clean after defaults populate', (tester) async {
+    testWidgets('edit load stays clean after defaults populate', (
+      tester,
+    ) async {
       var dirty = false;
       await tester.pumpWidget(
         MaterialApp(
@@ -506,7 +511,10 @@ void main() {
       );
       await settleDirtyTracking(tester);
 
-      expect(find.byKey(const ValueKey('question-form-create-title')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('question-form-create-title')),
+        findsOneWidget,
+      );
       expect(find.text('Classification & Syllabus'), findsOneWidget);
       expect(find.text('Question Content'), findsOneWidget);
       expect(find.text('Answer Configuration'), findsOneWidget);
@@ -537,8 +545,14 @@ void main() {
       );
       await settleDirtyTracking(tester);
 
-      expect(find.byKey(const ValueKey('question-form-edit-title')), findsOneWidget);
-      expect(find.byKey(const ValueKey('question-form-status-badge')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('question-form-edit-title')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('question-form-status-badge')),
+        findsOneWidget,
+      );
       expect(find.text('Published'), findsWidgets);
       expect(find.text('Save changes'), findsOneWidget);
       expect(find.byKey(const ValueKey('submit-question')), findsOneWidget);
@@ -561,7 +575,10 @@ void main() {
       );
       await settleDirtyTracking(tester);
 
-      expect(find.byKey(const ValueKey('test-form-create-title')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('test-form-create-title')),
+        findsOneWidget,
+      );
       expect(find.text('Test Classification & Scope'), findsOneWidget);
       expect(find.text('Test Details'), findsOneWidget);
       expect(find.text('Exam Configuration'), findsOneWidget);
@@ -600,8 +617,14 @@ void main() {
       );
       await settleDirtyTracking(tester);
 
-      expect(find.byKey(const ValueKey('test-form-edit-title')), findsOneWidget);
-      expect(find.byKey(const ValueKey('test-form-status-badge')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('test-form-edit-title')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('test-form-status-badge')),
+        findsOneWidget,
+      );
       expect(find.text('Published'), findsWidgets);
       expect(find.text('Publication'), findsOneWidget);
       expect(find.text('Save changes'), findsOneWidget);
@@ -659,18 +682,22 @@ void main() {
       await settleDirtyTracking(tester);
     }
 
-    testWidgets('clean Question form Sign Out always confirms', (
-      tester,
-    ) async {
+    testWidgets('clean Question form Sign Out always confirms', (tester) async {
       var signedOut = false;
-      await pumpShellWithQuestion(tester, onSignOut: () async {
-        signedOut = true;
-      });
+      await pumpShellWithQuestion(
+        tester,
+        onSignOut: () async {
+          signedOut = true;
+        },
+      );
 
       await tester.tap(find.text('Sign out').first);
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('admin-sign-out-clean-dialog')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('admin-sign-out-clean-dialog')),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('sign-out-cancel')), findsOneWidget);
       expect(find.byKey(const ValueKey('sign-out-confirm')), findsOneWidget);
       expect(signedOut, isFalse);
@@ -684,9 +711,12 @@ void main() {
       tester,
     ) async {
       var signedOut = false;
-      await pumpShellWithQuestion(tester, onSignOut: () async {
-        signedOut = true;
-      });
+      await pumpShellWithQuestion(
+        tester,
+        onSignOut: () async {
+          signedOut = true;
+        },
+      );
 
       await tester.tap(find.text('Sign out').first);
       await tester.pumpAndSettle();
@@ -697,11 +727,16 @@ void main() {
       expect(find.byType(AdminQuestionForm), findsOneWidget);
     });
 
-    testWidgets('dirty Question Sign Out shows one combined confirmation', (tester) async {
+    testWidgets('dirty Question Sign Out shows one combined confirmation', (
+      tester,
+    ) async {
       var signedOut = false;
-      await pumpShellWithQuestion(tester, onSignOut: () async {
-        signedOut = true;
-      });
+      await pumpShellWithQuestion(
+        tester,
+        onSignOut: () async {
+          signedOut = true;
+        },
+      );
 
       await openDropdownAndSelect(
         tester,
@@ -716,7 +751,10 @@ void main() {
         find.byKey(const ValueKey('admin-sign-out-dirty-dialog')),
         findsOneWidget,
       );
-      expect(find.byKey(const ValueKey('admin-sign-out-clean-dialog')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('admin-sign-out-clean-dialog')),
+        findsNothing,
+      );
       expect(find.text('Sign out and discard changes?'), findsOneWidget);
       expect(find.byKey(const ValueKey('dirty-sign-out-stay')), findsOneWidget);
       expect(
@@ -730,9 +768,12 @@ void main() {
       tester,
     ) async {
       var signedOut = false;
-      await pumpShellWithQuestion(tester, onSignOut: () async {
-        signedOut = true;
-      });
+      await pumpShellWithQuestion(
+        tester,
+        onSignOut: () async {
+          signedOut = true;
+        },
+      );
 
       final questionField = find.widgetWithText(
         TextFormField,
@@ -759,9 +800,12 @@ void main() {
       tester,
     ) async {
       var signedOut = false;
-      await pumpShellWithQuestion(tester, onSignOut: () async {
-        signedOut = true;
-      });
+      await pumpShellWithQuestion(
+        tester,
+        onSignOut: () async {
+          signedOut = true;
+        },
+      );
 
       await openDropdownAndSelect(
         tester,
@@ -780,18 +824,22 @@ void main() {
       expect(find.text('Sign out and discard changes?'), findsNothing);
     });
 
-    testWidgets('clean Test form Sign Out always confirms', (
-      tester,
-    ) async {
+    testWidgets('clean Test form Sign Out always confirms', (tester) async {
       var signedOut = false;
-      await pumpShellWithTest(tester, onSignOut: () async {
-        signedOut = true;
-      });
+      await pumpShellWithTest(
+        tester,
+        onSignOut: () async {
+          signedOut = true;
+        },
+      );
 
       await tester.tap(find.text('Sign out').first);
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('admin-sign-out-clean-dialog')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('admin-sign-out-clean-dialog')),
+        findsOneWidget,
+      );
       expect(signedOut, isFalse);
 
       await tester.tap(find.byKey(const ValueKey('sign-out-confirm')));
@@ -799,11 +847,16 @@ void main() {
       expect(signedOut, isTrue);
     });
 
-    testWidgets('dirty Test Sign Out shows one combined confirmation', (tester) async {
+    testWidgets('dirty Test Sign Out shows one combined confirmation', (
+      tester,
+    ) async {
       var signedOut = false;
-      await pumpShellWithTest(tester, onSignOut: () async {
-        signedOut = true;
-      });
+      await pumpShellWithTest(
+        tester,
+        onSignOut: () async {
+          signedOut = true;
+        },
+      );
 
       await openDropdownAndSelect(
         tester,
@@ -818,16 +871,22 @@ void main() {
         find.byKey(const ValueKey('admin-sign-out-dirty-dialog')),
         findsOneWidget,
       );
-      expect(find.byKey(const ValueKey('admin-sign-out-clean-dialog')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('admin-sign-out-clean-dialog')),
+        findsNothing,
+      );
       expect(find.text('Sign out and discard changes?'), findsOneWidget);
       expect(signedOut, isFalse);
     });
 
     testWidgets('dirty Test Stay preserves form', (tester) async {
       var signedOut = false;
-      await pumpShellWithTest(tester, onSignOut: () async {
-        signedOut = true;
-      });
+      await pumpShellWithTest(
+        tester,
+        onSignOut: () async {
+          signedOut = true;
+        },
+      );
 
       final titleField = find.widgetWithText(
         TextFormField,
@@ -851,9 +910,12 @@ void main() {
       tester,
     ) async {
       var signedOut = false;
-      await pumpShellWithTest(tester, onSignOut: () async {
-        signedOut = true;
-      });
+      await pumpShellWithTest(
+        tester,
+        onSignOut: () async {
+          signedOut = true;
+        },
+      );
 
       await openDropdownAndSelect(
         tester,
@@ -972,7 +1034,10 @@ class _FakeQuestionFormService extends AdminQuestionService {
   Future<List<Course>> loadCourses() async => courses;
 
   @override
-  Future<String> createQuestion(Question question) async => 'created-id';
+  Future<String> createQuestion(
+    Question question, {
+    AdminQuestionScope? scope,
+  }) async => 'created-id';
 
   @override
   Future<void> updateQuestion(Question question) async {}
@@ -988,7 +1053,8 @@ class _ShellDirtyQuestionHost extends StatefulWidget {
   final List<Course> courses;
 
   @override
-  State<_ShellDirtyQuestionHost> createState() => _ShellDirtyQuestionHostState();
+  State<_ShellDirtyQuestionHost> createState() =>
+      _ShellDirtyQuestionHostState();
 }
 
 class _ShellDirtyQuestionHostState extends State<_ShellDirtyQuestionHost> {
@@ -1033,10 +1099,7 @@ class _ShellDirtyQuestionHostState extends State<_ShellDirtyQuestionHost> {
 }
 
 class _ShellDirtyTestHost extends StatefulWidget {
-  const _ShellDirtyTestHost({
-    required this.testModel,
-    required this.courses,
-  });
+  const _ShellDirtyTestHost({required this.testModel, required this.courses});
 
   final TestModel testModel;
   final List<Course> courses;

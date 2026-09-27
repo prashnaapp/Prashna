@@ -4,6 +4,7 @@ import test from 'node:test';
 import { createAdminContentService } from '../src/admin_content_service.js';
 import {
   MAX_ASSIGNED_QUESTIONS_PER_TEST,
+  assertQuestionCompatibleWithTest,
   validateQuestionPayload,
   validateTestPayload,
 } from '../src/content_validation_service.js';
@@ -68,6 +69,26 @@ function paperWiseQuestion(overrides = {}) {
   });
 }
 
+function grandQuestion(overrides = {}) {
+  return question({
+    id: 'q-grand',
+    contentArea: 'testSeries',
+    testSeriesCategory: 'mock',
+    seriesId: 'Grand Test - I',
+    ...overrides,
+  });
+}
+
+function previousQuestion(overrides = {}) {
+  return question({
+    id: 'q-year',
+    contentArea: 'testSeries',
+    testSeriesCategory: 'previousyear',
+    year: 2024,
+    ...overrides,
+  });
+}
+
 function draftTest(overrides = {}) {
   return {
     id: 't1',
@@ -86,6 +107,39 @@ function draftTest(overrides = {}) {
     paperId: 'group-ii-paper-i',
     ...overrides,
   };
+}
+
+function mockTest(overrides = {}) {
+  return draftTest({
+    id: 't-grand',
+    title: 'Grand draft',
+    category: 'mock',
+    seriesId: 'Grand Test - I',
+    paperId: 'group-ii-paper-iii',
+    ...overrides,
+  });
+}
+
+function previousPaperTest(overrides = {}) {
+  return draftTest({
+    id: 't-year',
+    title: 'Previous draft',
+    category: 'previousyear',
+    year: 2024,
+    paperId: 'group-ii-paper-ii',
+    ...overrides,
+  });
+}
+
+function chapterTest(overrides = {}) {
+  return draftTest({
+    id: 't-chapter',
+    title: 'Chapter draft',
+    category: 'chapter',
+    paperId: 'group-ii-paper-i',
+    syllabusUnitId: 'group-ii-paper-i-area-01',
+    ...overrides,
+  });
 }
 
 function harness() {
@@ -701,5 +755,147 @@ test('160 assigned questions can change status together and 161 cannot be assign
       { assignedBy: ACTOR },
     ),
     (err) => /at most 160/.test(err.message),
+  );
+});
+
+function expectCompatible(questionData, testData, questionId = questionData.id) {
+  assert.doesNotThrow(
+    () => assertQuestionCompatibleWithTest(questionData, testData, questionId),
+  );
+}
+
+function expectIncompatible(questionData, testData, pattern, questionId = questionData.id) {
+  assert.throws(
+    () => assertQuestionCompatibleWithTest(questionData, testData, questionId),
+    (err) => err.code === 'failed-precondition' && pattern.test(err.message),
+  );
+}
+
+test('assignment compatibility: paper-wise matches paper, not part', () => {
+  expectCompatible(paperWiseQuestion(), draftTest());
+  expectIncompatible(
+    paperWiseQuestion(),
+    draftTest({
+      paperId: 'group-ii-paper-ii',
+      partId: 'group-ii-paper-ii-part-01',
+    }),
+    /test paper/,
+  );
+});
+
+test('assignment compatibility: grand matches series and does not require question paperId', () => {
+  const q = grandQuestion();
+  assert.equal(q.paperId, undefined);
+  expectCompatible(q, mockTest());
+  expectCompatible(q, mockTest({ paperId: 'group-ii-paper-i' }));
+  expectIncompatible(
+    q,
+    mockTest({ seriesId: 'Grand Test - II' }),
+    /test series/,
+  );
+});
+
+test('assignment compatibility: previous matches year and does not require question paperId', () => {
+  const q = previousQuestion();
+  assert.equal(q.paperId, undefined);
+  expectCompatible(q, previousPaperTest());
+  expectCompatible(q, previousPaperTest({ paperId: 'group-ii-paper-i' }));
+  expectIncompatible(
+    q,
+    previousPaperTest({ year: 2016 }),
+    /test year/,
+  );
+});
+
+test('assignment compatibility: wrong course or category fails', () => {
+  expectIncompatible(
+    paperWiseQuestion(),
+    draftTest({ courseId: 'group-iii', paperId: 'group-iii-paper-i' }),
+    /another course/,
+  );
+  expectIncompatible(paperWiseQuestion(), mockTest(), /test category/);
+  expectIncompatible(grandQuestion(), previousPaperTest(), /test category/);
+  expectIncompatible(previousQuestion(), draftTest(), /test category/);
+});
+
+test('assignment compatibility: chapter rules stay unchanged', () => {
+  expectCompatible(chapterQuestion(), chapterTest());
+  expectIncompatible(chapterQuestion(), mockTest(), /Chapter Question/);
+  expectIncompatible(chapterQuestion(), previousPaperTest(), /Chapter Question/);
+  expectIncompatible(
+    chapterQuestion(),
+    chapterTest({ paperId: 'group-ii-paper-ii', partId: 'group-ii-paper-ii-part-01', syllabusUnitId: 'group-ii-paper-ii-part-01-topic-01' }),
+    /test paper/,
+  );
+});
+
+test('assignment mutation: grand and previous use series/year, not question paperId', async () => {
+  const { db, svc } = harness();
+  await svc.createQuestion({ questionId: 'q-grand', data: grandQuestion({ id: 'q-grand' }) });
+  await svc.createQuestion({ questionId: 'q-year', data: previousQuestion({ id: 'q-year' }) });
+
+  const grandStored = (await db.collection('questions').doc('q-grand').get()).data();
+  const yearStored = (await db.collection('questions').doc('q-year').get()).data();
+  assert.equal(grandStored.paperId, undefined);
+  assert.equal(yearStored.paperId, undefined);
+
+  await svc.createTest(
+    { testId: 't-grand', data: mockTest({ id: 't-grand', questionIds: ['q-grand'] }) },
+    { assignedBy: ACTOR },
+  );
+  await svc.createTest(
+    { testId: 't-year', data: previousPaperTest({ id: 't-year', questionIds: ['q-year'] }) },
+    { assignedBy: ACTOR },
+  );
+  assert.equal(
+    (await db.collection('question_assignments').doc('q-grand').get()).data().testId,
+    't-grand',
+  );
+  assert.equal(
+    (await db.collection('question_assignments').doc('q-year').get()).data().testId,
+    't-year',
+  );
+
+  await svc.createQuestion({
+    questionId: 'q-grand-ii',
+    data: grandQuestion({ id: 'q-grand-ii', seriesId: 'Grand Test - II' }),
+  });
+  await svc.createQuestion({
+    questionId: 'q-year-2016',
+    data: previousQuestion({ id: 'q-year-2016', year: 2016 }),
+  });
+  await assert.rejects(
+    () => svc.createTest(
+      { testId: 't-grand-mismatch', data: mockTest({ id: 't-grand-mismatch', questionIds: ['q-grand-ii'] }) },
+      { assignedBy: ACTOR },
+    ),
+    (err) => /test series/.test(err.message),
+  );
+  await assert.rejects(
+    () => svc.createTest(
+      { testId: 't-year-mismatch', data: previousPaperTest({ id: 't-year-mismatch', questionIds: ['q-year-2016'] }) },
+      { assignedBy: ACTOR },
+    ),
+    (err) => /test year/.test(err.message),
+  );
+});
+
+test('assignment mutation: part paper mismatch is rejected', async () => {
+  const { svc } = harness();
+  await svc.createQuestion({ questionId: 'q-part', data: paperWiseQuestion() });
+  await assert.rejects(
+    () => svc.createTest(
+      {
+        testId: 't-wrong-paper',
+        data: draftTest({
+          id: 't-wrong-paper',
+          paperId: 'group-ii-paper-ii',
+          partId: 'group-ii-paper-ii-part-01',
+          questionIds: ['q-part'],
+        }),
+      },
+      { assignedBy: ACTOR },
+    ),
+    (err) => /test paper/.test(err.message),
   );
 });

@@ -223,7 +223,7 @@ void main() {
       isFalse,
     );
     expect(find.text('Paper I capital question'), findsOneWidget);
-    expect(find.text('Create Question'), findsNothing);
+    expect(find.text('Create Question'), findsOneWidget);
     expect(find.text('Import Questions'), findsNothing);
     expect(find.text('Assign'), findsNothing);
     expect(service.loadQuestionsCalls, 0);
@@ -443,7 +443,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('No questions in this bank yet.'), findsOneWidget);
-    expect(find.text('Create Question'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('test-series-question-bank-create')),
+      findsOneWidget,
+    );
     expect(service.loadQuestionsCalls, 0);
   });
 }

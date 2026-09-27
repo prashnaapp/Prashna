@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:telangana_prep/features/admin/admin_routes.dart';
+import 'package:telangana_prep/features/admin/data/admin_question_scope.dart';
 import 'package:telangana_prep/features/admin/data/models/question_import_models.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_question_form_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_question_import_screen.dart';
@@ -171,9 +172,8 @@ void main() {
             if (settings.name == AdminRoutes.questionImport) {
               return MaterialPageRoute<Object?>(
                 settings: settings,
-                builder: (_) => AdminQuestionImportScreen(
-                  service: _FakeImportService(),
-                ),
+                builder: (_) =>
+                    AdminQuestionImportScreen(service: _FakeImportService()),
               );
             }
             return null;
@@ -300,10 +300,8 @@ void main() {
             if (settings.name == AdminRoutes.testEdit) {
               return MaterialPageRoute<Object?>(
                 settings: settings,
-                builder: (_) => AdminTestFormScreen(
-                  service: service,
-                  test: test,
-                ),
+                builder: (_) =>
+                    AdminTestFormScreen(service: service, test: test),
               );
             }
             return null;
@@ -347,7 +345,10 @@ class _CountingQuestionService extends AdminQuestionService {
   }
 
   @override
-  Future<String> createQuestion(Question question) async {
+  Future<String> createQuestion(
+    Question question, {
+    AdminQuestionScope? scope,
+  }) async {
     questions.add(question);
     return question.id.isEmpty ? 'q-created' : question.id;
   }

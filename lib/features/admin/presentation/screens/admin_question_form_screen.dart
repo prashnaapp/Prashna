@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../course_enrollment/model/course.dart';
 import '../../../question_bank/data/models/question_models.dart';
+import '../../../tests/data/models/test_models.dart';
+import '../../data/admin_question_scope.dart';
 import '../../services/admin_question_service.dart';
+import '../../services/admin_question_test_assignment.dart';
+import '../../services/admin_test_series_question_create.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
 import '../shell/admin_dirty_scope.dart';
@@ -15,10 +19,16 @@ class AdminQuestionFormScreen extends StatefulWidget {
     super.key,
     this.question,
     this.service,
+    this.scope,
+    this.assignment,
   });
 
   final Question? question;
   final AdminQuestionService? service;
+
+  /// Locked Test Series bank. Chapter create leaves this null.
+  final AdminQuestionScope? scope;
+  final AdminQuestionTestAssignment? assignment;
 
   @override
   State<AdminQuestionFormScreen> createState() =>
@@ -27,9 +37,15 @@ class AdminQuestionFormScreen extends StatefulWidget {
 
 class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
   late final AdminQuestionService _service;
-  late final Future<List<Course>> _coursesFuture;
+  late final AdminQuestionTestAssignment _assignment;
+  late final Future<({List<Course> courses, List<TestModel> tests})>
+  _loadFuture;
   bool _dirty = false;
+  String? _assignTestId;
   AdminDirtyController? _dirtyController;
+
+  bool get _lockedBank =>
+      widget.question == null && (widget.scope?.isQuestionBank ?? false);
 
   bool _isDirtyChecker() => _dirty;
 
@@ -37,7 +53,17 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
   void initState() {
     super.initState();
     _service = widget.service ?? AdminQuestionService.instance;
-    _coursesFuture = _service.loadCourses();
+    _assignment = widget.assignment ?? AdminQuestionTestAssignment();
+    _loadFuture = _load();
+  }
+
+  Future<({List<Course> courses, List<TestModel> tests})> _load() async {
+    if (_lockedBank) {
+      final tests = await _assignment.loadCompatibleTests(widget.scope!);
+      return (courses: const <Course>[], tests: tests);
+    }
+    final courses = await _service.loadCourses();
+    return (courses: courses, tests: const <TestModel>[]);
   }
 
   @override
@@ -58,6 +84,16 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
   }
 
   Future<void> _save(Question question) async {
+    if (_lockedBank) {
+      await createTestSeriesQuestion(
+        questions: _service,
+        assignment: _assignment,
+        scope: widget.scope!,
+        question: question,
+        assignToTestId: _assignTestId,
+      );
+      return;
+    }
     if (widget.question == null) {
       await _service.createQuestion(question);
     } else {
@@ -123,8 +159,8 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
                 )
               : null,
         ),
-        body: FutureBuilder<List<Course>>(
-          future: _coursesFuture,
+        body: FutureBuilder<({List<Course> courses, List<TestModel> tests})>(
+          future: _loadFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const AdminLoadingSurface(rows: 3);
@@ -136,8 +172,9 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
                 icon: Icons.error_outline,
               );
             }
-            final courses = snapshot.data ?? const <Course>[];
-            if (courses.isEmpty) {
+            final courses = snapshot.data?.courses ?? const <Course>[];
+            final tests = snapshot.data?.tests ?? const <TestModel>[];
+            if (!_lockedBank && courses.isEmpty) {
               return const AdminEmptyState(
                 title: 'No courses available',
                 message: 'No published courses are available.',
@@ -156,6 +193,11 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
                   child: AdminQuestionForm(
                     courses: courses,
                     initialQuestion: widget.question,
+                    lockedScope: _lockedBank ? widget.scope : null,
+                    compatibleTests: _lockedBank ? tests : const [],
+                    onAssignTestChanged: _lockedBank
+                        ? (testId) => _assignTestId = testId
+                        : null,
                     onSubmit: _save,
                     onCancel: () => _handlePopRequest(),
                     onDirtyChanged: (dirty) {

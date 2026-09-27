@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../question_bank/data/models/question_models.dart';
 import '../../data/admin_question_scope.dart';
+import '../../data/question_create_outcome.dart';
 import '../../services/admin_question_service.dart';
+import '../../services/admin_question_test_assignment.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
 import '../widgets/admin_ui/admin_empty_state.dart';
@@ -10,19 +12,23 @@ import '../widgets/admin_ui/admin_loading_surface.dart';
 import '../widgets/admin_ui/admin_question_row.dart';
 import '../widgets/admin_ui/admin_status_badge.dart';
 import '../widgets/admin_ui/admin_surface.dart';
+import 'admin_question_form_screen.dart';
 
-/// Read-only Test Series Question Bank for one [AdminQuestionScope].
+/// Test Series Question Bank for one [AdminQuestionScope].
 ///
-/// Does not expose create, import, edit, or assignment actions.
+/// Create opens the existing question form with this bank's ownership.
+/// Import and bulk assignment stay unavailable.
 class AdminTestSeriesQuestionBankScreen extends StatefulWidget {
   const AdminTestSeriesQuestionBankScreen({
     super.key,
     required this.scope,
     this.service,
+    this.assignment,
   });
 
   final AdminQuestionScope scope;
   final AdminQuestionService? service;
+  final AdminQuestionTestAssignment? assignment;
 
   @override
   State<AdminTestSeriesQuestionBankScreen> createState() =>
@@ -64,8 +70,54 @@ class _AdminTestSeriesQuestionBankScreenState
     }
   }
 
+  Future<void> _create() async {
+    final outcome = await Navigator.of(context).push<QuestionCreateOutcome>(
+      MaterialPageRoute(
+        builder: (_) => AdminQuestionFormScreen(
+          scope: widget.scope,
+          service: _service,
+          assignment: widget.assignment,
+        ),
+      ),
+    );
+    if (!mounted || outcome == null) return;
+    await _load();
+    if (!mounted || !outcome.assignmentFailed) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(outcome.message ?? QuestionAssignmentFailed.message),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AdminSpacing.pagePadding,
+            AdminSpacing.pagePadding,
+            AdminSpacing.pagePadding,
+            0,
+          ),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              key: const ValueKey('test-series-question-bank-create'),
+              onPressed: _loading ? null : _create,
+              icon: const Icon(Icons.add),
+              label: const Text('Create Question'),
+            ),
+          ),
+        ),
+        Expanded(child: _body(context)),
+      ],
+    );
+  }
+
+  Widget _body(BuildContext context) {
     if (_loading) return const AdminLoadingSurface();
     if (_error != null) {
       return AdminEmptyState(

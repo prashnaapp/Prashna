@@ -48,25 +48,41 @@ class AdminQuestionService {
     return _questions.getQuestionById(questionId);
   }
 
-  List<String> validate(Question question, {String? documentId}) {
+  List<String> validate(
+    Question question, {
+    String? documentId,
+    AdminQuestionScope? scope,
+  }) {
     final errors = QuestionCloudMapper.validateForWrite(
       question,
       documentId: documentId,
     );
     if (question.status != null) {
-      errors.addAll(_validateCanonicalAdminQuestion(question));
+      errors.addAll(
+        _validateCanonicalAdminQuestion(
+          question,
+          testSeriesBank: scope?.isQuestionBank ?? false,
+        ),
+      );
     }
     return errors;
   }
 
-  Future<String> createQuestion(Question question) {
+  Future<String> createQuestion(
+    Question question, {
+    AdminQuestionScope? scope,
+  }) {
     // The repository generates the ID. A non-empty sentinel validates all
     // content without allowing a client-provided ID to drift.
-    final errors = validate(question, documentId: 'generated-on-create');
+    final errors = validate(
+      question,
+      documentId: 'generated-on-create',
+      scope: scope,
+    );
     if (errors.isNotEmpty) {
       throw FormatException(errors.join(' '));
     }
-    return _questions.createQuestion(question);
+    return _questions.createQuestion(question, ownership: scope);
   }
 
   Future<void> updateQuestion(Question question) {
@@ -89,7 +105,10 @@ class AdminQuestionService {
     return _questions.setQuestionStatus(questionId, status);
   }
 
-  List<String> _validateCanonicalAdminQuestion(Question question) {
+  List<String> _validateCanonicalAdminQuestion(
+    Question question, {
+    bool testSeriesBank = false,
+  }) {
     final errors = <String>[];
     final content = question.content;
     final syllabus = question.syllabus;
@@ -145,6 +164,7 @@ class AdminQuestionService {
     if (!const ['A', 'B', 'C', 'D'].contains(question.correctOption)) {
       errors.add('Correct answer must be A, B, C, or D.');
     }
+    if (testSeriesBank) return errors;
     if (syllabus == null) {
       errors.add('Canonical syllabus attribution is required.');
       return errors;

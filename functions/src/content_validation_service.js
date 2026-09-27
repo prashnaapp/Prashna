@@ -828,13 +828,34 @@ export function assertQuestionCompatibleWithTest(questionData, testData, questio
       `Question "${questionId}" is a Chapter Question and cannot be assigned to this test.`,
     );
   }
-  if (area === 'testSeries' && testCategory) {
+  if (area === 'testSeries') {
     const sub = trimToNull(questionData.testSeriesCategory);
-    if (sub && sub !== testCategory) {
+    if (sub && testCategory && sub !== testCategory) {
       fail(
         'failed-precondition',
         `Question "${questionId}" does not match the test category.`,
       );
+    }
+    if (sub === 'part') {
+      const questionPaper = trimToNull(questionData.paperId);
+      const testPaper = trimToNull(testData.paperId);
+      if (!questionPaper || !testPaper || questionPaper !== testPaper) {
+        fail('failed-precondition', `Question "${questionId}" does not match the test paper.`);
+      }
+    }
+    if (sub === 'mock') {
+      const questionSeries = trimToNull(questionData.seriesId);
+      const testSeries = trimToNull(testData.seriesId);
+      if (!questionSeries || !testSeries || questionSeries !== testSeries) {
+        fail('failed-precondition', `Question "${questionId}" does not match the test series.`);
+      }
+    }
+    if (sub === 'previousyear') {
+      const questionYear = asNumber(questionData.year);
+      const testYear = asNumber(testData.year);
+      if (!Number.isInteger(questionYear) || !Number.isInteger(testYear) || questionYear !== testYear) {
+        fail('failed-precondition', `Question "${questionId}" does not match the test year.`);
+      }
     }
   }
 

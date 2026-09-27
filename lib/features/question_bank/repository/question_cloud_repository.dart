@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../admin/data/admin_content_callable_client.dart';
+import '../../admin/data/admin_question_scope.dart';
 import '../../admin/data/admin_test_series_question_query.dart';
 import '../data/models/question_models.dart';
 import '../data/question_cloud_mapper.dart';
@@ -312,7 +313,10 @@ class QuestionCloudRepository {
   /// Creates a question with a generated Firestore ID.
   ///
   /// The generated ID is also stored in the document's `id` field.
-  Future<String> createQuestion(Question question) async {
+  Future<String> createQuestion(
+    Question question, {
+    AdminQuestionScope? ownership,
+  }) async {
     final testCreate = _createForTest;
     final questionId =
         _idGeneratorForTest?.call() ??
@@ -323,6 +327,7 @@ class QuestionCloudRepository {
       question,
       includeCreatedAt: true,
       documentId: questionId,
+      ownership: ownership,
     );
     // Legacy writes retain their historical active default. Canonical admin
     // writes carry an explicit draft/published/archived status.

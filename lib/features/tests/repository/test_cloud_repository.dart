@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../admin/data/admin_compatible_test_query.dart';
 import '../../admin/data/admin_content_callable_client.dart';
 import '../data/models/test_models.dart';
 import '../data/test_cloud_mapper.dart';
@@ -21,7 +22,8 @@ class TestCloudRepository {
        _createForTest = null,
        _updateForTest = null,
        _setPublishedForTest = null,
-       _idGeneratorForTest = null;
+       _idGeneratorForTest = null,
+       _loadCompatibleTestsForTest = null;
 
   /// Unit-test constructor — does not touch Firestore.
   @visibleForTesting
@@ -43,6 +45,8 @@ class TestCloudRepository {
     Future<void> Function({required String testId, required bool isPublished})?
     setPublished,
     String Function()? idGenerator,
+    Future<List<TestModel>> Function(AdminCompatibleTestQuery query)?
+    loadCompatibleTests,
   }) : _firestore = null,
        _contentCallables = null,
        _loadAdminTestsForTest = loadAdminTests,
@@ -50,7 +54,8 @@ class TestCloudRepository {
        _createForTest = create,
        _updateForTest = update,
        _setPublishedForTest = setPublished,
-       _idGeneratorForTest = idGenerator;
+       _idGeneratorForTest = idGenerator,
+       _loadCompatibleTestsForTest = loadCompatibleTests;
 
   static const String collectionName = 'tests';
 
@@ -79,6 +84,8 @@ class TestCloudRepository {
   })?
   _setPublishedForTest;
   final String Function()? _idGeneratorForTest;
+  final Future<List<TestModel>> Function(AdminCompatibleTestQuery query)?
+  _loadCompatibleTestsForTest;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
@@ -127,6 +134,38 @@ class TestCloudRepository {
       rethrow;
     } catch (error, stack) {
       debugPrint('TestCloudRepository.loadPublishedTests: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Admin tests for one Question-bank context. Equality filters only.
+  Future<List<TestModel>> loadCompatibleTests(
+    AdminCompatibleTestQuery query,
+  ) async {
+    final testLoader = _loadCompatibleTestsForTest;
+    if (testLoader != null) return testLoader(query);
+
+    try {
+      Query<Map<String, dynamic>> request = _tests;
+      for (final filter in query.equalityFilters) {
+        request = request.where(filter.field, isEqualTo: filter.value);
+      }
+      final snapshot = await request.get();
+      final tests = <TestModel>[];
+      for (final doc in snapshot.docs) {
+        final mapped = TestCloudMapper.fromFirestoreAdmin(doc.id, doc.data());
+        if (mapped == null || !query.matches(mapped)) continue;
+        tests.add(mapped);
+      }
+      return tests;
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in TestCloudRepository.loadCompatibleTests: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('TestCloudRepository.loadCompatibleTests: $error\n$stack');
       rethrow;
     }
   }

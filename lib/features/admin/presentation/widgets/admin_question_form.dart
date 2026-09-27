@@ -4,6 +4,10 @@ import '../../../course_enrollment/model/course.dart';
 import '../../../question_bank/data/models/question_models.dart';
 import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
+import '../../../tests/data/models/test_models.dart';
+import '../../data/admin_question_scope.dart';
+import '../../data/admin_test_hierarchy.dart';
+import '../../data/question_create_outcome.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
 import 'admin_ui/admin_form_section.dart';
@@ -21,6 +25,9 @@ class AdminQuestionForm extends StatefulWidget {
     this.initialQuestion,
     this.onCancel,
     this.onDirtyChanged,
+    this.lockedScope,
+    this.compatibleTests = const [],
+    this.onAssignTestChanged,
   });
 
   final List<Course> courses;
@@ -28,6 +35,11 @@ class AdminQuestionForm extends StatefulWidget {
   final Question? initialQuestion;
   final VoidCallback? onCancel;
   final ValueChanged<bool>? onDirtyChanged;
+
+  /// When set, course and bank ownership cannot be edited.
+  final AdminQuestionScope? lockedScope;
+  final List<TestModel> compatibleTests;
+  final ValueChanged<String?>? onAssignTestChanged;
 
   @override
   State<AdminQuestionForm> createState() => _AdminQuestionFormState();
@@ -73,8 +85,10 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
   String? _submitError;
   bool _trackDirty = false;
   bool _isDirty = false;
+  String _assignTestId = '';
 
   Question? get _initial => widget.initialQuestion;
+  bool get _lockedBank => widget.lockedScope?.isQuestionBank ?? false;
   bool get _isGroupIii => _courseId == 'group-iii';
   bool get _isStatementFormat =>
       _canonicalMode && _itemFormat == QuestionItemFormat.statementMcq;
@@ -165,6 +179,20 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
     _questionType = initial?.questionType ?? QuestionType.practice;
     _isActive = initial?.isActive ?? true;
     _status = initial?.status ?? QuestionPublicationStatus.draft;
+    final locked = widget.lockedScope;
+    if (locked != null && locked.isQuestionBank) {
+      _courseId = locked.courseId;
+      _paper.text = locked.testSeriesCategory == AdminQuestionScope.categoryPart
+          ? (locked.paperId ?? '')
+          : '';
+      _partId = null;
+      _canonicalTopicId = null;
+      _lessonId = null;
+      _majorStudyAreaId = null;
+      _contentTopicId = null;
+      _syllabusUnitId = null;
+      _year.text = locked.year?.toString() ?? '';
+    }
     if (_itemFormat == QuestionItemFormat.statementMcq) {
       _ensureFourEnglishOptions();
     }
@@ -374,7 +402,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
   Future<void> _submit() async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    if (_courseId == null || _courseId!.isEmpty) {
+    if (!_lockedBank && (_courseId == null || _courseId!.isEmpty)) {
       setState(() => _submitError = 'Course is required.');
       return;
     }
@@ -382,11 +410,16 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
     final marks = double.parse(_marks.text.trim());
     final negativeMarks = double.parse(_negativeMarks.text.trim());
     final seconds = int.parse(_estimatedSeconds.text.trim());
-    final year = int.tryParse(_year.text.trim());
+    final locked = widget.lockedScope;
+    final year = _lockedBank ? locked?.year : int.tryParse(_year.text.trim());
     final question = Question(
       id: _initial?.id ?? '',
-      courseId: _courseId!,
-      paperId: _paper.text.trim(),
+      courseId: _lockedBank ? locked!.courseId! : _courseId!,
+      paperId: _lockedBank
+          ? (locked!.testSeriesCategory == AdminQuestionScope.categoryPart
+                ? (locked.paperId ?? '')
+                : '')
+          : _paper.text.trim(),
       sectionId: _canonicalMode ? '' : _section.text.trim(),
       topicId: _canonicalMode ? '' : _topic.text.trim(),
       question: _question.text.trim(),
@@ -447,7 +480,9 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
               ),
             )
           : null,
-      syllabus: _canonicalMode ? _canonicalAttribution() : _initial?.syllabus,
+      syllabus: _lockedBank
+          ? null
+          : (_canonicalMode ? _canonicalAttribution() : _initial?.syllabus),
       status: _canonicalMode ? _status : _initial?.status,
     );
 
@@ -459,8 +494,14 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
       await widget.onSubmit(question);
       if (mounted) {
         _clearDirty();
-        Navigator.of(context).pop(true);
+        Navigator.of(
+          context,
+        ).pop(_lockedBank ? QuestionCreateOutcome.created : true);
       }
+    } on QuestionAssignmentFailed catch (error) {
+      if (!mounted) return;
+      _clearDirty();
+      Navigator.of(context).pop(error.outcome);
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -580,9 +621,8 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
           validator: (value) => _required(value, 'Syllabus Unit'),
           onChanged: units.isEmpty
               ? null
-              : (value) => _onUserEdit(
-                  () => setState(() => _syllabusUnitId = value),
-                ),
+              : (value) =>
+                    _onUserEdit(() => setState(() => _syllabusUnitId = value)),
         ),
       ],
     );
@@ -719,7 +759,10 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
         key: ValueKey('question-syllabus-$label'),
         initialValue: validValue,
         isExpanded: true,
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
         items: [
           for (final item in items)
             DropdownMenuItem<String>(
@@ -785,40 +828,42 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              DropdownButtonFormField<String>(
-                key: const ValueKey('question-course'),
-                initialValue: _courseId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Course *',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final course in widget.courses)
-                    DropdownMenuItem(
-                      value: course.courseId,
-                      child: Text(
-                        '${course.title} (${course.courseId})',
-                        overflow: TextOverflow.ellipsis,
+              if (_lockedBank) _lockedOwnership(context),
+              if (!_lockedBank)
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('question-course'),
+                  initialValue: _courseId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Course *',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    for (final course in widget.courses)
+                      DropdownMenuItem(
+                        value: course.courseId,
+                        child: Text(
+                          '${course.title} (${course.courseId})',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                ],
-                validator: (value) => value == null || value.isEmpty
-                    ? 'Course is required.'
-                    : null,
-                onChanged: _saving
-                    ? null
-                    : (value) => _onUserEdit(() {
-                        setState(() {
-                          _courseId = value;
-                          if (_canonicalMode) {
-                            _clearSyllabusSelection(resetPaperDefault: true);
-                          }
-                        });
-                      }),
-              ),
-              if (_canonicalMode) _canonicalFields(context),
-              if (!_canonicalMode) ...[
+                  ],
+                  validator: (value) => value == null || value.isEmpty
+                      ? 'Course is required.'
+                      : null,
+                  onChanged: _saving
+                      ? null
+                      : (value) => _onUserEdit(() {
+                          setState(() {
+                            _courseId = value;
+                            if (_canonicalMode) {
+                              _clearSyllabusSelection(resetPaperDefault: true);
+                            }
+                          });
+                        }),
+                ),
+              if (_canonicalMode && !_lockedBank) _canonicalFields(context),
+              if (!_canonicalMode && !_lockedBank) ...[
                 _field(_paper, 'Paper ID'),
                 _field(_section, 'Section ID'),
                 _field(_topic, 'Topic ID'),
@@ -839,6 +884,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                 _field(
                   _question,
                   'English question *',
+                  key: const ValueKey('question-en'),
                   maxLines: 4,
                   validator: (v) => _required(v, 'English question'),
                 )
@@ -853,6 +899,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                 _field(
                   _teluguQuestion,
                   'Telugu question *',
+                  key: const ValueKey('question-te'),
                   maxLines: 4,
                   validator: (v) => _required(v, 'Telugu question'),
                 ),
@@ -863,8 +910,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
         AdminFormSection(
           key: const ValueKey('section-answer'),
           title: 'Answer Configuration',
-          subtitle:
-              'Configure format, options, and the single correct choice.',
+          subtitle: 'Configure format, options, and the single correct choice.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -872,9 +918,9 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
               const SizedBox(height: AdminSpacing.sm),
               Text(
                 'Options *',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
               ),
               for (var i = 0; i < _options.length; i++) _optionRow(i),
               if (!_isStatementFormat)
@@ -932,6 +978,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
               _field(
                 _explanation,
                 _canonicalMode ? 'English explanation *' : 'Explanation',
+                key: const ValueKey('explanation-en'),
                 maxLines: 3,
                 validator: _canonicalMode
                     ? (v) => _required(v, 'English explanation')
@@ -941,6 +988,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                 _field(
                   _teluguExplanation,
                   'Telugu explanation *',
+                  key: const ValueKey('explanation-te'),
                   maxLines: 3,
                   validator: (v) => _required(v, 'Telugu explanation'),
                 ),
@@ -964,8 +1012,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                     label: 'Difficulty',
                     value: _difficulty,
                     values: QuestionDifficulty.values,
-                    onChanged: (value) =>
-                        setState(() => _difficulty = value!),
+                    onChanged: (value) => setState(() => _difficulty = value!),
                   );
                   final language = _field(
                     _language,
@@ -980,11 +1027,8 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                   final negative = _field(
                     _negativeMarks,
                     'Negative marks',
-                    validator: (v) => _positiveNumber(
-                      v,
-                      'Negative marks',
-                      allowZero: true,
-                    ),
+                    validator: (v) =>
+                        _positiveNumber(v, 'Negative marks', allowZero: true),
                   );
                   final seconds = _field(
                     _estimatedSeconds,
@@ -996,11 +1040,13 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                           : null;
                     },
                   );
-                  final year = _field(
-                    _year,
-                    'Year',
-                    keyboardType: TextInputType.number,
-                  );
+                  final year = _lockedBank
+                      ? const SizedBox.shrink()
+                      : _field(
+                          _year,
+                          'Year',
+                          keyboardType: TextInputType.number,
+                        );
                   if (!wide) {
                     return Column(
                       children: [
@@ -1058,8 +1104,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                   value: _status,
                   values: QuestionPublicationStatus.values,
                   onChanged: (value) => setState(
-                    () =>
-                        _status = value ?? QuestionPublicationStatus.draft,
+                    () => _status = value ?? QuestionPublicationStatus.draft,
                   ),
                 ),
                 const SizedBox(height: AdminSpacing.md),
@@ -1092,9 +1137,8 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
             value: _isActive,
             onChanged: _saving
                 ? null
-                : (value) => _onUserEdit(
-                    () => setState(() => _isActive = value),
-                  ),
+                : (value) =>
+                      _onUserEdit(() => setState(() => _isActive = value)),
           ),
         if (_submitError != null)
           Padding(
@@ -1155,6 +1199,67 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
     );
   }
 
+  Widget _lockedOwnership(BuildContext context) {
+    final scope = widget.lockedScope!;
+    final syllabus = SyllabusService.instance;
+    final course = syllabus.getCourseById(scope.courseId ?? '');
+    final lines = <String>[course?.name ?? scope.courseId ?? ''];
+    if (scope.categoryLabel.isNotEmpty) lines.add(scope.categoryLabel);
+    switch (scope.testSeriesCategory) {
+      case AdminQuestionScope.categoryPart:
+        final paper = syllabus.getPaper(
+          courseId: scope.courseId ?? '',
+          paperId: scope.paperId ?? '',
+        );
+        lines.add(
+          paper == null
+              ? (scope.paperId ?? '')
+              : AdminTestHierarchy.paperLabel(paper),
+        );
+      case AdminQuestionScope.categoryMock:
+        lines.add(scope.seriesId ?? '');
+      case AdminQuestionScope.categoryPreviousYear:
+        lines.add('${scope.year ?? ''}');
+    }
+    return Column(
+      key: const ValueKey('test-series-ownership-context'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final line in lines)
+          Text(
+            line,
+            key: ValueKey('test-series-ownership-$line'),
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AdminColors.textPrimary,
+            ),
+          ),
+        const SizedBox(height: AdminSpacing.md),
+        DropdownButtonFormField<String>(
+          key: const ValueKey('test-series-assign-test'),
+          initialValue: _assignTestId,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Assign to Test',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            const DropdownMenuItem(value: '', child: Text('Do not assign')),
+            for (final test in widget.compatibleTests)
+              DropdownMenuItem(value: test.id, child: Text(test.title)),
+          ],
+          onChanged: _saving
+              ? null
+              : (value) {
+                  final next = value ?? '';
+                  setState(() => _assignTestId = next);
+                  widget.onAssignTestChanged?.call(next.isEmpty ? null : next);
+                },
+        ),
+      ],
+    );
+  }
+
   Widget _editorHeader(BuildContext context, {required bool editing}) {
     final theme = Theme.of(context);
     return Row(
@@ -1167,7 +1272,9 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
               Text(
                 editing ? 'Edit Question' : 'Create Question',
                 key: ValueKey(
-                  editing ? 'question-form-edit-title' : 'question-form-create-title',
+                  editing
+                      ? 'question-form-edit-title'
+                      : 'question-form-create-title',
                 ),
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w700,
@@ -1273,9 +1380,9 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
       const SizedBox(height: AdminSpacing.md),
       Text(
         'Statements *',
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
       ),
       for (var i = 0; i < _statements.length; i++) _statementRow(context, i),
       Align(
@@ -1506,9 +1613,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _question.text.trim().isEmpty
-                ? 'English question'
-                : _question.text,
+            _question.text.trim().isEmpty ? 'English question' : _question.text,
           ),
           Text(
             _teluguQuestion.text.trim().isEmpty

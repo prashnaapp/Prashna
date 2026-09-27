@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../admin/data/admin_question_scope.dart';
 import 'models/question_models.dart';
 
 /// Maps Firestore `questions/{questionId}` documents to [Question].
@@ -176,6 +177,7 @@ abstract final class QuestionCloudMapper {
     bool includeCreatedAt = false,
     String? documentId,
     bool forUpdate = false,
+    AdminQuestionScope? ownership,
   }) {
     final errors = validateForWrite(question, documentId: documentId);
     if (errors.isNotEmpty) {
@@ -292,7 +294,48 @@ abstract final class QuestionCloudMapper {
     if (includeCreatedAt) {
       data['createdAt'] = FieldValue.serverTimestamp();
     }
+    _applyTestSeriesOwnership(data, ownership);
     return data;
+  }
+
+  /// Writes locked Test Series ownership. Does not read [Question.questionType].
+  ///
+  /// Chapter writes pass a null [ownership] and stay unchanged. Paper-wise
+  /// keeps [paperId] and omits partId. Grand and Previous omit paperId so the
+  /// legacy Test paper requirement cannot be copied onto the Question.
+  static void _applyTestSeriesOwnership(
+    Map<String, dynamic> data,
+    AdminQuestionScope? ownership,
+  ) {
+    if (ownership == null || !ownership.isQuestionBank) return;
+    data['contentArea'] = AdminQuestionScope.contentAreaTestSeries;
+    data['testSeriesCategory'] = ownership.testSeriesCategory;
+    data['courseId'] = ownership.courseId!.trim();
+    for (final field in const [
+      'sectionId',
+      'topicId',
+      'partId',
+      'lessonId',
+      'majorStudyAreaId',
+      'contentTopicId',
+      'syllabusUnitId',
+    ]) {
+      data.remove(field);
+    }
+    switch (ownership.testSeriesCategory) {
+      case AdminQuestionScope.categoryPart:
+        data['paperId'] = ownership.paperId!.trim();
+        data.remove('seriesId');
+        data.remove('year');
+      case AdminQuestionScope.categoryMock:
+        data['seriesId'] = ownership.seriesId!.trim();
+        data.remove('paperId');
+        data.remove('year');
+      case AdminQuestionScope.categoryPreviousYear:
+        data['year'] = ownership.year;
+        data.remove('paperId');
+        data.remove('seriesId');
+    }
   }
 
   static Map<String, dynamic> toDeactivateMap({required bool isActive}) {
