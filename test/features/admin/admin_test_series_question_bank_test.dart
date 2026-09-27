@@ -492,12 +492,33 @@ class _BankService extends AdminQuestionService {
   Future<List<Question>> loadTestSeriesQuestions(
     AdminQuestionScope scope,
   ) async {
-    final query = AdminTestSeriesQuestionQuery.fromScope(scope);
+    final page = await loadTestSeriesQuestionPage(scope);
+    return page.questions;
+  }
+
+  @override
+  Future<QuestionBankPage> loadTestSeriesQuestionPage(
+    AdminQuestionScope scope, {
+    String? searchText,
+    String? cursorDocumentId,
+    String? cursorSearchText,
+  }) async {
+    final query = AdminTestSeriesQuestionQuery.fromScope(
+      scope,
+      searchText: searchText,
+      cursorDocumentId: cursorDocumentId,
+      cursorSearchText: cursorSearchText,
+    );
     queries.add(query);
-    return [
+    final matches = [
       for (final seed in seeds)
         if (_matches(seed, query)) seed.question,
     ];
+    return QuestionBankPage(
+      questions: matches,
+      hasMore: false,
+      cursorDocumentId: matches.isEmpty ? null : matches.last.id,
+    );
   }
 
   bool _matches(_Seed seed, AdminTestSeriesQuestionQuery query) {

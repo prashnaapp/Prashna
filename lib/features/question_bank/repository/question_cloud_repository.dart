@@ -6,6 +6,8 @@ import '../../admin/data/admin_question_scope.dart';
 import '../../admin/data/admin_test_series_question_query.dart';
 import '../data/models/question_models.dart';
 import '../data/question_cloud_mapper.dart';
+import '../data/question_fingerprint_query.dart';
+import '../data/question_search_text.dart';
 
 /// Firestore boundary for the Question Bank (`questions` collection).
 ///
@@ -20,6 +22,8 @@ class QuestionCloudRepository {
            contentCallables, // ignore: prefer_initializing_formals
        _loadQuestionsForTest = null,
        _loadTestSeriesForTest = null,
+       _loadTestSeriesPageForTest = null,
+       _findFingerprintsForTest = null,
        _getByIdForTest = null,
        _getByIdsForTest = null,
        _createForTest = null,
@@ -34,6 +38,13 @@ class QuestionCloudRepository {
     Future<List<Question>> Function(QuestionFilter? filter)? loadQuestions,
     Future<List<Question>> Function(AdminTestSeriesQuestionQuery query)?
     loadTestSeriesQuestions,
+    Future<QuestionBankPage> Function(AdminTestSeriesQuestionQuery query)?
+    loadTestSeriesQuestionPage,
+    Future<Set<String>> Function({
+      required List<String> fingerprints,
+      required List<({String field, Object value})> equalityFilters,
+    })?
+    findFingerprints,
     Future<Question?> Function(String id)? getById,
     Future<List<Question>> Function(List<String> ids)? getByIds,
     Future<void> Function({
@@ -57,6 +68,8 @@ class QuestionCloudRepository {
        _contentCallables = null,
        _loadQuestionsForTest = loadQuestions,
        _loadTestSeriesForTest = loadTestSeriesQuestions,
+       _loadTestSeriesPageForTest = loadTestSeriesQuestionPage,
+       _findFingerprintsForTest = findFingerprints,
        _getByIdForTest = getById,
        _getByIdsForTest = getByIds,
        _createForTest = create,
@@ -74,6 +87,13 @@ class QuestionCloudRepository {
   _loadQuestionsForTest;
   final Future<List<Question>> Function(AdminTestSeriesQuestionQuery query)?
   _loadTestSeriesForTest;
+  final Future<QuestionBankPage> Function(AdminTestSeriesQuestionQuery query)?
+  _loadTestSeriesPageForTest;
+  final Future<Set<String>> Function({
+    required List<String> fingerprints,
+    required List<({String field, Object value})> equalityFilters,
+  })?
+  _findFingerprintsForTest;
   final Future<Question?> Function(String id)? _getByIdForTest;
   final Future<List<Question>> Function(List<String> ids)? _getByIdsForTest;
   final Future<void> Function({
@@ -216,17 +236,32 @@ class QuestionCloudRepository {
     }
   }
 
-  /// Test Series Question Bank. Equality filters plus [AdminTestSeriesQuestionQuery.pageSize].
-  ///
-  /// Does not load the course and filter in memory.
+  /// First page of a Test Series bank. Prefer [loadTestSeriesQuestionPage].
   Future<List<Question>> loadTestSeriesQuestions(
     AdminTestSeriesQuestionQuery spec,
   ) async {
-    final testLoader = _loadTestSeriesForTest;
-    if (testLoader != null) return testLoader(spec);
+    final page = await loadTestSeriesQuestionPage(spec);
+    return page.questions;
+  }
+
+  /// Cursor page for a Test Series bank. Equality filters stay on every page.
+  Future<QuestionBankPage> loadTestSeriesQuestionPage(
+    AdminTestSeriesQuestionQuery spec,
+  ) async {
+    final pageLoader = _loadTestSeriesPageForTest;
+    if (pageLoader != null) return pageLoader(spec);
+    final listLoader = _loadTestSeriesForTest;
+    if (listLoader != null) {
+      final questions = await listLoader(spec);
+      return QuestionBankPage(
+        questions: questions,
+        hasMore: false,
+        cursorDocumentId: questions.isEmpty ? null : questions.last.id,
+      );
+    }
     if (_firestore == null) {
       throw StateError(
-        'QuestionCloudRepository.loadTestSeriesQuestions has no Firestore.',
+        'QuestionCloudRepository.loadTestSeriesQuestionPage has no Firestore.',
       );
     }
 
@@ -235,27 +270,80 @@ class QuestionCloudRepository {
       for (final filter in spec.equalityFilters) {
         query = query.where(filter.field, isEqualTo: filter.value);
       }
-      query = query.limit(AdminTestSeriesQuestionQuery.pageSize);
+      final plan = spec.cursorPlan;
+      for (final field in plan.orderBy) {
+        query = field == AdminTestSeriesQuestionQuery.documentOrderField
+            ? query.orderBy(FieldPath.documentId)
+            : query.orderBy(field);
+      }
+      if (plan.startAt != null) query = query.startAt(plan.startAt!);
+      if (plan.startAfter != null) query = query.startAfter(plan.startAfter!);
+      if (plan.endAt != null) query = query.endAt(plan.endAt!);
+      query = query.limit(plan.limit);
       final snapshot = await query.get();
+      final docs = snapshot.docs;
+      final hasMore = docs.length > AdminTestSeriesQuestionQuery.pageSize;
+      final pageDocs = hasMore
+          ? docs.sublist(0, AdminTestSeriesQuestionQuery.pageSize)
+          : docs;
       final results = <Question>[];
-      for (final doc in snapshot.docs) {
+      for (final doc in pageDocs) {
         final mapped = QuestionCloudMapper.fromFirestore(doc.id, doc.data());
         if (mapped == null) continue;
         results.add(mapped);
       }
-      return results;
+      final last = pageDocs.isEmpty ? null : pageDocs.last;
+      final searchCursor = last?.data()[QuestionSearchText.field];
+      return QuestionBankPage(
+        questions: results,
+        hasMore: hasMore,
+        cursorDocumentId: last?.id,
+        cursorSearchText: searchCursor is String ? searchCursor : null,
+      );
     } on FirebaseException catch (error, stack) {
       debugPrint(
-        'FirebaseException in QuestionCloudRepository.loadTestSeriesQuestions: '
+        'FirebaseException in QuestionCloudRepository.loadTestSeriesQuestionPage: '
         'code=${error.code} message=${error.message}\n$stack',
       );
       rethrow;
     } catch (error, stack) {
       debugPrint(
-        'QuestionCloudRepository.loadTestSeriesQuestions: $error\n$stack',
+        'QuestionCloudRepository.loadTestSeriesQuestionPage: $error\n$stack',
       );
       rethrow;
     }
+  }
+
+  /// Exact `contentFingerprint` matches. One bounded `whereIn` per 30 values.
+  Future<Set<String>> findExistingContentFingerprints({
+    required List<String> fingerprints,
+    required List<({String field, Object value})> equalityFilters,
+  }) async {
+    final testFind = _findFingerprintsForTest;
+    if (testFind != null) {
+      return testFind(
+        fingerprints: fingerprints,
+        equalityFilters: equalityFilters,
+      );
+    }
+    if (_firestore == null || fingerprints.isEmpty) return {};
+
+    final found = <String>{};
+    for (final chunk in QuestionFingerprintQuery.chunks(fingerprints)) {
+      Query<Map<String, dynamic>> query = _questions;
+      for (final filter in equalityFilters) {
+        query = query.where(filter.field, isEqualTo: filter.value);
+      }
+      query = query
+          .where('contentFingerprint', whereIn: chunk)
+          .limit(chunk.length);
+      final snapshot = await query.get();
+      for (final doc in snapshot.docs) {
+        final value = doc.data()['contentFingerprint'];
+        if (value is String && value.trim().isNotEmpty) found.add(value.trim());
+      }
+    }
+    return found;
   }
 
   Future<Question?> getQuestionById(String id) async {

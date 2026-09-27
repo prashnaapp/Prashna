@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../admin/data/admin_question_scope.dart';
 import 'models/question_models.dart';
+import 'question_content_fingerprint.dart';
+import 'question_search_text.dart';
 
 /// Maps Firestore `questions/{questionId}` documents to [Question].
 ///
@@ -226,10 +228,10 @@ abstract final class QuestionCloudMapper {
     if (itemFormatValue != null) {
       data['itemFormat'] = itemFormatValue;
     }
-    final fingerprint = question.contentFingerprint?.trim();
-    if (fingerprint != null && fingerprint.isNotEmpty) {
-      data['contentFingerprint'] = fingerprint;
-    }
+    data['contentFingerprint'] = QuestionContentFingerprint.fromQuestion(
+      question,
+    );
+    data[QuestionSearchText.field] = QuestionSearchText.normalize(questionText);
     if (forUpdate) {
       _writeOptionalSyllabusField(
         data,

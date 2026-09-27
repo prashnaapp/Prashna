@@ -69,31 +69,6 @@ class QuestionImportRecord {
   final int? year;
 
   bool get isStatementMcq => itemFormat == 'statement_mcq';
-
-  /// Fingerprint used only for within-file content duplicate warnings.
-  ///
-  /// Keeps the existing courseId and paperId segments. Adds statement text
-  /// so two Statement MCQs are not treated as the same item. Does not include
-  /// testId.
-  String get contentFingerprint {
-    final optionText = [
-      for (final option in options) '${option.en.trim()}|${option.te.trim()}',
-    ].join('||');
-    final statementText = [
-      for (final statement in statements)
-        '${statement.en.trim()}|${statement.te.trim()}',
-    ].join('||');
-    return [
-      courseId.trim().toLowerCase(),
-      paperId.trim().toLowerCase(),
-      (itemFormat ?? 'standard_mcq').trim().toLowerCase(),
-      question.en.trim().toLowerCase(),
-      question.te.trim(),
-      correctOption.trim().toUpperCase(),
-      optionText.toLowerCase(),
-      statementText.toLowerCase(),
-    ].join('::');
-  }
 }
 
 class QuestionImportIssue {

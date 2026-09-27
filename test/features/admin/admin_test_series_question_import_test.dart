@@ -11,6 +11,7 @@ import 'package:telangana_prep/features/admin/services/admin_question_test_assig
 import 'package:telangana_prep/features/admin/services/question_import_parser.dart';
 import 'package:telangana_prep/features/admin/services/question_import_service.dart';
 import 'package:telangana_prep/features/question_bank/data/models/question_models.dart';
+import 'package:telangana_prep/features/question_bank/data/question_content_fingerprint.dart';
 import 'package:telangana_prep/features/question_bank/repository/question_cloud_repository.dart';
 import 'package:telangana_prep/features/tests/data/grand_test_series.dart';
 import 'package:telangana_prep/features/tests/data/models/test_models.dart';
@@ -283,9 +284,22 @@ void main() {
     ];
 
     String fingerprintOf(Map<String, dynamic> json) {
-      return QuestionImportParser.parseJson(
-        wrap([json]),
-      ).single.contentFingerprint;
+      final record = QuestionImportParser.parseJson(wrap([json])).single;
+      return QuestionContentFingerprint.compute(
+        courseId: paperScope.courseId!,
+        paperId: paperScope.paperId!,
+        itemFormat: record.itemFormat,
+        questionEn: record.question.en,
+        questionTe: record.question.te,
+        correctOption: record.correctOption,
+        options: [
+          for (final option in record.options) (en: option.en, te: option.te),
+        ],
+        statements: [
+          for (final statement in record.statements)
+            (en: statement.en, te: statement.te),
+        ],
+      );
     }
 
     await service.validateAndImportJson(wrap([stem()]));

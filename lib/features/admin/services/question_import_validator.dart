@@ -1,10 +1,12 @@
 import '../../question_bank/data/models/question_models.dart';
+import '../../question_bank/data/question_content_fingerprint.dart';
 import '../../question_bank/repository/question_cloud_repository.dart';
 import '../../syllabus/data/models/syllabus_models.dart';
 import '../../syllabus/services/syllabus_service.dart';
 import '../../tests/data/models/test_models.dart';
 import '../data/admin_compatible_test_query.dart';
 import '../data/admin_question_scope.dart';
+import '../data/admin_test_series_question_query.dart';
 import '../data/models/question_import_models.dart';
 import 'admin_question_test_assignment.dart';
 
@@ -85,7 +87,8 @@ class QuestionImportValidator {
         }
       }
 
-      final fingerprint = record.contentFingerprint;
+      final question = _toQuestion(record);
+      final fingerprint = QuestionContentFingerprint.fromQuestion(question);
       final previousFingerprint = seenFingerprints[fingerprint];
       if (previousFingerprint != null) {
         warnings.add(
@@ -103,7 +106,7 @@ class QuestionImportValidator {
       }
 
       if (recordErrors.isEmpty) {
-        validated.add(_toQuestion(record));
+        validated.add(question);
         assignTestIds.add(_lockedBank ? record.testId?.trim() : null);
         sourceIndexes.add(i);
       } else {
@@ -112,7 +115,20 @@ class QuestionImportValidator {
     }
 
     if (_lockedBank) {
+      await _rejectExistingFingerprints(
+        errors,
+        validated,
+        assignTestIds,
+        sourceIndexes,
+      );
       await _validateTestAssignments(
+        errors,
+        validated,
+        assignTestIds,
+        sourceIndexes,
+      );
+    } else {
+      await _rejectExistingFingerprints(
         errors,
         validated,
         assignTestIds,
@@ -743,6 +759,95 @@ class QuestionImportValidator {
     }
   }
 
+  Future<void> _rejectExistingFingerprints(
+    List<QuestionImportIssue> errors,
+    List<Question> validated,
+    List<String?> assignTestIds,
+    List<int> sourceIndexes,
+  ) async {
+    final repository = _questions;
+    if (repository == null || validated.isEmpty) return;
+    final drop = <int>{};
+    if (_lockedBank) {
+      final found = await repository.findExistingContentFingerprints(
+        fingerprints: [
+          for (final question in validated)
+            QuestionContentFingerprint.fromQuestion(question),
+        ],
+        equalityFilters: AdminTestSeriesQuestionQuery.fromScope(
+          scope!,
+        ).equalityFilters,
+      );
+      for (var i = 0; i < validated.length; i++) {
+        final fingerprint = QuestionContentFingerprint.fromQuestion(
+          validated[i],
+        );
+        if (!found.contains(fingerprint)) continue;
+        errors.add(
+          QuestionImportIssue(
+            recordIndex: sourceIndexes[i],
+            field: 'contentFingerprint',
+            message: 'Exact duplicate already exists in this bank.',
+          ),
+        );
+        drop.add(i);
+      }
+    } else {
+      final groups = <String, List<int>>{};
+      for (var i = 0; i < validated.length; i++) {
+        final question = validated[i];
+        final key = '${question.courseId}\u0000${question.paperId}';
+        groups.putIfAbsent(key, () => []).add(i);
+      }
+      for (final indexes in groups.values) {
+        final sample = validated[indexes.first];
+        final found = await repository.findExistingContentFingerprints(
+          fingerprints: [
+            for (final index in indexes)
+              QuestionContentFingerprint.fromQuestion(validated[index]),
+          ],
+          equalityFilters: [
+            (field: 'courseId', value: sample.courseId),
+            (field: 'paperId', value: sample.paperId),
+          ],
+        );
+        for (final index in indexes) {
+          final fingerprint = QuestionContentFingerprint.fromQuestion(
+            validated[index],
+          );
+          if (!found.contains(fingerprint)) continue;
+          errors.add(
+            QuestionImportIssue(
+              recordIndex: sourceIndexes[index],
+              field: 'contentFingerprint',
+              message: 'Exact duplicate already exists in this bank.',
+            ),
+          );
+          drop.add(index);
+        }
+      }
+    }
+    if (drop.isEmpty) return;
+    final keptQuestions = <Question>[];
+    final keptIds = <String?>[];
+    final keptSources = <int>[];
+    for (var i = 0; i < validated.length; i++) {
+      if (drop.contains(i)) continue;
+      keptQuestions.add(validated[i]);
+      keptIds.add(assignTestIds[i]);
+      keptSources.add(sourceIndexes[i]);
+    }
+    validated
+      ..clear()
+      ..addAll(keptQuestions);
+    assignTestIds
+      ..clear()
+      ..addAll(keptIds);
+    sourceIndexes
+      ..clear()
+      ..addAll(keptSources);
+  }
+
   Future<void> _validateTestAssignments(
     List<QuestionImportIssue> errors,
     List<Question> validated,
@@ -913,7 +1018,6 @@ class QuestionImportValidator {
               lessonId: isPaperI || isGroupIii ? null : record.lessonId?.trim(),
               syllabusUnitId: isGroupIii ? record.syllabusUnitId?.trim() : null,
             ),
-      contentFingerprint: record.contentFingerprint,
     );
   }
 }

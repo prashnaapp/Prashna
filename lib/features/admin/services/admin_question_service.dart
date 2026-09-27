@@ -4,6 +4,7 @@ import '../../course_enrollment/model/course.dart';
 import '../../course_enrollment/service/course_catalog_service.dart';
 import '../../question_bank/data/models/question_models.dart';
 import '../../question_bank/data/question_cloud_mapper.dart';
+import '../../question_bank/data/question_content_fingerprint.dart';
 import '../../question_bank/repository/question_cloud_repository.dart';
 import '../../syllabus/services/syllabus_service.dart';
 
@@ -39,9 +40,27 @@ class AdminQuestionService {
   }
 
   /// Bounded Test Series bank. Does not call [loadQuestions].
-  Future<List<Question>> loadTestSeriesQuestions(AdminQuestionScope scope) {
-    final query = AdminTestSeriesQuestionQuery.fromScope(scope);
-    return _questions.loadTestSeriesQuestions(query);
+  Future<List<Question>> loadTestSeriesQuestions(
+    AdminQuestionScope scope,
+  ) async {
+    final page = await loadTestSeriesQuestionPage(scope);
+    return page.questions;
+  }
+
+  /// One cursor page. [searchText] is normalized by the query plan.
+  Future<QuestionBankPage> loadTestSeriesQuestionPage(
+    AdminQuestionScope scope, {
+    String? searchText,
+    String? cursorDocumentId,
+    String? cursorSearchText,
+  }) {
+    final query = AdminTestSeriesQuestionQuery.fromScope(
+      scope,
+      searchText: searchText,
+      cursorDocumentId: cursorDocumentId,
+      cursorSearchText: cursorSearchText,
+    );
+    return _questions.loadTestSeriesQuestionPage(query);
   }
 
   Future<Question?> getQuestion(String questionId) {
@@ -71,7 +90,7 @@ class AdminQuestionService {
   Future<String> createQuestion(
     Question question, {
     AdminQuestionScope? scope,
-  }) {
+  }) async {
     // The repository generates the ID. A non-empty sentinel validates all
     // content without allowing a client-provided ID to drift.
     final errors = validate(
@@ -82,6 +101,7 @@ class AdminQuestionService {
     if (errors.isNotEmpty) {
       throw FormatException(errors.join(' '));
     }
+    await _rejectExactDuplicate(question, scope);
     return _questions.createQuestion(question, ownership: scope);
   }
 
@@ -91,6 +111,29 @@ class AdminQuestionService {
       throw FormatException(errors.join(' '));
     }
     return _questions.updateQuestion(question);
+  }
+
+  /// Client pre-check only. Concurrent creates can still both pass.
+  Future<void> _rejectExactDuplicate(
+    Question question,
+    AdminQuestionScope? scope,
+  ) async {
+    final fingerprint = QuestionContentFingerprint.fromQuestion(question);
+    final equality = scope?.isQuestionBank == true
+        ? AdminTestSeriesQuestionQuery.fromScope(scope!).equalityFilters
+        : <({String field, Object value})>[
+            (field: 'courseId', value: question.courseId.trim()),
+            (field: 'paperId', value: question.paperId.trim()),
+          ];
+    final found = await _questions.findExistingContentFingerprints(
+      fingerprints: [fingerprint],
+      equalityFilters: equality,
+    );
+    if (found.contains(fingerprint)) {
+      throw const FormatException(
+        'An exact duplicate of this question already exists.',
+      );
+    }
   }
 
   Future<void> deactivateQuestion(String questionId) {

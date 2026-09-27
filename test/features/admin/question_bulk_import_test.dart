@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:telangana_prep/features/admin/services/question_import_parser.dart';
 import 'package:telangana_prep/features/admin/services/question_import_service.dart';
+import 'package:telangana_prep/features/question_bank/data/question_content_fingerprint.dart';
 import 'package:telangana_prep/features/question_bank/data/models/question_models.dart';
 import 'package:telangana_prep/features/question_bank/repository/question_cloud_repository.dart';
 
@@ -283,8 +284,27 @@ void main() {
     final expected = QuestionImportParser.parseJson(
       wrap([validPaperIRecord(), validPaperIIRecord()]),
     );
-    expect(created[0]['contentFingerprint'], expected[0].contentFingerprint);
-    expect(created[1]['contentFingerprint'], expected[1].contentFingerprint);
+    String fingerprintOf(int index) {
+      final record = expected[index];
+      return QuestionContentFingerprint.compute(
+        courseId: record.courseId,
+        paperId: record.paperId,
+        itemFormat: record.itemFormat,
+        questionEn: record.question.en,
+        questionTe: record.question.te,
+        correctOption: record.correctOption,
+        options: [
+          for (final option in record.options) (en: option.en, te: option.te),
+        ],
+        statements: [
+          for (final statement in record.statements)
+            (en: statement.en, te: statement.te),
+        ],
+      );
+    }
+
+    expect(created[0]['contentFingerprint'], fingerprintOf(0));
+    expect(created[1]['contentFingerprint'], fingerprintOf(1));
   });
 
   test('chapter import rejects testId before write', () async {
