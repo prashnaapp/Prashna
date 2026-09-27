@@ -362,6 +362,18 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.embeddedInShell && Navigator.of(context).canPop()) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                key: const ValueKey('question-list-back'),
+                tooltip: 'Back',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+            ),
+            const SizedBox(height: AdminSpacing.sm),
+          ],
           AdminPageHeader(
             title: 'Question Bank',
             subtitle:
@@ -829,9 +841,7 @@ class _FilterWorkspace extends StatelessWidget {
               if (_isPaperI) ...[
                 _dropdown<String?>(
                   key: const ValueKey('question-list-major-study-area'),
-                  rebuildKey: ValueKey(
-                    'rebuild-msa-$majorStudyAreaFilter',
-                  ),
+                  rebuildKey: ValueKey('rebuild-msa-$majorStudyAreaFilter'),
                   label: 'Major Study Area',
                   value: majorStudyAreaFilter,
                   width: 220,
@@ -981,9 +991,7 @@ class _FilterWorkspace extends StatelessWidget {
                   ),
                 _dropdown<String?>(
                   key: const ValueKey('question-list-syllabus-unit'),
-                  rebuildKey: ValueKey(
-                    'rebuild-unit-$syllabusUnitFilter',
-                  ),
+                  rebuildKey: ValueKey('rebuild-unit-$syllabusUnitFilter'),
                   label: 'Syllabus Unit',
                   value: syllabusUnitFilter,
                   width: 240,
@@ -1043,9 +1051,7 @@ class _FilterWorkspace extends StatelessWidget {
             labelText: label,
             filled: true,
             fillColor: AdminColors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: AdminColors.border),

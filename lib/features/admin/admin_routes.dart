@@ -4,6 +4,8 @@ abstract final class AdminRoutes {
   static const login = '/admin/login';
   static const dashboard = '/admin/dashboard';
   static const questions = '/admin/questions';
+  static const chapterQuestions = '/admin/questions/chapter';
+  static const testSeriesQuestions = '/admin/questions/test-series';
   static const questionCreate = '/admin/questions/create';
   static const questionEdit = '/admin/questions/edit';
   static const questionImport = '/admin/questions/import';

@@ -12,6 +12,8 @@ import '../screens/admin_dashboard_screen.dart';
 import '../screens/admin_question_form_screen.dart';
 import '../screens/admin_question_import_screen.dart';
 import '../screens/admin_question_list_screen.dart';
+import '../screens/admin_questions_home_screen.dart';
+import '../screens/admin_test_series_questions_browser_screen.dart';
 import '../screens/admin_test_form_screen.dart';
 import '../screens/admin_test_series_browser_screen.dart';
 import 'admin_dirty_scope.dart';
@@ -57,10 +59,9 @@ class _AdminShellState extends State<AdminShell> {
 
     if (widget.embeddedChild != null) {
       setState(() => _destination = destination);
-      await Navigator.of(context).pushNamedAndRemoveUntil(
-        destination.routeName,
-        (route) => false,
-      );
+      await Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(destination.routeName, (route) => false);
       return;
     }
 
@@ -128,10 +129,7 @@ class _AdminShellState extends State<AdminShell> {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [
-                          Color(0xFF1A2440),
-                          AdminColors.sidebar,
-                        ],
+                        colors: [Color(0xFF1A2440), AdminColors.sidebar],
                       ),
                     ),
                     child: SafeArea(
@@ -169,7 +167,9 @@ class _AdminShellState extends State<AdminShell> {
                                 const SizedBox(width: 4),
                                 Text(
                                   _destination.label,
-                                  style: Theme.of(context).textTheme.titleMedium,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
                                 ),
                                 const Spacer(),
                                 TextButton(
@@ -183,11 +183,14 @@ class _AdminShellState extends State<AdminShell> {
                         ),
                       ),
                     Expanded(
-                      child: widget.embeddedChild ??
+                      child:
+                          widget.embeddedChild ??
                           Navigator(
                             key: _navKey,
                             initialRoute: AdminRoutes.dashboard,
-                            observers: [_AdminNavObserver(onChange: _onNestedRoute)],
+                            observers: [
+                              _AdminNavObserver(onChange: _onNestedRoute),
+                            ],
                             onGenerateRoute: _onGenerateNestedRoute,
                           ),
                     ),
@@ -213,8 +216,14 @@ class _AdminShellState extends State<AdminShell> {
         onSignOut: widget.onSignOut,
         embeddedInShell: true,
       ),
-      AdminRoutes.questions =>
-        const AdminQuestionListScreen(embeddedInShell: true),
+      AdminRoutes.questions => const AdminQuestionsHomeScreen(
+        embeddedInShell: true,
+      ),
+      AdminRoutes.chapterQuestions => const AdminQuestionListScreen(
+        embeddedInShell: true,
+      ),
+      AdminRoutes.testSeriesQuestions =>
+        const AdminTestSeriesQuestionsBrowserScreen(embeddedInShell: true),
       AdminRoutes.questionCreate => const AdminQuestionFormScreen(),
       AdminRoutes.questionEdit => () {
         final question = settings.arguments;
@@ -222,10 +231,12 @@ class _AdminShellState extends State<AdminShell> {
             ? AdminQuestionFormScreen(question: question)
             : const AdminQuestionListScreen(embeddedInShell: true);
       }(),
-      AdminRoutes.questionImport =>
-        const AdminQuestionImportScreen(embeddedInShell: true),
-      AdminRoutes.chapters =>
-        const AdminChaptersBrowserScreen(embeddedInShell: true),
+      AdminRoutes.questionImport => const AdminQuestionImportScreen(
+        embeddedInShell: true,
+      ),
+      AdminRoutes.chapters => const AdminChaptersBrowserScreen(
+        embeddedInShell: true,
+      ),
       AdminRoutes.testSeries || AdminRoutes.tests =>
         const AdminTestSeriesBrowserScreen(embeddedInShell: true),
       AdminRoutes.testCreate => () {
@@ -323,10 +334,7 @@ class _AdminWorkspaceRoute<T> extends PageRoute<T> {
     // Opaque workspace fill so Dashboard image/blur cannot show through
     // embedded screens that omit their own Scaffold background.
     return SizedBox.expand(
-      child: ColoredBox(
-        color: AdminColors.backgroundTop,
-        child: child,
-      ),
+      child: ColoredBox(color: AdminColors.backgroundTop, child: child),
     );
   }
 
@@ -422,11 +430,12 @@ class _AdminSidebar extends StatelessWidget {
                     children: [
                       Text(
                         'PRASHNA',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: AdminColors.sidebarText,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.6,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: AdminColors.sidebarText,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
+                            ),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -537,7 +546,9 @@ class _AdminSidebar extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AdminSpacing.sm),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AdminSpacing.sm,
+                  ),
                   child: Divider(
                     height: 1,
                     thickness: 1,
@@ -600,16 +611,14 @@ class _NavTileState extends State<_NavTile> {
     final bg = selected
         ? AdminColors.sidebarActive
         : (_hovered || _focused)
-            ? AdminColors.sidebarHover
-            : Colors.transparent;
+        ? AdminColors.sidebarHover
+        : Colors.transparent;
     final iconColor = selected
         ? Colors.white
         : emphasize
-            ? AdminColors.sidebarText
-            : AdminColors.sidebarTextMuted;
-    final textColor = selected
-        ? Colors.white
-        : AdminColors.sidebarText;
+        ? AdminColors.sidebarText
+        : AdminColors.sidebarTextMuted;
+    final textColor = selected ? Colors.white : AdminColors.sidebarText;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -633,8 +642,8 @@ class _NavTileState extends State<_NavTile> {
                 color: selected
                     ? AdminColors.sidebarAccent.withValues(alpha: 0.35)
                     : _focused
-                        ? AdminColors.sidebarAccent.withValues(alpha: 0.45)
-                        : Colors.transparent,
+                    ? AdminColors.sidebarAccent.withValues(alpha: 0.45)
+                    : Colors.transparent,
               ),
             ),
             child: Material(
@@ -674,8 +683,9 @@ class _NavTileState extends State<_NavTile> {
                           widget.destination.label,
                           style: TextStyle(
                             color: textColor,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
                           ),
                         ),
                       ),

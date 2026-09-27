@@ -44,6 +44,8 @@ extension AdminNavDestinationX on AdminNavDestination {
       case null:
         return AdminNavDestination.dashboard;
       case AdminRoutes.questions:
+      case AdminRoutes.chapterQuestions:
+      case AdminRoutes.testSeriesQuestions:
       case AdminRoutes.questionCreate:
       case AdminRoutes.questionEdit:
         return AdminNavDestination.questions;
