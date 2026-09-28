@@ -1,0 +1,72 @@
+{
+  "cases": [
+    {
+      "name": "standard-mcq-missing-item-format",
+      "question": {
+        "courseId": " Group-II ",
+        "paperId": "Group-II-Paper-II",
+        "question": "Fallback question is unused",
+        "correctOption": "b",
+        "options": [
+          "unused A",
+          "unused B"
+        ],
+        "content": {
+          "en": {
+            "question": "  English   stem  ",
+            "options": [
+              { "text": " Yes " },
+              { "text": " No " }
+            ],
+            "statements": []
+          },
+          "te": {
+            "question": " తెలుగు ప్రశ్న ",
+            "options": [
+              { "text": " అవును " },
+              { "text": " కాదు " }
+            ],
+            "statements": []
+          }
+        }
+      },
+      "expectedFingerprint": "group-ii::group-ii-paper-ii::standard_mcq::english   stem::తెలుగు ప్రశ్న::B::yes|అవును||no|కాదు::",
+      "expectedSearchText": "english stem"
+    },
+    {
+      "name": "statement-mcq",
+      "question": {
+        "courseId": "group-iii",
+        "paperId": "group-iii-paper-i",
+        "itemFormat": "statement_mcq",
+        "correctOption": "A",
+        "content": {
+          "en": {
+            "question": " Select statements ",
+            "options": [
+              { "text": "A" },
+              { "text": "B" }
+            ],
+            "statements": [
+              " One ",
+              "Two"
+            ]
+          },
+          "te": {
+            "question": " తెలుగు ",
+            "options": [
+              { "text": "ఏ" },
+              { "text": "బి" }
+            ],
+            "statements": [
+              " ఒకటి ",
+              "రెండు "
+            ]
+          }
+        }
+      },
+      "expectedFingerprint": "group-iii::group-iii-paper-i::statement_mcq::select statements::తెలుగు::A::a|ఏ||b|బి::one|ఒకటి||two|రెండు",
+      "expectedSearchText": "select statements"
+    }
+  ]
+}
