@@ -5,9 +5,12 @@ import '../../../question_bank/data/models/question_models.dart';
 import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
 import '../../admin_routes.dart';
+import '../../data/admin_chapter_question_context.dart';
 import '../../services/admin_question_service.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
+import 'admin_question_form_screen.dart';
+import 'admin_question_import_screen.dart';
 import '../widgets/admin_ui/admin_empty_state.dart';
 import '../widgets/admin_ui/admin_loading_surface.dart';
 import '../widgets/admin_ui/admin_page_header.dart';
@@ -19,11 +22,15 @@ class AdminQuestionListScreen extends StatefulWidget {
     super.key,
     this.service,
     this.syllabusService,
+    this.chapterContext,
     this.embeddedInShell = false,
   });
 
   final AdminQuestionService? service;
   final SyllabusService? syllabusService;
+
+  /// When set, the bank shows only this Chapter location.
+  final AdminChapterQuestionContext? chapterContext;
   final bool embeddedInShell;
 
   @override
@@ -61,6 +68,16 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
     super.initState();
     _service = widget.service ?? AdminQuestionService.instance;
     _searchController = TextEditingController();
+    final locked = widget.chapterContext;
+    if (locked != null) {
+      _courseId = locked.courseId;
+      _paperFilter = locked.paperId;
+      _majorStudyAreaFilter = locked.majorStudyAreaId;
+      _contentTopicFilter = locked.contentTopicId;
+      _partFilter = locked.partId;
+      _topicFilter = locked.topicId;
+      _syllabusUnitFilter = locked.syllabusUnitId;
+    }
     _loadCourses();
   }
 
@@ -75,7 +92,7 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
       _searchController.clear();
       _search = '';
       _statusFilter = null;
-      _clearHierarchyFilters();
+      if (widget.chapterContext == null) _clearHierarchyFilters();
     });
   }
 
@@ -95,7 +112,9 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
       if (!mounted) return;
       setState(() {
         _courses = courses;
-        _courseId = courses.isEmpty ? null : courses.first.courseId;
+        _courseId =
+            widget.chapterContext?.courseId ??
+            (courses.isEmpty ? null : courses.first.courseId);
         _loadingCourses = false;
       });
       if (_courseId != null) await _loadQuestions();
@@ -132,9 +151,17 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
   }
 
   Future<void> _openCreate() async {
-    final changed = await Navigator.of(
-      context,
-    ).pushNamed(AdminRoutes.questionCreate);
+    final chapter = widget.chapterContext;
+    final changed = chapter == null
+        ? await Navigator.of(context).pushNamed(AdminRoutes.questionCreate)
+        : await Navigator.of(context).push<Object?>(
+            MaterialPageRoute<Object?>(
+              builder: (_) => AdminQuestionFormScreen(
+                service: _service,
+                chapterContext: chapter,
+              ),
+            ),
+          );
     if (mounted && changed == true) await _loadQuestions();
   }
 
@@ -146,9 +173,15 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
   }
 
   Future<void> _openImport() async {
-    final changed = await Navigator.of(
-      context,
-    ).pushNamed(AdminRoutes.questionImport);
+    final chapter = widget.chapterContext;
+    final changed = chapter == null
+        ? await Navigator.of(context).pushNamed(AdminRoutes.questionImport)
+        : await Navigator.of(context).push<Object?>(
+            MaterialPageRoute<Object?>(
+              builder: (_) =>
+                  AdminQuestionImportScreen(chapterContext: chapter),
+            ),
+          );
     if (mounted && changed == true) await _loadQuestions();
   }
 
@@ -211,6 +244,32 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
         _syllabusUnitFilter != null;
   }
 
+  int get _chapterQuestionCount {
+    return _questions.where(_matchesLockedChapter).length;
+  }
+
+  bool _matchesLockedChapter(Question question) {
+    if (_paperFilter != null && question.paperId != _paperFilter) return false;
+    if (_majorStudyAreaFilter != null &&
+        question.majorStudyAreaId != _majorStudyAreaFilter) {
+      return false;
+    }
+    if (_contentTopicFilter != null &&
+        question.contentTopicId != _contentTopicFilter) {
+      return false;
+    }
+    if (_partFilter != null && question.partId != _partFilter) return false;
+    final topicId = (question.syllabus?.topicId?.isNotEmpty == true)
+        ? question.syllabus!.topicId!
+        : question.topicId;
+    if (_topicFilter != null && topicId != _topicFilter) return false;
+    if (_syllabusUnitFilter != null &&
+        question.syllabusUnitId != _syllabusUnitFilter) {
+      return false;
+    }
+    return true;
+  }
+
   List<Question> get _visibleQuestions {
     final query = _search.trim().toLowerCase();
     return _questions
@@ -242,7 +301,9 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
           if (_topicFilter != null && topicId != _topicFilter) {
             return false;
           }
-          if (_lessonFilter != null && question.lessonId != _lessonFilter) {
+          if (widget.chapterContext == null &&
+              _lessonFilter != null &&
+              question.lessonId != _lessonFilter) {
             return false;
           }
           if (_syllabusUnitFilter != null &&
@@ -399,9 +460,21 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
             ),
             const SizedBox(height: AdminSpacing.lg),
           ],
+          if (widget.chapterContext != null) ...[
+            Text(
+              widget.chapterContext!.pathLabel(_syllabus),
+              key: const ValueKey('chapter-question-bank-context'),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AdminColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AdminSpacing.lg),
+          ],
           _FilterWorkspace(
             courses: _courses,
             syllabus: _syllabus,
+            hierarchyLocked: widget.chapterContext != null,
             courseId: _courseId,
             statusFilter: _statusFilter,
             paperFilter: _paperFilter,
@@ -466,7 +539,7 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
               Text(
                 _loadingQuestions
                     ? 'Loading…'
-                    : '${visible.length} of ${_questions.length}',
+                    : '${visible.length} of ${widget.chapterContext == null ? _questions.length : _chapterQuestionCount}',
                 key: const ValueKey('question-list-result-count'),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AdminColors.textSecondary,
@@ -611,6 +684,7 @@ class _FilterWorkspace extends StatelessWidget {
   const _FilterWorkspace({
     required this.courses,
     required this.syllabus,
+    this.hierarchyLocked = false,
     required this.courseId,
     required this.statusFilter,
     required this.paperFilter,
@@ -637,6 +711,7 @@ class _FilterWorkspace extends StatelessWidget {
 
   final List<Course> courses;
   final SyllabusService syllabus;
+  final bool hierarchyLocked;
   final String? courseId;
   final QuestionPublicationStatus? statusFilter;
   final String? paperFilter;
@@ -767,24 +842,25 @@ class _FilterWorkspace extends StatelessWidget {
             spacing: AdminSpacing.md,
             runSpacing: AdminSpacing.md,
             children: [
-              _dropdown<String>(
-                key: const ValueKey('question-list-course'),
-                rebuildKey: ValueKey('rebuild-course-$courseId'),
-                label: 'Course',
-                value: courseId,
-                width: 260,
-                items: [
-                  for (final course in courses)
-                    DropdownMenuItem(
-                      value: course.courseId,
-                      child: Text(
-                        course.title,
-                        overflow: TextOverflow.ellipsis,
+              if (!hierarchyLocked)
+                _dropdown<String>(
+                  key: const ValueKey('question-list-course'),
+                  rebuildKey: ValueKey('rebuild-course-$courseId'),
+                  label: 'Course',
+                  value: courseId,
+                  width: 260,
+                  items: [
+                    for (final course in courses)
+                      DropdownMenuItem(
+                        value: course.courseId,
+                        child: Text(
+                          course.title,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                ],
-                onChanged: onCourseChanged,
-              ),
+                  ],
+                  onChanged: onCourseChanged,
+                ),
               _dropdown<QuestionPublicationStatus?>(
                 key: const ValueKey('question-list-status'),
                 rebuildKey: ValueKey('rebuild-status-$statusFilter'),
@@ -806,167 +882,94 @@ class _FilterWorkspace extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AdminSpacing.lg),
-          Text(
-            'Syllabus hierarchy',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: AdminColors.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AdminSpacing.sm),
-          Wrap(
-            spacing: AdminSpacing.md,
-            runSpacing: AdminSpacing.md,
-            children: [
-              _dropdown<String?>(
-                key: const ValueKey('question-list-paper'),
-                rebuildKey: ValueKey('rebuild-paper-$paperFilter'),
-                label: 'Paper',
-                value: paperFilter,
-                width: 200,
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('All papers'),
-                  ),
-                  for (final item in papers)
-                    DropdownMenuItem(
-                      value: item.id,
-                      child: Text(item.title, overflow: TextOverflow.ellipsis),
-                    ),
-                ],
-                onChanged: onPaperChanged,
+          if (!hierarchyLocked) ...[
+            const SizedBox(height: AdminSpacing.lg),
+            Text(
+              'Syllabus hierarchy',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: AdminColors.textPrimary,
+                fontWeight: FontWeight.w700,
               ),
-              if (_isPaperI) ...[
+            ),
+            const SizedBox(height: AdminSpacing.sm),
+            Wrap(
+              spacing: AdminSpacing.md,
+              runSpacing: AdminSpacing.md,
+              children: [
                 _dropdown<String?>(
-                  key: const ValueKey('question-list-major-study-area'),
-                  rebuildKey: ValueKey('rebuild-msa-$majorStudyAreaFilter'),
-                  label: 'Major Study Area',
-                  value: majorStudyAreaFilter,
-                  width: 220,
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('All areas'),
-                    ),
-                    for (final area in paper!.majorStudyAreas)
-                      DropdownMenuItem(
-                        value: area.id,
-                        child: Text(
-                          area.displayName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                  onChanged: onMajorStudyAreaChanged,
-                ),
-                _dropdown<String?>(
-                  key: const ValueKey('question-list-content-topic'),
-                  rebuildKey: ValueKey(
-                    'rebuild-content-topic-$contentTopicFilter',
-                  ),
-                  label: 'Content Topic',
-                  value: contentTopicFilter,
-                  width: 220,
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('All content topics'),
-                    ),
-                    for (final area in paper.majorStudyAreas)
-                      if (majorStudyAreaFilter == null ||
-                          area.id == majorStudyAreaFilter)
-                        for (final topic in area.contentTopics)
-                          DropdownMenuItem(
-                            value: topic.id,
-                            child: Text(
-                              topic.displayName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                  ],
-                  onChanged: onContentTopicChanged,
-                ),
-              ],
-              if (_isPapersWithTopics) ...[
-                _dropdown<String?>(
-                  key: const ValueKey('question-list-part'),
-                  rebuildKey: ValueKey('rebuild-part-$partFilter'),
-                  label: 'Part',
-                  value: partFilter,
-                  width: 180,
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('All parts'),
-                    ),
-                    for (final part in paper!.parts)
-                      DropdownMenuItem(
-                        value: part.id,
-                        child: Text(
-                          part.displayName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                  onChanged: onPartChanged,
-                ),
-                _dropdown<String?>(
-                  key: const ValueKey('question-list-topic'),
-                  rebuildKey: ValueKey('rebuild-topic-$topicFilter'),
-                  label: 'Topic',
-                  value: topicFilter,
-                  width: 220,
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('All topics'),
-                    ),
-                    for (final part in paper.parts)
-                      if (partFilter == null || part.id == partFilter)
-                        for (final topic in part.topics)
-                          DropdownMenuItem(
-                            value: topic.id,
-                            child: Text(
-                              topic.resolvedDisplayName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                  ],
-                  onChanged: onTopicChanged,
-                ),
-                _dropdown<String?>(
-                  key: const ValueKey('question-list-lesson'),
-                  rebuildKey: ValueKey('rebuild-lesson-$lessonFilter'),
-                  label: 'Lesson',
-                  value: lessonFilter,
+                  key: const ValueKey('question-list-paper'),
+                  rebuildKey: ValueKey('rebuild-paper-$paperFilter'),
+                  label: 'Paper',
+                  value: paperFilter,
                   width: 200,
                   items: [
                     const DropdownMenuItem(
                       value: null,
-                      child: Text('All lessons'),
+                      child: Text('All papers'),
                     ),
-                    for (final part in paper.parts)
-                      if (partFilter == null || part.id == partFilter)
-                        for (final topic in part.topics)
-                          if (topicFilter == null || topic.id == topicFilter)
-                            for (final lesson in topic.lessons)
-                              DropdownMenuItem(
-                                value: lesson.id,
-                                child: Text(
-                                  lesson.displayName,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
+                    for (final item in papers)
+                      DropdownMenuItem(
+                        value: item.id,
+                        child: Text(
+                          item.title,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                   ],
-                  onChanged: onLessonChanged,
+                  onChanged: onPaperChanged,
                 ),
-              ],
-              if (!_isPaperI &&
-                  !_isPapersWithTopics &&
-                  _isSyllabusUnitPaper) ...[
-                if (paper!.hasPartSyllabusUnits)
+                if (_isPaperI) ...[
+                  _dropdown<String?>(
+                    key: const ValueKey('question-list-major-study-area'),
+                    rebuildKey: ValueKey('rebuild-msa-$majorStudyAreaFilter'),
+                    label: 'Major Study Area',
+                    value: majorStudyAreaFilter,
+                    width: 220,
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('All areas'),
+                      ),
+                      for (final area in paper!.majorStudyAreas)
+                        DropdownMenuItem(
+                          value: area.id,
+                          child: Text(
+                            area.displayName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: onMajorStudyAreaChanged,
+                  ),
+                  _dropdown<String?>(
+                    key: const ValueKey('question-list-content-topic'),
+                    rebuildKey: ValueKey(
+                      'rebuild-content-topic-$contentTopicFilter',
+                    ),
+                    label: 'Content Topic',
+                    value: contentTopicFilter,
+                    width: 220,
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('All content topics'),
+                      ),
+                      for (final area in paper.majorStudyAreas)
+                        if (majorStudyAreaFilter == null ||
+                            area.id == majorStudyAreaFilter)
+                          for (final topic in area.contentTopics)
+                            DropdownMenuItem(
+                              value: topic.id,
+                              child: Text(
+                                topic.displayName,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                    ],
+                    onChanged: onContentTopicChanged,
+                  ),
+                ],
+                if (_isPapersWithTopics) ...[
                   _dropdown<String?>(
                     key: const ValueKey('question-list-part'),
                     rebuildKey: ValueKey('rebuild-part-$partFilter'),
@@ -978,7 +981,7 @@ class _FilterWorkspace extends StatelessWidget {
                         value: null,
                         child: Text('All parts'),
                       ),
-                      for (final part in paper.parts)
+                      for (final part in paper!.parts)
                         DropdownMenuItem(
                           value: part.id,
                           child: Text(
@@ -989,31 +992,109 @@ class _FilterWorkspace extends StatelessWidget {
                     ],
                     onChanged: onPartChanged,
                   ),
-                _dropdown<String?>(
-                  key: const ValueKey('question-list-syllabus-unit'),
-                  rebuildKey: ValueKey('rebuild-unit-$syllabusUnitFilter'),
-                  label: 'Syllabus Unit',
-                  value: syllabusUnitFilter,
-                  width: 240,
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('All units'),
-                    ),
-                    for (final unit in _unitsForPaper(paper))
-                      DropdownMenuItem(
-                        value: unit.id,
-                        child: Text(
-                          unit.displayName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                  _dropdown<String?>(
+                    key: const ValueKey('question-list-topic'),
+                    rebuildKey: ValueKey('rebuild-topic-$topicFilter'),
+                    label: 'Topic',
+                    value: topicFilter,
+                    width: 220,
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('All topics'),
                       ),
-                  ],
-                  onChanged: onSyllabusUnitChanged,
-                ),
+                      for (final part in paper.parts)
+                        if (partFilter == null || part.id == partFilter)
+                          for (final topic in part.topics)
+                            DropdownMenuItem(
+                              value: topic.id,
+                              child: Text(
+                                topic.resolvedDisplayName,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                    ],
+                    onChanged: onTopicChanged,
+                  ),
+                  _dropdown<String?>(
+                    key: const ValueKey('question-list-lesson'),
+                    rebuildKey: ValueKey('rebuild-lesson-$lessonFilter'),
+                    label: 'Lesson',
+                    value: lessonFilter,
+                    width: 200,
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('All lessons'),
+                      ),
+                      for (final part in paper.parts)
+                        if (partFilter == null || part.id == partFilter)
+                          for (final topic in part.topics)
+                            if (topicFilter == null || topic.id == topicFilter)
+                              for (final lesson in topic.lessons)
+                                DropdownMenuItem(
+                                  value: lesson.id,
+                                  child: Text(
+                                    lesson.displayName,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                    ],
+                    onChanged: onLessonChanged,
+                  ),
+                ],
+                if (!_isPaperI &&
+                    !_isPapersWithTopics &&
+                    _isSyllabusUnitPaper) ...[
+                  if (paper!.hasPartSyllabusUnits)
+                    _dropdown<String?>(
+                      key: const ValueKey('question-list-part'),
+                      rebuildKey: ValueKey('rebuild-part-$partFilter'),
+                      label: 'Part',
+                      value: partFilter,
+                      width: 180,
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('All parts'),
+                        ),
+                        for (final part in paper.parts)
+                          DropdownMenuItem(
+                            value: part.id,
+                            child: Text(
+                              part.displayName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: onPartChanged,
+                    ),
+                  _dropdown<String?>(
+                    key: const ValueKey('question-list-syllabus-unit'),
+                    rebuildKey: ValueKey('rebuild-unit-$syllabusUnitFilter'),
+                    label: 'Syllabus Unit',
+                    value: syllabusUnitFilter,
+                    width: 240,
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('All units'),
+                      ),
+                      for (final unit in _unitsForPaper(paper))
+                        DropdownMenuItem(
+                          value: unit.id,
+                          child: Text(
+                            unit.displayName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: onSyllabusUnitChanged,
+                  ),
+                ],
               ],
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );

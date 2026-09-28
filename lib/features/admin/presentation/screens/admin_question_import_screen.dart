@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/admin_chapter_question_context.dart';
 import '../../data/admin_question_scope.dart';
 import '../../data/admin_test_hierarchy.dart';
 import '../../data/models/question_import_models.dart';
@@ -10,6 +11,7 @@ import '../../../syllabus/services/syllabus_service.dart';
 import '../widgets/admin_ui/admin_nav_tile.dart';
 import '../widgets/admin_ui/admin_page_header.dart';
 import '../widgets/admin_ui/admin_surface.dart';
+import 'admin_chapter_questions_browser_screen.dart';
 import 'admin_test_series_questions_browser_screen.dart';
 
 /// Premium Admin UI: paste JSON → validate → confirm import as drafts.
@@ -20,11 +22,13 @@ class AdminQuestionImportScreen extends StatefulWidget {
     super.key,
     this.service,
     this.scope,
+    this.chapterContext,
     this.embeddedInShell = false,
   });
 
   final QuestionImportService? service;
   final AdminQuestionScope? scope;
+  final AdminChapterQuestionContext? chapterContext;
   final bool embeddedInShell;
 
   @override
@@ -47,13 +51,41 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
   @override
   void initState() {
     super.initState();
-    _service = widget.service ?? QuestionImportService(scope: widget.scope);
+    _service =
+        widget.service ??
+        QuestionImportService(
+          scope: widget.scope,
+          chapterContext: widget.chapterContext,
+        );
   }
 
   @override
   void dispose() {
     _jsonController.dispose();
     super.dispose();
+  }
+
+  Widget _lockedChapterContext(ThemeData theme) {
+    final lines = widget.chapterContext!
+        .pathLabel(SyllabusService.instance)
+        .split('  ›  ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AdminSpacing.lg),
+      child: Column(
+        key: const ValueKey('chapter-import-locked-context'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final line in lines)
+            if (line.trim().isNotEmpty)
+              Text(
+                line,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+        ],
+      ),
+    );
   }
 
   Widget _lockedContext(ThemeData theme) {
@@ -89,7 +121,9 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
           for (final line in lines)
             Text(
               line,
-              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
         ],
       ),
@@ -234,6 +268,8 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
                   const SizedBox(height: AdminSpacing.lg),
                   if (widget.scope?.isQuestionBank == true)
                     _lockedContext(theme),
+                  if (widget.chapterContext != null)
+                    _lockedChapterContext(theme),
                   TextField(
                     key: const ValueKey('import-json'),
                     controller: _jsonController,
@@ -547,8 +583,8 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
   }
 }
 
-/// Sidebar Import Questions entry. Chapter import stays on the existing
-/// screen. Test Series import is reached only after a bank is selected.
+/// Sidebar Import Questions entry. Chapter import starts in the Chapter
+/// hierarchy. Test Series import is reached only after a bank is selected.
 class AdminQuestionImportEntryScreen extends StatelessWidget {
   const AdminQuestionImportEntryScreen({
     super.key,
@@ -575,7 +611,9 @@ class AdminQuestionImportEntryScreen extends StatelessWidget {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => const AdminQuestionImportScreen(),
+                builder: (_) => const AdminChapterQuestionsBrowserScreen(
+                  purpose: AdminChapterBrowserPurpose.import,
+                ),
               ),
             );
           },

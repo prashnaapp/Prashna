@@ -4,6 +4,7 @@ import '../../question_bank/repository/question_cloud_repository.dart';
 import '../../syllabus/data/models/syllabus_models.dart';
 import '../../syllabus/services/syllabus_service.dart';
 import '../../tests/data/models/test_models.dart';
+import '../data/admin_chapter_question_context.dart';
 import '../data/admin_compatible_test_query.dart';
 import '../data/admin_question_scope.dart';
 import '../data/admin_test_series_question_query.dart';
@@ -16,6 +17,7 @@ class QuestionImportValidator {
     QuestionCloudRepository? questionRepository,
     SyllabusService? syllabusService,
     this.scope,
+    this.chapterContext,
     this.loadTest,
   }) : _questions = questionRepository,
        _syllabus = syllabusService ?? SyllabusService.instance;
@@ -23,6 +25,7 @@ class QuestionImportValidator {
   final QuestionCloudRepository? _questions;
   final SyllabusService _syllabus;
   final AdminQuestionScope? scope;
+  final AdminChapterQuestionContext? chapterContext;
   final Future<TestModel?> Function(String testId)? loadTest;
 
   bool get _lockedBank => scope?.isQuestionBank ?? false;
@@ -51,11 +54,14 @@ class QuestionImportValidator {
       final recordErrors = <QuestionImportIssue>[];
 
       _validateContent(record, i, recordErrors);
+      final chapterRecord = _lockedBank
+          ? record
+          : _lockChapterContext(record, i, recordErrors);
       if (_lockedBank) {
         _validateLockedOwnership(record, i, recordErrors);
       } else {
-        _validateChapterOwnership(record, i, recordErrors);
-        _validateSyllabus(record, i, recordErrors);
+        _validateChapterOwnership(chapterRecord, i, recordErrors);
+        _validateSyllabus(chapterRecord, i, recordErrors);
       }
 
       final id = record.id?.trim();
@@ -87,7 +93,7 @@ class QuestionImportValidator {
         }
       }
 
-      final question = _toQuestion(record);
+      final question = _toQuestion(chapterRecord);
       final fingerprint = QuestionContentFingerprint.fromQuestion(question);
       final previousFingerprint = seenFingerprints[fingerprint];
       if (previousFingerprint != null) {
@@ -656,6 +662,79 @@ class QuestionImportValidator {
 
   bool _statementHasTeluguOptions(QuestionImportRecord record) {
     return record.options.any((option) => option.te.trim().isNotEmpty);
+  }
+
+  QuestionImportRecord _lockChapterContext(
+    QuestionImportRecord record,
+    int index,
+    List<QuestionImportIssue> errors,
+  ) {
+    final chapter = chapterContext;
+    if (chapter == null) return record;
+
+    void conflict(String field) {
+      errors.add(
+        QuestionImportIssue(
+          recordIndex: index,
+          field: field,
+          message: 'JSON cannot override the selected chapter.',
+        ),
+      );
+    }
+
+    String lockedText(String supplied, String? selected, String field) {
+      final value = supplied.trim();
+      final locked = selected?.trim() ?? '';
+      if (value.isNotEmpty && locked.isNotEmpty && value != locked) {
+        conflict(field);
+      }
+      return locked.isNotEmpty ? locked : value;
+    }
+
+    String? lockedOptional(String? supplied, String? selected, String field) {
+      final value = supplied?.trim() ?? '';
+      final locked = selected?.trim() ?? '';
+      if (value.isNotEmpty && locked.isNotEmpty && value != locked) {
+        conflict(field);
+      }
+      if (locked.isNotEmpty) return locked;
+      return value.isEmpty ? null : value;
+    }
+
+    return QuestionImportRecord(
+      id: record.id,
+      courseId: lockedText(record.courseId, chapter.courseId, 'courseId'),
+      paperId: lockedText(record.paperId, chapter.paperId, 'paperId'),
+      majorStudyAreaId: lockedOptional(
+        record.majorStudyAreaId,
+        chapter.majorStudyAreaId,
+        'majorStudyAreaId',
+      ),
+      contentTopicId: lockedOptional(
+        record.contentTopicId,
+        chapter.contentTopicId,
+        'contentTopicId',
+      ),
+      partId: lockedOptional(record.partId, chapter.partId, 'partId'),
+      topicId: lockedOptional(record.topicId, chapter.topicId, 'topicId'),
+      lessonId: record.lessonId,
+      syllabusUnitId: lockedOptional(
+        record.syllabusUnitId,
+        chapter.syllabusUnitId,
+        'syllabusUnitId',
+      ),
+      question: record.question,
+      options: record.options,
+      correctOption: record.correctOption,
+      explanation: record.explanation,
+      itemFormat: record.itemFormat,
+      statements: record.statements,
+      testId: record.testId,
+      contentArea: record.contentArea,
+      testSeriesCategory: record.testSeriesCategory,
+      seriesId: record.seriesId,
+      year: record.year,
+    );
   }
 
   void _validateChapterOwnership(

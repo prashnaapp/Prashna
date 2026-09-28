@@ -1,6 +1,7 @@
 import '../../question_bank/repository/question_cloud_repository.dart';
 import '../../syllabus/services/syllabus_service.dart';
 import '../../tests/repository/test_cloud_repository.dart';
+import '../data/admin_chapter_question_context.dart';
 import '../data/admin_question_scope.dart';
 import '../data/models/question_import_models.dart';
 import 'admin_question_test_assignment.dart';
@@ -17,6 +18,7 @@ class QuestionImportService {
     SyllabusService? syllabusService,
     QuestionImportValidator? validator,
     AdminQuestionScope? scope,
+    AdminChapterQuestionContext? chapterContext,
     TestCloudRepository? tests,
     AdminQuestionTestAssignment? assignment,
   }) : this._(
@@ -24,6 +26,7 @@ class QuestionImportService {
          syllabusService,
          validator,
          scope,
+         chapterContext,
          tests,
          assignment,
        );
@@ -33,6 +36,7 @@ class QuestionImportService {
     SyllabusService? syllabusService,
     QuestionImportValidator? validator,
     this.scope,
+    this.chapterContext,
     TestCloudRepository? tests,
     AdminQuestionTestAssignment? assignment,
   ) : _questions = questions,
@@ -43,6 +47,7 @@ class QuestionImportService {
             questionRepository: questions,
             syllabusService: syllabusService,
             scope: scope,
+            chapterContext: chapterContext,
             loadTest:
                 (tests ??
                         (scope?.isQuestionBank == true
@@ -54,6 +59,7 @@ class QuestionImportService {
   final QuestionCloudRepository _questions;
   final QuestionImportValidator _validator;
   final AdminQuestionScope? scope;
+  final AdminChapterQuestionContext? chapterContext;
   final AdminQuestionTestAssignment _assignment;
 
   /// Parses JSON and validates without writing Firestore.

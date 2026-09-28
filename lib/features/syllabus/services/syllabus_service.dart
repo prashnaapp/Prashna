@@ -1,31 +1,39 @@
+import 'package:flutter/foundation.dart';
+
 import '../data/models/syllabus_models.dart';
 import '../data/syllabus_dummy_data.dart';
 
 /// Syllabus API. UI must never read [SyllabusDummyData] directly.
 class SyllabusService {
-  SyllabusService._();
+  SyllabusService._({this._courses});
+
+  /// Catalog override for navigation tests. Production uses [instance].
+  @visibleForTesting
+  factory SyllabusService.testing(List<SyllabusCourse> courses) {
+    return SyllabusService._(courses: courses);
+  }
 
   static final SyllabusService instance = SyllabusService._();
 
-  List<SyllabusCourse> getAllCourses() =>
-      List.unmodifiable(SyllabusDummyData.all);
+  final List<SyllabusCourse>? _courses;
+
+  List<SyllabusCourse> get _catalog => _courses ?? SyllabusDummyData.all;
+
+  List<SyllabusCourse> getAllCourses() => List.unmodifiable(_catalog);
 
   /// MVP available exams (Group-II, Group-III).
-  List<SyllabusCourse> getAvailableCourses() => List.unmodifiable(
-    SyllabusDummyData.all.where((course) => course.isAvailable),
-  );
+  List<SyllabusCourse> getAvailableCourses() =>
+      List.unmodifiable(_catalog.where((course) => course.isAvailable));
 
   /// MVP launching-soon exams (Police SI, Constable).
-  List<SyllabusCourse> getLaunchingSoonCourses() => List.unmodifiable(
-    SyllabusDummyData.all.where((course) => !course.isAvailable),
-  );
+  List<SyllabusCourse> getLaunchingSoonCourses() =>
+      List.unmodifiable(_catalog.where((course) => !course.isAvailable));
 
-  List<SyllabusCourse> getEnrolledCourses() => List.unmodifiable(
-    SyllabusDummyData.all.where((course) => course.isEnrolled),
-  );
+  List<SyllabusCourse> getEnrolledCourses() =>
+      List.unmodifiable(_catalog.where((course) => course.isEnrolled));
 
   SyllabusCourse? getCourseById(String id) {
-    for (final course in SyllabusDummyData.all) {
+    for (final course in _catalog) {
       if (course.id == id) return course;
     }
     return null;

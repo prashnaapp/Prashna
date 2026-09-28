@@ -5,6 +5,7 @@ import '../../../question_bank/data/models/question_models.dart';
 import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
 import '../../../tests/data/models/test_models.dart';
+import '../../data/admin_chapter_question_context.dart';
 import '../../data/admin_question_scope.dart';
 import '../../data/admin_test_hierarchy.dart';
 import '../../data/question_create_outcome.dart';
@@ -26,6 +27,7 @@ class AdminQuestionForm extends StatefulWidget {
     this.onCancel,
     this.onDirtyChanged,
     this.lockedScope,
+    this.chapterContext,
     this.compatibleTests = const [],
     this.onAssignTestChanged,
   });
@@ -38,6 +40,9 @@ class AdminQuestionForm extends StatefulWidget {
 
   /// When set, course and bank ownership cannot be edited.
   final AdminQuestionScope? lockedScope;
+
+  /// When set, Chapter syllabus location is prefilled and locked.
+  final AdminChapterQuestionContext? chapterContext;
   final List<TestModel> compatibleTests;
   final ValueChanged<String?>? onAssignTestChanged;
 
@@ -88,6 +93,7 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
 
   Question? get _initial => widget.initialQuestion;
   bool get _lockedBank => widget.lockedScope?.isQuestionBank ?? false;
+  bool get _chapterLocked => widget.chapterContext != null;
   bool get _isGroupIii => _courseId == 'group-iii';
   bool get _isStatementFormat =>
       _canonicalMode && _itemFormat == QuestionItemFormat.statementMcq;
@@ -190,6 +196,17 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
       _contentTopicId = null;
       _syllabusUnitId = null;
       _year.text = locked.year?.toString() ?? '';
+    }
+    final chapter = widget.chapterContext;
+    if (chapter != null && initial == null) {
+      _courseId = chapter.courseId;
+      _paper.text = chapter.paperId ?? '';
+      _majorStudyAreaId = chapter.majorStudyAreaId;
+      _contentTopicId = chapter.contentTopicId;
+      _partId = chapter.partId;
+      _canonicalTopicId = chapter.topicId;
+      _lessonId = null;
+      _syllabusUnitId = chapter.syllabusUnitId;
     }
     if (_itemFormat == QuestionItemFormat.statementMcq) {
       _ensureFourEnglishOptions();
@@ -721,25 +738,12 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                     ),
             ],
             validator: (value) => _required(value, 'Topic'),
-            onChanged: (value) =>
-                _onUserEdit(() => setState(() => _canonicalTopicId = value)),
-          ),
-          _canonicalDropdown(
-            label: 'Lesson',
-            value: _lessonId,
-            items: [
-              for (final part in paper.parts)
-                if (part.id == _partId)
-                  for (final topic in part.topics)
-                    if (topic.id == _canonicalTopicId)
-                      for (final item in topic.lessons)
-                        DropdownMenuItem(
-                          value: item.id,
-                          child: Text(item.displayName),
-                        ),
-            ],
-            onChanged: (value) =>
-                _onUserEdit(() => setState(() => _lessonId = value)),
+            onChanged: (value) => _onUserEdit(() {
+              setState(() {
+                if (value != _canonicalTopicId) _lessonId = null;
+                _canonicalTopicId = value;
+              });
+            }),
           ),
         ],
       ],
@@ -830,7 +834,8 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_lockedBank) _lockedOwnership(context),
-              if (!_lockedBank)
+              if (_chapterLocked) _lockedChapterContext(context),
+              if (!_lockedBank && !_chapterLocked)
                 DropdownButtonFormField<String>(
                   key: const ValueKey('question-course'),
                   initialValue: _courseId,
@@ -863,8 +868,9 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                           });
                         }),
                 ),
-              if (_canonicalMode && !_lockedBank) _canonicalFields(context),
-              if (!_canonicalMode && !_lockedBank) ...[
+              if (_canonicalMode && !_lockedBank && !_chapterLocked)
+                _canonicalFields(context),
+              if (!_canonicalMode && !_lockedBank && !_chapterLocked) ...[
                 _field(_paper, 'Paper ID'),
                 _field(_section, 'Section ID'),
                 _field(_topic, 'Topic ID'),
@@ -1178,6 +1184,18 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _lockedChapterContext(BuildContext context) {
+    final chapter = widget.chapterContext!;
+    return Text(
+      chapter.pathLabel(SyllabusService.instance),
+      key: const ValueKey('chapter-question-create-context'),
+      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: AdminColors.textPrimary,
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../course_enrollment/model/course.dart';
 import '../../../question_bank/data/models/question_models.dart';
 import '../../../tests/data/models/test_models.dart';
+import '../../data/admin_chapter_question_context.dart';
 import '../../data/admin_question_scope.dart';
 import '../../services/admin_question_service.dart';
 import '../../services/admin_question_test_assignment.dart';
@@ -20,6 +21,7 @@ class AdminQuestionFormScreen extends StatefulWidget {
     this.question,
     this.service,
     this.scope,
+    this.chapterContext,
     this.assignment,
   });
 
@@ -28,6 +30,9 @@ class AdminQuestionFormScreen extends StatefulWidget {
 
   /// Locked Test Series bank. Chapter create leaves this null.
   final AdminQuestionScope? scope;
+
+  /// Locked Chapter syllabus location from the Chapter Questions browser.
+  final AdminChapterQuestionContext? chapterContext;
   final AdminQuestionTestAssignment? assignment;
 
   @override
@@ -174,7 +179,9 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
             }
             final courses = snapshot.data?.courses ?? const <Course>[];
             final tests = snapshot.data?.tests ?? const <TestModel>[];
-            if (!_lockedBank && courses.isEmpty) {
+            if (!_lockedBank &&
+                widget.chapterContext == null &&
+                courses.isEmpty) {
               return const AdminEmptyState(
                 title: 'No courses available',
                 message: 'No published courses are available.',
@@ -194,6 +201,9 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
                     courses: courses,
                     initialQuestion: widget.question,
                     lockedScope: _lockedBank ? widget.scope : null,
+                    chapterContext: widget.question == null
+                        ? widget.chapterContext
+                        : null,
                     compatibleTests: _lockedBank ? tests : const [],
                     onAssignTestChanged: _lockedBank
                         ? (testId) => _assignTestId = testId

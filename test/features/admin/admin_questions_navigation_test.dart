@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:telangana_prep/features/admin/admin_routes.dart';
 import 'package:telangana_prep/features/admin/data/admin_question_scope.dart';
+import 'package:telangana_prep/features/admin/presentation/screens/admin_chapter_questions_browser_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_question_list_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_questions_home_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_test_series_questions_browser_screen.dart';
@@ -45,8 +46,8 @@ void main() {
             if (name == AdminRoutes.chapterQuestions) {
               return MaterialPageRoute<void>(
                 settings: settings,
-                builder: (_) => AdminQuestionListScreen(
-                  service: service,
+                builder: (_) => AdminChapterQuestionsBrowserScreen(
+                  questionService: service,
                   embeddedInShell: true,
                 ),
               );
@@ -94,9 +95,7 @@ void main() {
     expect(find.text('Previous Papers'), findsNothing);
   });
 
-  testWidgets('Chapter Questions opens the existing Question Bank workflow', (
-    tester,
-  ) async {
+  testWidgets('Chapter Questions opens Group-II and Group-III', (tester) async {
     final service = _FakeAdminQuestionService();
     await tester.pumpWidget(navApp(service: service));
     await tester.pumpAndSettle();
@@ -104,15 +103,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('questions-choice-chapter')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AdminQuestionListScreen), findsOneWidget);
-    expect(find.text('Question Bank'), findsWidgets);
-    expect(find.text('Create Question'), findsWidgets);
-    expect(find.text('Import Questions'), findsWidgets);
-    expect(
-      find.byKey(const ValueKey('question-list-course-context')),
-      findsOneWidget,
-    );
-    expect(service.loadQuestionsCalls, 1);
+    expect(find.byType(AdminChapterQuestionsBrowserScreen), findsOneWidget);
+    expect(find.byType(AdminQuestionListScreen), findsNothing);
+    expect(find.text('Group-II'), findsOneWidget);
+    expect(find.text('Group-III'), findsOneWidget);
+    expect(service.loadQuestionsCalls, 0);
   });
 
   testWidgets('Test Series Questions opens canonical Group-II and Group-III', (

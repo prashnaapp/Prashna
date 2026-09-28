@@ -11,6 +11,7 @@ import '../screens/admin_chapters_browser_screen.dart';
 import '../screens/admin_dashboard_screen.dart';
 import '../screens/admin_question_form_screen.dart';
 import '../screens/admin_question_import_screen.dart';
+import '../screens/admin_chapter_questions_browser_screen.dart';
 import '../screens/admin_question_list_screen.dart';
 import '../screens/admin_questions_home_screen.dart';
 import '../screens/admin_test_series_questions_browser_screen.dart';
@@ -220,7 +221,7 @@ class _AdminShellState extends State<AdminShell> {
       AdminRoutes.questions => const AdminQuestionsHomeScreen(
         embeddedInShell: true,
       ),
-      AdminRoutes.chapterQuestions => const AdminQuestionListScreen(
+      AdminRoutes.chapterQuestions => const AdminChapterQuestionsBrowserScreen(
         embeddedInShell: true,
       ),
       AdminRoutes.testSeriesQuestions =>

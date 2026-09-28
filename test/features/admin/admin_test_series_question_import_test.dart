@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:telangana_prep/features/admin/data/admin_question_scope.dart';
 import 'package:telangana_prep/features/admin/data/models/question_import_models.dart';
+import 'package:telangana_prep/features/admin/presentation/screens/admin_chapter_questions_browser_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_question_import_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_test_series_question_bank_screen.dart';
 import 'package:telangana_prep/features/admin/services/admin_question_service.dart';
@@ -626,8 +627,13 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('import-entry-chapter')));
     await tester.pumpAndSettle();
+    expect(find.byType(AdminChapterQuestionsBrowserScreen), findsOneWidget);
     expect(find.byKey(const ValueKey('import-locked-ownership')), findsNothing);
-    expect(find.byKey(const ValueKey('import-json')), findsOneWidget);
+    expect(find.byKey(const ValueKey('import-json')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('import-entry-test-series')),
+      findsNothing,
+    );
   });
 }
 
