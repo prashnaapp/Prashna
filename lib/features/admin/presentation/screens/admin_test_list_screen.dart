@@ -282,6 +282,9 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
                     return AdminTestRow(
                       test: test,
                       onEdit: () => _openEdit(test),
+                      onManageQuestions: () => Navigator.of(
+                        context,
+                      ).pushNamed(AdminRoutes.testAssignments, arguments: test),
                       onPublish: test.status == TestPublicationStatus.draft
                           ? () => _setStatus(
                               test,
@@ -290,18 +293,14 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
                           : null,
                       onUnpublish:
                           test.status == TestPublicationStatus.published
-                          ? () =>
-                                _setStatus(test, TestPublicationStatus.draft)
+                          ? () => _setStatus(test, TestPublicationStatus.draft)
                           : null,
                       onArchive: test.status != TestPublicationStatus.archived
-                          ? () => _setStatus(
-                              test,
-                              TestPublicationStatus.archived,
-                            )
+                          ? () =>
+                                _setStatus(test, TestPublicationStatus.archived)
                           : null,
                       onRestore: test.status == TestPublicationStatus.archived
-                          ? () =>
-                                _setStatus(test, TestPublicationStatus.draft)
+                          ? () => _setStatus(test, TestPublicationStatus.draft)
                           : null,
                     );
                   },

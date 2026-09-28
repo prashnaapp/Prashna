@@ -14,6 +14,7 @@ class AdminTestRow extends StatelessWidget {
     super.key,
     required this.test,
     required this.onEdit,
+    this.onManageQuestions,
     this.onPublish,
     this.onUnpublish,
     this.onArchive,
@@ -23,6 +24,7 @@ class AdminTestRow extends StatelessWidget {
 
   final TestModel test;
   final VoidCallback onEdit;
+  final VoidCallback? onManageQuestions;
   final VoidCallback? onPublish;
   final VoidCallback? onUnpublish;
   final VoidCallback? onArchive;
@@ -53,9 +55,7 @@ class AdminTestRow extends StatelessWidget {
     final paperId = test.paperId?.trim();
     if (paperId != null && paperId.isNotEmpty) {
       final paper = syllabus.getPaper(courseId: courseId, paperId: paperId);
-      parts.add(
-        paper == null ? paperId : AdminTestHierarchy.paperLabel(paper),
-      );
+      parts.add(paper == null ? paperId : AdminTestHierarchy.paperLabel(paper));
 
       final partId = test.partId?.trim();
       if (partId != null && partId.isNotEmpty) {
@@ -131,8 +131,7 @@ class AdminTestRow extends StatelessWidget {
       '${test.marks} marks',
       '${test.durationMinutes} min',
       if (test.difficulty.trim().isNotEmpty) test.difficulty,
-      if (test.negativeMarking.trim().isNotEmpty)
-        '−${test.negativeMarking}',
+      if (test.negativeMarking.trim().isNotEmpty) '−${test.negativeMarking}',
     ];
 
     final actions = Wrap(
@@ -146,6 +145,13 @@ class AdminTestRow extends StatelessWidget {
           onPressed: onEdit,
           icon: const Icon(Icons.edit_outlined, size: 20),
         ),
+        if (onManageQuestions != null)
+          IconButton(
+            key: ValueKey('test-manage-questions-${test.id}'),
+            tooltip: 'Manage Questions',
+            onPressed: onManageQuestions,
+            icon: const Icon(Icons.quiz_outlined, size: 20),
+          ),
         if (onPublish != null)
           IconButton(
             key: ValueKey('test-publish-${test.id}'),

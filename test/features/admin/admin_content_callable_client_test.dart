@@ -87,4 +87,30 @@ void main() {
       expect(names, ['adminSetTestStatus', 'adminSetTestStatus']);
     },
   );
+
+  test('assignment owner lookup uses the bounded admin callable', () async {
+    String? calledName;
+    Map<String, dynamic>? calledData;
+    final client = AdminContentCallableClient(
+      callOverride: (name, data) async {
+        calledName = name;
+        calledData = data;
+        return {
+          'assignments': [
+            {'questionId': 'q-1', 'testId': 'test-1'},
+          ],
+        };
+      },
+    );
+
+    final owners = await client.getQuestionAssignments(
+      questionIds: const ['q-1', 'q-2'],
+    );
+
+    expect(calledName, 'adminGetQuestionAssignments');
+    expect(calledData, {
+      'questionIds': ['q-1', 'q-2'],
+    });
+    expect(owners, {'q-1': 'test-1'});
+  });
 }

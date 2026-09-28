@@ -40,6 +40,56 @@ test('client-supplied admin flags never grant access', () => {
   );
 });
 
+test('admin assignment lookup returns owners in one bounded read', async () => {
+  const db = new FakeFirestore();
+  const svc = createAdminContentService(db);
+  await db.collection('question_assignments').doc('q-1').set({
+    questionId: 'q-1',
+    testId: 'test-1',
+  });
+  await db.collection('tests').doc('legacy-test').set({
+    questionIds: ['q-legacy'],
+  });
+
+  const result = await invoke(
+    (content, data) => content.getQuestionAssignments(data),
+    {
+      ...adminRequest({
+        questionIds: ['q-1', 'q-missing', 'q-1'],
+      }),
+      _service: svc,
+    },
+  );
+
+  assert.deepEqual(result, {
+    assignments: [{ questionId: 'q-1', testId: 'test-1' }],
+    legacyReferences: [],
+  });
+});
+
+test('admin assignment lookup reports legacy Test references without locks', async () => {
+  const db = new FakeFirestore();
+  const svc = createAdminContentService(db);
+  await db.collection('tests').doc('legacy-test').set({
+    questionIds: ['q-legacy'],
+  });
+
+  const result = await invoke(
+    (content, data) => content.getQuestionAssignments(data),
+    {
+      ...adminRequest({ questionIds: ['q-legacy'] }),
+      _service: svc,
+    },
+  );
+
+  assert.deepEqual(result, {
+    assignments: [],
+    legacyReferences: [
+      { questionId: 'q-legacy', testIds: ['legacy-test'] },
+    ],
+  });
+});
+
 test('admin create question is accepted after claim check', async () => {
   const db = new FakeFirestore();
   const svc = createAdminContentService(db);

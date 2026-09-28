@@ -25,6 +25,16 @@ Map<String, dynamic> encodeCallableWriteData(Map<String, dynamic> data) {
   return encoded;
 }
 
+class AdminQuestionAssignmentState {
+  const AdminQuestionAssignmentState({
+    required this.owners,
+    required this.legacyTestIds,
+  });
+
+  final Map<String, String> owners;
+  final Map<String, List<String>> legacyTestIds;
+}
+
 /// Thin asia-south1 callable client for trusted admin catalog writes.
 class AdminContentCallableClient {
   AdminContentCallableClient({this.functions, this.callOverride});
@@ -101,6 +111,52 @@ class AdminContentCallableClient {
     }).then((_) {});
   }
 
+  Future<Map<String, String>> getQuestionAssignments({
+    required List<String> questionIds,
+  }) async {
+    return (await getQuestionAssignmentState(questionIds: questionIds)).owners;
+  }
+
+  Future<AdminQuestionAssignmentState> getQuestionAssignmentState({
+    required List<String> questionIds,
+  }) async {
+    final result = await _call('adminGetQuestionAssignments', {
+      'questionIds': questionIds,
+    });
+    final assignments = <String, String>{};
+    final rawAssignments = result['assignments'];
+    if (rawAssignments is List) {
+      for (final item in rawAssignments) {
+        if (item is! Map) continue;
+        final questionId = item['questionId'];
+        final testId = item['testId'];
+        if (questionId is String &&
+            testId is String &&
+            testId.trim().isNotEmpty) {
+          assignments[questionId] = testId;
+        }
+      }
+    }
+    final legacyTestIds = <String, List<String>>{};
+    final rawLegacy = result['legacyReferences'];
+    if (rawLegacy is List) {
+      for (final item in rawLegacy) {
+        if (item is! Map || item['questionId'] is! String) continue;
+        final ids = item['testIds'];
+        if (ids is List) {
+          legacyTestIds[item['questionId'] as String] = [
+            for (final id in ids)
+              if (id is String && id.trim().isNotEmpty) id,
+          ];
+        }
+      }
+    }
+    return AdminQuestionAssignmentState(
+      owners: assignments,
+      legacyTestIds: legacyTestIds,
+    );
+  }
+
   Future<String> createTest({
     required String testId,
     required Map<String, dynamic> data,
@@ -173,10 +229,7 @@ class AdminContentCallableClient {
       throw const FormatException('Authentication required.');
     }
 
-    final uri = Uri.https(
-      '$_region-$_projectId.cloudfunctions.net',
-      '/$name',
-    );
+    final uri = Uri.https('$_region-$_projectId.cloudfunctions.net', '/$name');
     final response = await http
         .post(
           uri,
@@ -196,7 +249,8 @@ class AdminContentCallableClient {
     }
 
     final error = decoded['error'];
-    final message = _callableErrorMessage(error) ??
+    final message =
+        _callableErrorMessage(error) ??
         'Callable $name failed (${response.statusCode}).';
     debugPrint(
       'AdminContentCallableClient.$name failed: HTTP ${response.statusCode} $message',

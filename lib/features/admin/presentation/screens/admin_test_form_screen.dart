@@ -9,6 +9,7 @@ import '../shell/admin_dirty_scope.dart';
 import '../widgets/admin_test_form.dart';
 import '../widgets/admin_ui/admin_empty_state.dart';
 import '../widgets/admin_ui/admin_loading_surface.dart';
+import 'admin_test_assignment_screen.dart';
 
 class AdminTestFormScreen extends StatefulWidget {
   const AdminTestFormScreen({
@@ -126,6 +127,24 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
                   ),
                 )
               : null,
+          actions: [
+            if (widget.test != null)
+              IconButton(
+                key: const ValueKey('test-form-manage-questions'),
+                tooltip: 'Manage Questions',
+                onPressed: _dirty
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AdminTestAssignmentScreen(
+                            test: widget.test!,
+                            service: _service,
+                          ),
+                        ),
+                      ),
+                icon: const Icon(Icons.quiz_outlined),
+              ),
+          ],
         ),
         body: FutureBuilder<List<Course>>(
           future: _coursesFuture,

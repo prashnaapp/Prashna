@@ -171,12 +171,19 @@ class FakeDocRef {
 }
 
 class FakeCollectionRef {
-  constructor(db, path) {
+  constructor(db, path, filters = []) {
     this.db = db;
     this.path = path;
+    this.filters = filters;
   }
   doc(id) {
     return new FakeDocRef(this.db, `${this.path}/${id}`);
+  }
+  where(field, options = {}) {
+    return new FakeCollectionRef(this.db, this.path, [
+      ...this.filters,
+      { field, options },
+    ]);
   }
   async get() {
     const prefix = `${this.path}/`;
@@ -185,7 +192,16 @@ class FakeCollectionRef {
       if (!path.startsWith(prefix)) continue;
       const rest = path.slice(prefix.length);
       if (!rest || rest.includes('/')) continue;
-      docs.push(new FakeDocSnapshot(new FakeDocRef(this.db, path), data));
+      const matches = this.filters.every(({ field, options }) => {
+        if (!Array.isArray(options['array-contains-any'])) return true;
+        const values = Array.isArray(data[field]) ? data[field] : [];
+        return options['array-contains-any'].some((item) =>
+          values.includes(item),
+        );
+      });
+      if (matches) {
+        docs.push(new FakeDocSnapshot(new FakeDocRef(this.db, path), data));
+      }
     }
     return { size: docs.length, docs, empty: docs.length === 0 };
   }
@@ -272,6 +288,10 @@ export class FakeFirestore {
 
   doc(path) {
     return new FakeDocRef(this, path);
+  }
+
+  async getAll(...refs) {
+    return Promise.all(refs.map((ref) => ref.get()));
   }
 
   /**

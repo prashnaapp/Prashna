@@ -345,6 +345,60 @@ export function createAdminContentService(db) {
       return result;
     },
 
+    async getQuestionAssignments({ questionIds } = {}) {
+      if (!Array.isArray(questionIds) || questionIds.length > 500) {
+        fail(
+          'invalid-argument',
+          'Question assignment lookup supports at most 500 question IDs.',
+        );
+      }
+      const ids = [];
+      const seen = new Set();
+      for (const value of questionIds) {
+        const id = trimToNull(value);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        ids.push(id);
+      }
+      if (ids.length === 0) return { assignments: [] };
+
+      const snapshots = await db.getAll(
+        ...ids.map((id) => assignmentsCol(db).doc(id)),
+      );
+      const legacyReferences = new Map(ids.map((id) => [id, new Set()]));
+      for (let i = 0; i < ids.length; i += 30) {
+        const chunk = ids.slice(i, i + 30);
+        const tests = await testsCol(db)
+          .where('questionIds', 'array-contains-any', chunk)
+          .get();
+        for (const test of tests.docs) {
+          const questionIds = Array.isArray(test.data()?.questionIds)
+            ? test.data().questionIds
+            : [];
+          for (const questionId of chunk) {
+            if (questionIds.includes(questionId)) {
+              legacyReferences.get(questionId).add(test.id);
+            }
+          }
+        }
+      }
+      return {
+        assignments: snapshots
+          .filter((snapshot) => snapshot.exists)
+          .map((snapshot) => ({
+            questionId: snapshot.id,
+            testId: trimToNull(snapshot.data()?.testId),
+          }))
+          .filter((assignment) => assignment.testId),
+        legacyReferences: [...legacyReferences.entries()]
+          .filter(([, testIds]) => testIds.size > 0)
+          .map(([questionId, testIds]) => ({
+            questionId,
+            testIds: [...testIds],
+          })),
+      };
+    },
+
     async createTest({ testId, data } = {}, options = {}) {
       const id = trimToNull(testId) || trimToNull(data?.id);
       if (!id) fail('invalid-argument', 'Test ID is required.');

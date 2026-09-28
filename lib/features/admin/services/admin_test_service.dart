@@ -7,6 +7,9 @@ import '../../tests/data/test_cloud_mapper.dart';
 import '../../tests/repository/test_cloud_repository.dart';
 import '../../syllabus/data/models/syllabus_models.dart';
 import '../../syllabus/services/syllabus_service.dart';
+import '../data/admin_content_callable_client.dart';
+import '../data/admin_question_scope.dart';
+import '../data/admin_test_series_question_query.dart';
 
 /// Admin-only orchestration for Test Series definitions.
 ///
@@ -42,6 +45,115 @@ class AdminTestService {
 
   Future<TestModel?> getTest(String testId) {
     return _tests.getAdminTestById(testId);
+  }
+
+  Future<List<Question>> loadQuestionsByIds(List<String> ids) {
+    return _questions.getAdminByIds(ids);
+  }
+
+  Future<Map<String, String>> loadQuestionAssignmentOwners(List<String> ids) {
+    return _questions.getQuestionAssignmentOwners(ids);
+  }
+
+  Future<AdminQuestionAssignmentState> loadQuestionAssignmentState(
+    List<String> ids,
+  ) {
+    return _questions.getQuestionAssignmentState(ids);
+  }
+
+  Future<QuestionBankPage> loadCompatibleQuestionPage(
+    TestModel test, {
+    String? searchText,
+    String? cursorDocumentId,
+    String? cursorSearchText,
+  }) async {
+    final scope = _questionScopeForTest(test);
+    if (scope.isTestSeries) {
+      if (!scope.isQuestionBank) {
+        throw const FormatException(
+          'Test Series ownership is incomplete for this Test.',
+        );
+      }
+      return _questions.loadTestSeriesQuestionPage(
+        AdminTestSeriesQuestionQuery.fromScope(
+          scope,
+          searchText: searchText,
+          cursorDocumentId: cursorDocumentId,
+          cursorSearchText: cursorSearchText,
+        ),
+      );
+    }
+
+    final questions = await _questions.loadQuestions(
+      filter: QuestionFilter(
+        courseId: test.examId,
+        paperId: test.paperId,
+        partId: test.partId,
+        activeOnly: false,
+      ),
+    );
+    final normalizedSearch = searchText?.trim().toLowerCase() ?? '';
+    final compatible = [
+      for (final question in questions)
+        if ((question.contentArea == null ||
+                question.contentArea ==
+                    AdminQuestionScope.contentAreaChapter) &&
+            questionMatchesChapterTest(question, test) &&
+            (normalizedSearch.isEmpty ||
+                _questionSearchText(question).contains(normalizedSearch)))
+          question,
+    ];
+    return QuestionBankPage(
+      questions: compatible,
+      hasMore: false,
+      cursorDocumentId: compatible.isEmpty ? null : compatible.last.id,
+    );
+  }
+
+  static AdminQuestionScope _questionScopeForTest(TestModel test) {
+    switch (test.category) {
+      case TestCategoryType.partTests:
+        return AdminQuestionScope(
+          contentArea: AdminQuestionScope.contentAreaTestSeries,
+          courseId: test.examId,
+          testSeriesCategory: AdminQuestionScope.categoryPart,
+          paperId: test.paperId,
+        );
+      case TestCategoryType.mockTests:
+        return AdminQuestionScope(
+          contentArea: AdminQuestionScope.contentAreaTestSeries,
+          courseId: test.examId,
+          testSeriesCategory: AdminQuestionScope.categoryMock,
+          seriesId: test.seriesId,
+        );
+      case TestCategoryType.previousYear:
+        return AdminQuestionScope(
+          contentArea: AdminQuestionScope.contentAreaTestSeries,
+          courseId: test.examId,
+          testSeriesCategory: AdminQuestionScope.categoryPreviousYear,
+          year: test.year,
+        );
+      case TestCategoryType.chapterTests:
+      case TestCategoryType.paperTests:
+        return AdminQuestionScope(
+          contentArea: AdminQuestionScope.contentAreaChapter,
+          courseId: test.examId,
+        );
+    }
+  }
+
+  static bool questionMatchesChapterTest(Question question, TestModel test) {
+    final unitId = test.syllabusUnitId?.trim();
+    if (unitId == null || unitId.isEmpty) {
+      return true;
+    }
+    return questionMatchesChapterUnit(question, unitId);
+  }
+
+  static String _questionSearchText(Question question) {
+    final topLevel = question.question.trim();
+    if (topLevel.isNotEmpty) return topLevel.toLowerCase();
+    return question.content?.en.question.trim().toLowerCase() ?? '';
   }
 
   List<String> validate(TestModel test, {String? documentId}) {
@@ -377,7 +489,8 @@ class AdminTestService {
         errors.add('Question "$id" does not exist.');
         continue;
       }
-      if (!question.isActive) {
+      if (test.status == TestPublicationStatus.published &&
+          !question.isActive) {
         errors.add('Question "$id" is inactive.');
       }
       if (question.courseId != test.examId) {
@@ -385,11 +498,17 @@ class AdminTestService {
       }
       if (test.paperId != null &&
           test.paperId!.isNotEmpty &&
-          question.paperId != test.paperId) {
+          question.paperId.isNotEmpty &&
+          question.paperId != test.paperId &&
+          (test.category == TestCategoryType.chapterTests ||
+              test.category == TestCategoryType.paperTests ||
+              test.category == TestCategoryType.partTests)) {
         errors.add('Question "$id" does not match the test paper.');
       }
       if (test.partId != null &&
           test.partId!.isNotEmpty &&
+          question.partId != null &&
+          question.partId!.isNotEmpty &&
           question.partId != test.partId) {
         errors.add('Question "$id" does not match the test part.');
       }

@@ -366,6 +366,26 @@ class QuestionCloudRepository {
     }
   }
 
+  /// Reads authoritative assignment owners through the admin callable.
+  ///
+  /// Assignment documents are intentionally not readable from the client
+  /// Firestore rules, so this remains a bounded server-side lookup.
+  Future<Map<String, String>> getQuestionAssignmentOwners(
+    List<String> questionIds,
+  ) async {
+    if (questionIds.isEmpty) return const {};
+    return _callables.getQuestionAssignments(questionIds: questionIds);
+  }
+
+  Future<AdminQuestionAssignmentState> getQuestionAssignmentState(
+    List<String> questionIds,
+  ) async {
+    if (questionIds.isEmpty) {
+      return const AdminQuestionAssignmentState(owners: {}, legacyTestIds: {});
+    }
+    return _callables.getQuestionAssignmentState(questionIds: questionIds);
+  }
+
   /// Loads questions by stable IDs, preserving [ids] order.
   Future<List<Question>> getByIds(List<String> ids) async {
     final testGet = _getByIdsForTest;
@@ -394,6 +414,42 @@ class QuestionCloudRepository {
       rethrow;
     } catch (error, stack) {
       debugPrint('QuestionCloudRepository.getByIds: $error\n$stack');
+      rethrow;
+    }
+  }
+
+  /// Bounded admin-only batch read for assignment management.
+  ///
+  /// Unlike [getByIds], this query is only used through an Admin Question
+  /// service, where the admin Firestore rule permits the bounded batch query.
+  Future<List<Question>> getAdminByIds(List<String> ids) async {
+    if (ids.isEmpty) return const [];
+    try {
+      final byId = <String, Question>{};
+      for (final chunk in QuestionFingerprintQuery.chunks(ids)) {
+        final snapshot = await _questions
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+        for (final doc in snapshot.docs) {
+          final question = QuestionCloudMapper.fromFirestore(
+            doc.id,
+            doc.data(),
+          );
+          if (question != null) byId[question.id] = question;
+        }
+      }
+      return [
+        for (final id in ids)
+          if (byId[id] != null) byId[id]!,
+      ];
+    } on FirebaseException catch (error, stack) {
+      debugPrint(
+        'FirebaseException in QuestionCloudRepository.getAdminByIds: '
+        'code=${error.code} message=${error.message}\n$stack',
+      );
+      rethrow;
+    } catch (error, stack) {
+      debugPrint('QuestionCloudRepository.getAdminByIds: $error\n$stack');
       rethrow;
     }
   }

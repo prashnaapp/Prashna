@@ -367,6 +367,14 @@ export const adminSetQuestionActive = onCall(
   (request) => withAdminContent(request, (content, data) => content.setQuestionActive(data)),
 );
 
+export const adminGetQuestionAssignments = onCall(
+  { region: 'asia-south1' },
+  (request) => withAdminContent(
+    request,
+    (content, data) => content.getQuestionAssignments(data),
+  ),
+);
+
 export const adminCreateTest = onCall(
   { region: 'asia-south1' },
   (request) => withAdminContent(request, (content, data) => content.createTest(

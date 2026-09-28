@@ -15,6 +15,7 @@ import '../screens/admin_question_list_screen.dart';
 import '../screens/admin_questions_home_screen.dart';
 import '../screens/admin_test_series_questions_browser_screen.dart';
 import '../screens/admin_test_form_screen.dart';
+import '../screens/admin_test_assignment_screen.dart';
 import '../screens/admin_test_series_browser_screen.dart';
 import 'admin_dirty_scope.dart';
 import 'admin_nav_destination.dart';
@@ -253,6 +254,12 @@ class _AdminShellState extends State<AdminShell> {
                 test: test,
                 scope: AdminTestScope.fromTest(test),
               )
+            : const AdminTestSeriesBrowserScreen(embeddedInShell: true);
+      }(),
+      AdminRoutes.testAssignments => () {
+        final test = settings.arguments;
+        return test is TestModel
+            ? AdminTestAssignmentScreen(test: test)
             : const AdminTestSeriesBrowserScreen(embeddedInShell: true);
       }(),
       _ => AdminDashboardScreen(

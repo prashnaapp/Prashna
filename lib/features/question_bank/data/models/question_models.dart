@@ -132,6 +132,9 @@ class Question {
     this.isActive = true,
     this.itemFormat,
     this.contentFingerprint,
+    this.contentArea,
+    this.testSeriesCategory,
+    this.seriesId,
   });
 
   final String id;
@@ -164,9 +167,17 @@ class Question {
   /// Absent on legacy documents; treat as [QuestionItemFormat.standardMcq].
   final QuestionItemFormat? itemFormat;
 
-  /// Normalized content fingerprint. Written by JSON import; Manual Create
-  /// currently does not set this field.
+  /// Normalized content fingerprint.
   final String? contentFingerprint;
+
+  /// Authoritative Question pool. Absent on legacy documents.
+  final String? contentArea;
+
+  /// Test Series subtype. Absent on Chapter and legacy documents.
+  final String? testSeriesCategory;
+
+  /// Grand Test group. Only meaningful for Test Series mock Questions.
+  final String? seriesId;
 
   QuestionItemFormat get resolvedItemFormat =>
       itemFormat ?? QuestionItemFormat.standardMcq;

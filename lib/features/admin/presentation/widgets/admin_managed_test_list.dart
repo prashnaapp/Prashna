@@ -124,6 +124,9 @@ class AdminManagedTestList extends StatelessWidget {
             AdminTestRow(
               test: test,
               onEdit: () => _openEdit(context, test),
+              onManageQuestions: () => Navigator.of(
+                context,
+              ).pushNamed(AdminRoutes.testAssignments, arguments: test),
               onPublish: test.status == TestPublicationStatus.draft
                   ? () => _setStatus(
                       context,

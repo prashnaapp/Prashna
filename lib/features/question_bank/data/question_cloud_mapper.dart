@@ -88,6 +88,9 @@ abstract final class QuestionCloudMapper {
       status: parsePublicationStatus(data['status'] as String?),
       itemFormat: parseItemFormat(data['itemFormat'] as String?),
       contentFingerprint: (data['contentFingerprint'] as String?)?.trim(),
+      contentArea: (data['contentArea'] as String?)?.trim(),
+      testSeriesCategory: (data['testSeriesCategory'] as String?)?.trim(),
+      seriesId: (data['seriesId'] as String?)?.trim(),
     );
   }
 
