@@ -106,6 +106,7 @@ void main() {
     String? paperId = 'group-ii-paper-i',
     String? syllabusUnitId = 'group-ii-paper-i-area-01',
     List<String> questionIds = const [],
+    String difficulty = 'Medium',
   }) {
     return TestModel(
       id: id,
@@ -116,7 +117,7 @@ void main() {
       marks: 10,
       durationMinutes: 30,
       negativeMarking: '0',
-      difficulty: 'Medium',
+      difficulty: difficulty,
       status: status,
       paperId: paperId,
       syllabusUnitId: syllabusUnitId,
@@ -212,31 +213,30 @@ void main() {
       expect(dirty, isTrue);
     });
 
-    testWidgets('difficulty dropdown marks dirty', (tester) async {
-      var dirty = false;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: AdminQuestionForm(
-                courses: const [groupIi, groupIii],
-                initialQuestion: buildQuestion(),
-                onSubmit: (_) async {},
-                onDirtyChanged: (value) => dirty = value,
+    testWidgets('create and edit forms do not expose difficulty', (
+      tester,
+    ) async {
+      Future<void> pumpForm({Question? initialQuestion}) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: AdminQuestionForm(
+                  courses: const [groupIi, groupIii],
+                  initialQuestion: initialQuestion,
+                  onSubmit: (_) async {},
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await settleDirtyTracking(tester);
-      expect(dirty, isFalse);
+        );
+        await settleDirtyTracking(tester);
+        expect(find.byKey(const ValueKey('question-difficulty')), findsNothing);
+        expect(find.text('Difficulty'), findsNothing);
+      }
 
-      await openDropdownAndSelect(
-        tester,
-        fieldKey: const ValueKey('question-difficulty'),
-        optionText: 'hard',
-      );
-      expect(dirty, isTrue);
+      await pumpForm();
+      await pumpForm(initialQuestion: buildQuestion());
     });
 
     testWidgets('syllabus paper dropdown marks dirty', (tester) async {
@@ -295,6 +295,32 @@ void main() {
   });
 
   group('Test form dirty coverage', () {
+    testWidgets('create and edit forms do not expose difficulty', (
+      tester,
+    ) async {
+      Future<void> pumpForm({TestModel? initialTest}) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: AdminTestForm(
+                  courses: const [groupIi, groupIii],
+                  initialTest: initialTest,
+                  initialCourseId: 'group-ii',
+                  onSubmit: (_) async {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await settleDirtyTracking(tester);
+        expect(find.text('Difficulty'), findsNothing);
+      }
+
+      await pumpForm();
+      await pumpForm(initialTest: buildTest(difficulty: 'Hard'));
+    });
+
     testWidgets('edit load stays clean after defaults populate', (
       tester,
     ) async {

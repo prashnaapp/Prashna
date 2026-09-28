@@ -130,7 +130,6 @@ class AdminTestRow extends StatelessWidget {
       '${test.questionCount} Q',
       '${test.marks} marks',
       '${test.durationMinutes} min',
-      if (test.difficulty.trim().isNotEmpty) test.difficulty,
       if (test.negativeMarking.trim().isNotEmpty) '−${test.negativeMarking}',
     ];
 

@@ -75,8 +75,8 @@ void main() {
     );
     expect(find.text('Negative Marking'), findsOneWidget);
     expect(find.text(test.negativeMarking), findsOneWidget);
-    expect(find.text('Difficulty'), findsOneWidget);
-    expect(find.text(test.difficulty), findsOneWidget);
+    expect(find.text('Difficulty'), findsNothing);
+    expect(find.text(test.difficulty), findsNothing);
     expect(find.text('Instructions'), findsOneWidget);
     for (final line in TestsDummyData.instructions) {
       expect(find.text(line), findsOneWidget);
@@ -122,7 +122,7 @@ void main() {
     expect(find.text('1'), findsWidgets);
     expect(find.text('4'), findsWidgets);
     expect(find.text('0'), findsOneWidget);
-    expect(find.text('Easy'), findsOneWidget);
+    expect(find.text('Easy'), findsNothing);
     expect(find.text('20'), findsNothing);
     expect(find.text('0.25'), findsNothing);
     expect(find.text('Medium'), findsNothing);

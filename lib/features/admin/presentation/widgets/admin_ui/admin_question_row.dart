@@ -87,7 +87,6 @@ class _AdminQuestionRowState extends State<AdminQuestionRow> {
 
     final path = AdminQuestionRow.syllabusPath(question);
     final metadata = <String>[
-      question.difficulty.name,
       question.questionType.name,
       if (question.language.trim().isNotEmpty) question.language,
       if (question.year != null) '${question.year}',

@@ -115,6 +115,13 @@ void main() {
     expect(result.validatedQuestions.single.isActive, isFalse);
   });
 
+  test('legacy JSON difficulty remains harmless and optional', () async {
+    final record = validPaperIRecord()..['difficulty'] = 'hard';
+    final result = await service().validateJson(wrap([record]));
+    expect(result.canImport, isTrue);
+    expect(result.validRecords, 1);
+  });
+
   test('2: missing English question', () async {
     final result = await service().validateJson(
       wrap([validPaperIRecord(questionEn: ' ')]),

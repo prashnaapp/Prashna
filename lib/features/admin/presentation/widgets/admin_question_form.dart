@@ -70,7 +70,6 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
   String? _courseId;
   String _correctOption = 'A';
   QuestionItemFormat _itemFormat = QuestionItemFormat.standardMcq;
-  QuestionDifficulty _difficulty = QuestionDifficulty.medium;
   QuestionType _questionType = QuestionType.practice;
   bool _isActive = true;
   bool _canonicalMode = true;
@@ -175,7 +174,6 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
     _lessonId = initial?.lessonId;
     _syllabusUnitId = initial?.syllabusUnitId;
     _correctOption = initial?.correctOption ?? 'A';
-    _difficulty = initial?.difficulty ?? QuestionDifficulty.medium;
     _questionType = initial?.questionType ?? QuestionType.practice;
     _isActive = initial?.isActive ?? true;
     _status = initial?.status ?? QuestionPublicationStatus.draft;
@@ -426,7 +424,10 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
       options: [for (final option in _options) option.text.trim()],
       correctOption: _correctOption,
       explanation: _explanation.text.trim(),
-      difficulty: _difficulty,
+      // Keep the legacy schema value without exposing Difficulty in the
+      // product. Existing values are preserved when editing; new questions
+      // use the compatibility value until the stored field is retired.
+      difficulty: _initial?.difficulty ?? QuestionDifficulty.medium,
       questionType: _questionType,
       language: _language.text.trim(),
       marks: marks,
@@ -1007,13 +1008,6 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final wide = constraints.maxWidth >= 640;
-                  final difficulty = _enumField<QuestionDifficulty>(
-                    key: const ValueKey('question-difficulty'),
-                    label: 'Difficulty',
-                    value: _difficulty,
-                    values: QuestionDifficulty.values,
-                    onChanged: (value) => setState(() => _difficulty = value!),
-                  );
                   final language = _field(
                     _language,
                     'Language *',
@@ -1049,25 +1043,14 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
                         );
                   if (!wide) {
                     return Column(
-                      children: [
-                        difficulty,
-                        language,
-                        marks,
-                        negative,
-                        seconds,
-                        year,
-                      ],
+                      children: [language, marks, negative, seconds, year],
                     );
                   }
                   return Column(
                     children: [
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: difficulty),
-                          const SizedBox(width: AdminSpacing.md),
-                          Expanded(child: language),
-                        ],
+                        children: [Expanded(child: language)],
                       ),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,

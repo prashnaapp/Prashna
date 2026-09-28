@@ -310,10 +310,13 @@ void main() {
     );
   });
 
-  test('9: missing difficulty rejected', () {
+  test('9: empty difficulty is accepted for write validation', () {
     expect(
-      TestCloudMapper.validateForWrite(sampleTest(difficulty: ' ')),
-      contains('Difficulty is required.'),
+      TestCloudMapper.validateForWrite(
+        sampleTest(id: 'test-1', difficulty: ' '),
+        documentId: 'test-1',
+      ),
+      isEmpty,
     );
   });
 
@@ -514,11 +517,20 @@ void main() {
     );
   });
 
-  test('publication rejects empty difficulty', () async {
-    await expectPublishRejected(
+  test('publication allows empty difficulty and defaults on write', () async {
+    var published = false;
+    final service = publishService(
       current: sampleTest(id: 'test-1', difficulty: ' '),
-      message: 'Difficulty is required.',
+      onPublished: (value) => published = value,
     );
+
+    await service.publishTest('test-1');
+    expect(published, isTrue);
+    final data = TestCloudMapper.toFirestore(
+      sampleTest(id: 'test-1', difficulty: ' '),
+      documentId: 'test-1',
+    );
+    expect(data['difficulty'], 'Medium');
   });
 
   test(

@@ -36,13 +36,6 @@ class TestSummaryCard extends StatelessWidget {
         label: 'Negative Marking',
         value: instructions.negativeMarking,
       ),
-      _MetaSpec(
-        icon: Icons.bar_chart_rounded,
-        iconTint: SyllabusVisual.tileLavender,
-        label: 'Difficulty',
-        value: instructions.difficulty,
-        valueAsBadge: true,
-      ),
     ];
 
     return DecoratedBox(
@@ -71,14 +64,12 @@ class _MetaSpec {
     required this.iconTint,
     required this.label,
     required this.value,
-    this.valueAsBadge = false,
   });
 
   final IconData icon;
   final Color iconTint;
   final String label;
   final String value;
-  final bool valueAsBadge;
 }
 
 class _MetaRow extends StatelessWidget {
@@ -122,11 +113,7 @@ class _MetaRow extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Flexible(
-                      child: spec.valueAsBadge
-                          ? _DifficultyBadge(value: spec.value)
-                          : _Value(spec.value),
-                    ),
+                    Flexible(child: _Value(spec.value)),
                   ],
                 ),
                 if (showDivider) ...[
@@ -160,37 +147,6 @@ class _Value extends StatelessWidget {
         color: SyllabusVisual.ink,
         fontWeight: FontWeight.w700,
         fontSize: 15,
-      ),
-    );
-  }
-}
-
-class _DifficultyBadge extends StatelessWidget {
-  const _DifficultyBadge({required this.value});
-
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: SyllabusVisual.tileLavender,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Text(
-            value,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.label(context).copyWith(
-              color: SyllabusVisual.accent,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-            ),
-          ),
-        ),
       ),
     );
   }

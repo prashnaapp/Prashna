@@ -243,6 +243,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('question-difficulty')), findsNothing);
+    expect(find.text('Difficulty'), findsNothing);
   }
 
   String fieldText(WidgetTester tester, Key key) {

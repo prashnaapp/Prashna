@@ -109,9 +109,6 @@ abstract final class TestCloudMapper {
     if (negative == null) {
       errors.add('Negative marking must be a valid non-negative number.');
     }
-    if (test.difficulty.trim().isEmpty) {
-      errors.add('Difficulty is required.');
-    }
     if (test.questionIds.isNotEmpty &&
         test.questionIds.length != test.questionCount) {
       errors.add('Question count must match assigned question IDs.');
@@ -203,7 +200,7 @@ abstract final class TestCloudMapper {
       'totalMarks': test.marks,
       'durationMinutes': test.durationMinutes,
       'negativeMarks': negative,
-      'difficulty': test.difficulty.trim(),
+      'difficulty': _difficulty(test.difficulty),
       'questionIds': [
         for (final questionId in test.questionIds)
           if (questionId.trim().isNotEmpty) questionId.trim(),

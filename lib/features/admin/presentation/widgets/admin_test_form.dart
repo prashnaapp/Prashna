@@ -52,7 +52,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
   late final TextEditingController _marks;
   late final TextEditingController _duration;
   late final TextEditingController _negativeMarking;
-  late final TextEditingController _difficulty;
   late final TextEditingController _questionIds;
   late final TextEditingController _filterPaper;
   late final TextEditingController _filterPart;
@@ -151,7 +150,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
     _negativeMarking = TextEditingController(
       text: initial?.negativeMarking ?? '0',
     );
-    _difficulty = TextEditingController(text: initial?.difficulty ?? 'Medium');
     _questionIds = TextEditingController(
       text: (initial?.questionIds ?? const []).join('\n'),
     );
@@ -188,7 +186,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
         _marks,
         _duration,
         _negativeMarking,
-        _difficulty,
         _questionIds,
         _year,
       ]) {
@@ -223,7 +220,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
     _marks.dispose();
     _duration.dispose();
     _negativeMarking.dispose();
-    _difficulty.dispose();
     _questionIds.dispose();
     _filterPaper.dispose();
     _filterPart.dispose();
@@ -282,7 +278,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
       marks: _parseInt(_marks.text) ?? 0,
       durationMinutes: _parseInt(_duration.text) ?? 0,
       negativeMarking: _negativeMarking.text.trim(),
-      difficulty: _difficulty.text.trim(),
+      // Keep the legacy schema value without exposing Difficulty in the form.
+      difficulty: _initial?.difficulty ?? 'Medium',
       questionIds: questionIds,
       status: (_initial == null || _initial!.id.isEmpty)
           ? TestPublicationStatus.draft
@@ -775,7 +772,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
         AdminFormSection(
           key: const ValueKey('section-details'),
           title: 'Test Details',
-          subtitle: 'Title, description, and difficulty for Admin and catalog.',
+          subtitle: 'Title and description for Admin and catalog.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -801,18 +798,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
                 ),
                 enabled: !_saving,
                 onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: AdminSpacing.lg),
-              TextFormField(
-                controller: _difficulty,
-                decoration: const InputDecoration(
-                  labelText: 'Difficulty',
-                  border: OutlineInputBorder(),
-                ),
-                enabled: !_saving,
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Difficulty is required.'
-                    : null,
               ),
             ],
           ),

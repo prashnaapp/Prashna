@@ -561,6 +561,8 @@ void main() {
     );
     expect(find.text('wrong-paper'), findsNothing);
     expect(find.text('Do not assign'), findsOneWidget);
+    expect(find.byKey(const ValueKey('question-difficulty')), findsNothing);
+    expect(find.text('Difficulty'), findsNothing);
 
     Future<void> enter(String key, String value) async {
       final field = find.byKey(ValueKey(key));
@@ -592,6 +594,7 @@ void main() {
     expect(created.single['testSeriesCategory'], 'part');
     expect(created.single['courseId'], 'group-ii');
     expect(created.single['paperId'], 'group-ii-paper-i');
+    expect(created.single['difficulty'], 'medium');
     expect(created.single.containsKey('partId'), isFalse);
     expect(created.single.containsKey('assignedTestId'), isFalse);
   });
@@ -633,6 +636,7 @@ void main() {
     await open(grandScope);
     expect(find.text('Grand Tests'), findsOneWidget);
     expect(find.text(GrandTestSeries.grandTestII), findsOneWidget);
+    expect(find.byKey(const ValueKey('question-difficulty')), findsNothing);
     expect(find.byKey(const ValueKey('question-course')), findsNothing);
     expect(
       find.byKey(const ValueKey('group-ii-question-syllabus')),
@@ -676,6 +680,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('question-course')), findsOneWidget);
+    expect(find.byKey(const ValueKey('question-difficulty')), findsNothing);
     expect(
       find.byKey(const ValueKey('test-series-ownership-context')),
       findsNothing,

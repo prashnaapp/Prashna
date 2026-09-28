@@ -27,8 +27,6 @@ class PracticeSummaryCard extends StatelessWidget {
           _Row(label: 'Time Limit', value: session.timeLimitLabel),
           const SizedBox(height: AppSpacing.md),
           _Row(label: 'Negative Marking', value: session.negativeMarking),
-          const SizedBox(height: AppSpacing.md),
-          _Row(label: 'Difficulty', value: session.difficulty),
         ],
       ),
     );
