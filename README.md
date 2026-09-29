@@ -1,4 +1,4 @@
-# telangana_prep
+# prashna app
 
 A new Flutter project.
 
