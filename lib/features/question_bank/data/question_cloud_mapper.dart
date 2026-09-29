@@ -235,6 +235,9 @@ abstract final class QuestionCloudMapper {
       question,
     );
     data[QuestionSearchText.field] = QuestionSearchText.normalize(questionText);
+    data[QuestionSearchPrefixes.field] = QuestionSearchPrefixes.fromQuestion(
+      questionText,
+    );
     if (forUpdate) {
       _writeOptionalSyllabusField(
         data,
@@ -305,12 +308,20 @@ abstract final class QuestionCloudMapper {
       data['createdAt'] = FieldValue.serverTimestamp();
     }
     _applyTestSeriesOwnership(data, ownership);
+    if (ownership == null || !ownership.isQuestionBank) {
+      final existing = question.contentArea?.trim();
+      data['contentArea'] = existing == AdminQuestionScope.contentAreaTestSeries
+          ? AdminQuestionScope.contentAreaTestSeries
+          : AdminQuestionScope.contentAreaChapter;
+    }
     return data;
   }
 
   /// Writes locked Test Series ownership. Does not read [Question.questionType].
   ///
-  /// Chapter writes pass a null [ownership] and stay unchanged. Paper-wise
+  /// Chapter creates, imports, and edits persist contentArea=chapter.
+  /// An update that already carries contentArea=testSeries keeps that value.
+  /// Paper-wise
   /// keeps [paperId] and omits partId. Grand and Previous omit paperId so the
   /// legacy Test paper requirement cannot be copied onto the Question.
   static void _applyTestSeriesOwnership(

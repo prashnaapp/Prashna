@@ -502,6 +502,9 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
           ? null
           : (_canonicalMode ? _canonicalAttribution() : _initial?.syllabus),
       status: _canonicalMode ? _status : _initial?.status,
+      contentArea: _initial?.contentArea,
+      testSeriesCategory: _initial?.testSeriesCategory,
+      seriesId: _initial?.seriesId,
     );
 
     setState(() {

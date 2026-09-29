@@ -742,8 +742,19 @@ class QuestionImportValidator {
     int index,
     List<QuestionImportIssue> errors,
   ) {
-    if (record.contentArea != null ||
-        record.testSeriesCategory != null ||
+    final area = record.contentArea?.trim();
+    if (area != null &&
+        area.isNotEmpty &&
+        area != AdminQuestionScope.contentAreaChapter) {
+      errors.add(
+        QuestionImportIssue(
+          recordIndex: index,
+          field: 'contentArea',
+          message: 'JSON cannot override the Chapter question bank.',
+        ),
+      );
+    }
+    if (record.testSeriesCategory != null ||
         record.seriesId != null ||
         record.year != null) {
       errors.add(

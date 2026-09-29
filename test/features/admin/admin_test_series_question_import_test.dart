@@ -150,6 +150,7 @@ void main() {
 
     expect(paperResult.succeeded, isTrue);
     expect(created[0]['contentArea'], 'testSeries');
+    expect(created[0]['questionSearchPrefixes'], contains('city'));
     expect(created[0]['testSeriesCategory'], 'part');
     expect(created[0]['courseId'], 'group-ii');
     expect(created[0]['paperId'], 'group-ii-paper-i');

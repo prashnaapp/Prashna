@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../course_enrollment/model/course.dart';
@@ -61,7 +63,16 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
   String? _error;
   bool _loadingCourses = true;
   bool _loadingQuestions = false;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  int _chapterTotal = 0;
+  String? _cursorDocumentId;
+  String? _cursorSearchText;
+  int _chapterRequest = 0;
+  Timer? _searchTimer;
   late final TextEditingController _searchController;
+
+  bool get _serverBank => widget.chapterContext != null;
 
   @override
   void initState() {
@@ -83,6 +94,7 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
 
   @override
   void dispose() {
+    _searchTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -94,6 +106,7 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
       _statusFilter = null;
       if (widget.chapterContext == null) _clearHierarchyFilters();
     });
+    if (_serverBank) _loadChapterFirstPage();
   }
 
   void _clearHierarchyFilters() {
@@ -128,6 +141,10 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
   }
 
   Future<void> _loadQuestions() async {
+    if (_serverBank) {
+      await _loadChapterFirstPage();
+      return;
+    }
     final courseId = _courseId;
     if (courseId == null || courseId.isEmpty) return;
     setState(() {
@@ -148,6 +165,95 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
         _error = 'Unable to load questions: $error';
       });
     }
+  }
+
+  Future<void> _loadChapterFirstPage() async {
+    final location = widget.chapterContext;
+    if (location == null) return;
+    final request = ++_chapterRequest;
+    final search = _searchController.text;
+    final status = _statusFilter;
+    setState(() {
+      _loadingQuestions = true;
+      _error = null;
+      _questions = const [];
+      _hasMore = false;
+      _chapterTotal = 0;
+      _cursorDocumentId = null;
+      _cursorSearchText = null;
+    });
+    try {
+      final page = await _service.loadChapterQuestionPage(
+        location,
+        status: status,
+        searchText: search,
+      );
+      final total = await _service.countChapterQuestions(
+        location,
+        status: status,
+        searchText: search,
+      );
+      if (!mounted || request != _chapterRequest) return;
+      setState(() {
+        _questions = page.questions;
+        _hasMore = page.hasMore;
+        _chapterTotal = total;
+        _cursorDocumentId = page.cursorDocumentId;
+        _cursorSearchText = page.cursorSearchText;
+        _loadingQuestions = false;
+      });
+    } catch (error) {
+      if (!mounted || request != _chapterRequest) return;
+      setState(() {
+        _loadingQuestions = false;
+        _error = 'Unable to load questions: $error';
+      });
+    }
+  }
+
+  Future<void> _loadChapterMore() async {
+    final location = widget.chapterContext;
+    if (location == null || _loadingQuestions || _loadingMore || !_hasMore) {
+      return;
+    }
+    final request = _chapterRequest;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await _service.loadChapterQuestionPage(
+        location,
+        status: _statusFilter,
+        searchText: _searchController.text,
+        cursorDocumentId: _cursorDocumentId,
+        cursorSearchText: _cursorSearchText,
+      );
+      if (!mounted || request != _chapterRequest) return;
+      setState(() {
+        final seen = {for (final question in _questions) question.id};
+        _questions = [
+          ..._questions,
+          for (final question in page.questions)
+            if (seen.add(question.id)) question,
+        ];
+        _hasMore = page.hasMore;
+        _cursorDocumentId = page.cursorDocumentId;
+        _cursorSearchText = page.cursorSearchText;
+        _loadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || request != _chapterRequest) return;
+      setState(() {
+        _loadingMore = false;
+        _error = 'Unable to load more questions: $error';
+      });
+    }
+  }
+
+  void _onChapterSearchChanged(String value) {
+    _searchTimer?.cancel();
+    _searchTimer = Timer(
+      const Duration(milliseconds: 300),
+      _loadChapterFirstPage,
+    );
   }
 
   Future<void> _openCreate() async {
@@ -244,33 +350,8 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
         _syllabusUnitFilter != null;
   }
 
-  int get _chapterQuestionCount {
-    return _questions.where(_matchesLockedChapter).length;
-  }
-
-  bool _matchesLockedChapter(Question question) {
-    if (_paperFilter != null && question.paperId != _paperFilter) return false;
-    if (_majorStudyAreaFilter != null &&
-        question.majorStudyAreaId != _majorStudyAreaFilter) {
-      return false;
-    }
-    if (_contentTopicFilter != null &&
-        question.contentTopicId != _contentTopicFilter) {
-      return false;
-    }
-    if (_partFilter != null && question.partId != _partFilter) return false;
-    final topicId = (question.syllabus?.topicId?.isNotEmpty == true)
-        ? question.syllabus!.topicId!
-        : question.topicId;
-    if (_topicFilter != null && topicId != _topicFilter) return false;
-    if (_syllabusUnitFilter != null &&
-        question.syllabusUnitId != _syllabusUnitFilter) {
-      return false;
-    }
-    return true;
-  }
-
   List<Question> get _visibleQuestions {
+    if (_serverBank) return _questions;
     final query = _search.trim().toLowerCase();
     return _questions
         .where((question) {
@@ -494,8 +575,13 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
               });
               await _loadQuestions();
             },
-            onSearchChanged: (value) => setState(() => _search = value),
-            onStatusChanged: (value) => setState(() => _statusFilter = value),
+            onSearchChanged: _serverBank
+                ? _onChapterSearchChanged
+                : (value) => setState(() => _search = value),
+            onStatusChanged: (value) {
+              setState(() => _statusFilter = value);
+              if (_serverBank) _loadChapterFirstPage();
+            },
             onPaperChanged: (value) => setState(() {
               _paperFilter = value;
               _majorStudyAreaFilter = null;
@@ -539,7 +625,7 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
               Text(
                 _loadingQuestions
                     ? 'Loading…'
-                    : '${visible.length} of ${widget.chapterContext == null ? _questions.length : _chapterQuestionCount}',
+                    : '${visible.length} of ${_serverBank ? _chapterTotal : _questions.length}',
                 key: const ValueKey('question-list-result-count'),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AdminColors.textSecondary,
@@ -591,6 +677,25 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
               if (i != visible.length - 1)
                 const SizedBox(height: AdminSpacing.md),
             ],
+          if (_serverBank && !_loadingQuestions && visible.isNotEmpty) ...[
+            const SizedBox(height: AdminSpacing.lg),
+            if (_loadingMore)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(AdminSpacing.md),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_hasMore)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonal(
+                  key: const ValueKey('chapter-question-bank-load-more'),
+                  onPressed: _loadChapterMore,
+                  child: const Text('Load More'),
+                ),
+              ),
+          ],
         ],
       ),
     );

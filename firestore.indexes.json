@@ -153,6 +153,352 @@
       ]
     },
     {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "majorStudyAreaId", "order": "ASCENDING" },
+        { "fieldPath": "contentTopicId", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "majorStudyAreaId", "order": "ASCENDING" },
+        { "fieldPath": "contentTopicId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchText", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "majorStudyAreaId", "order": "ASCENDING" },
+        { "fieldPath": "contentTopicId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "majorStudyAreaId", "order": "ASCENDING" },
+        { "fieldPath": "contentTopicId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchText", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "topicId", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "topicId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchText", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "topicId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "topicId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchText", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchText", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchText", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchText", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchText", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "majorStudyAreaId", "order": "ASCENDING" },
+        { "fieldPath": "contentTopicId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "majorStudyAreaId", "order": "ASCENDING" },
+        { "fieldPath": "contentTopicId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "topicId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "topicId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "partId", "order": "ASCENDING" },
+        { "fieldPath": "syllabusUnitId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "testSeriesCategory", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "paperId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "testSeriesCategory", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "seriesId", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentArea", "order": "ASCENDING" },
+        { "fieldPath": "testSeriesCategory", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "year", "order": "ASCENDING" },
+        { "fieldPath": "questionSearchPrefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "tests",
       "queryScope": "COLLECTION",
       "fields": [

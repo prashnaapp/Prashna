@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:telangana_prep/features/admin/data/admin_chapter_question_context.dart';
+import 'package:telangana_prep/features/admin/data/admin_chapter_question_query.dart';
 import 'package:telangana_prep/features/admin/data/admin_compatible_test_query.dart';
 import 'package:telangana_prep/features/admin/data/admin_question_scope.dart';
 import 'package:telangana_prep/features/admin/data/admin_test_hierarchy.dart';
@@ -210,7 +212,7 @@ void main() {
       });
       expect(captured[3]['year'], 2024);
       expect(captured[3]['questionType'], 'previousYear');
-      expect(captured[4].containsKey('contentArea'), isFalse);
+      expect(captured[4]['contentArea'], 'chapter');
       expect(captured[4].containsKey('testSeriesCategory'), isFalse);
     },
   );
@@ -687,4 +689,158 @@ void main() {
     );
     expect(find.byKey(const ValueKey('test-series-assign-test')), findsNothing);
   });
+
+  test('chapter creates persist contentArea=chapter for every bank', () async {
+    final captured = <Map<String, dynamic>>[];
+    final service = AdminQuestionService(
+      questionRepository: QuestionCloudRepository.withHandlers(
+        create: ({required questionId, required data}) async {
+          captured.add(data);
+        },
+        idGenerator: () => 'q-created',
+      ),
+    );
+    final now = DateTime(2026, 9, 28);
+    final groupIii = Question(
+      id: '',
+      courseId: 'group-iii',
+      paperId: 'group-iii-paper-i',
+      question: 'Which city is the capital?',
+      options: const ['Warangal', 'Hyderabad', 'Nizamabad', 'Karimnagar'],
+      correctOption: 'B',
+      explanation: 'Hyderabad is the capital.',
+      difficulty: QuestionDifficulty.medium,
+      questionType: QuestionType.practice,
+      marks: 1,
+      negativeMarks: 0,
+      tags: const [],
+      estimatedTime: const Duration(seconds: 60),
+      createdAt: now,
+      updatedAt: now,
+      isActive: false,
+      status: QuestionPublicationStatus.draft,
+      content: draft(paperI: true).content,
+      syllabus: const QuestionSyllabusAttribution(
+        courseId: 'group-iii',
+        paperId: 'group-iii-paper-i',
+        syllabusUnitId: 'group-iii-paper-i-unit-01',
+      ),
+    );
+
+    await service.createQuestion(draft(paperI: true));
+    await service.createQuestion(
+      draft(partId: 'group-ii-paper-ii-part-01'),
+    );
+    await service.createQuestion(groupIii);
+
+    expect(captured[0]['contentArea'], 'chapter');
+    expect(captured[1]['contentArea'], 'chapter');
+    expect(captured[2]['contentArea'], 'chapter');
+    expect(captured[0].containsKey('testSeriesCategory'), isFalse);
+    _expectChapterQuery(captured[0], const AdminChapterQuestionContext(
+      courseId: 'group-ii',
+      paperId: 'group-ii-paper-i',
+      majorStudyAreaId: 'group-ii-paper-i-area-1',
+      contentTopicId: 'group-ii-paper-i-area-1-topic-1',
+    ));
+    _expectChapterQuery(captured[1], const AdminChapterQuestionContext(
+      courseId: 'group-ii',
+      paperId: 'group-ii-paper-ii',
+      partId: 'group-ii-paper-ii-part-01',
+      topicId: 'group-ii-paper-ii-part-1-topic-1',
+    ));
+    _expectChapterQuery(captured[2], const AdminChapterQuestionContext(
+      courseId: 'group-iii',
+      paperId: 'group-iii-paper-i',
+      syllabusUnitId: 'group-iii-paper-i-unit-01',
+    ));
+  });
+
+  test('editing a legacy chapter question writes contentArea=chapter', () async {
+    Map<String, dynamic>? written;
+    final service = AdminQuestionService(
+      questionRepository: QuestionCloudRepository.withHandlers(
+        update: ({required questionId, required data}) async {
+          written = data;
+        },
+      ),
+    );
+    final legacy = draft(paperI: true).copyWithId('q-legacy');
+    await service.updateQuestion(legacy);
+    expect(legacy.contentArea, isNull);
+    expect(written?['contentArea'], 'chapter');
+    expect(written?.containsKey('testSeriesCategory'), isFalse);
+  });
+
+  test('editing a test series question keeps contentArea=testSeries', () async {
+    Map<String, dynamic>? written;
+    final service = AdminQuestionService(
+      questionRepository: QuestionCloudRepository.withHandlers(
+        update: ({required questionId, required data}) async {
+          written = data;
+        },
+      ),
+    );
+    final existing = Question(
+      id: 'q-series',
+      courseId: 'group-ii',
+      paperId: 'group-ii-paper-i',
+      question: 'Which city is the capital?',
+      options: const ['Warangal', 'Hyderabad', 'Nizamabad', 'Karimnagar'],
+      correctOption: 'B',
+      explanation: 'Hyderabad is the capital.',
+      difficulty: QuestionDifficulty.medium,
+      questionType: QuestionType.practice,
+      marks: 1,
+      negativeMarks: 0,
+      tags: const [],
+      estimatedTime: const Duration(seconds: 60),
+      createdAt: DateTime(2026, 9, 28),
+      updatedAt: DateTime(2026, 9, 28),
+      isActive: false,
+      status: QuestionPublicationStatus.draft,
+      content: draft(paperI: true).content,
+      syllabus: draft(paperI: true).syllabus,
+      contentArea: AdminQuestionScope.contentAreaTestSeries,
+      testSeriesCategory: AdminQuestionScope.categoryPart,
+    );
+    await service.updateQuestion(existing);
+    expect(written?['contentArea'], 'testSeries');
+  });
+}
+
+void _expectChapterQuery(
+  Map<String, dynamic> data,
+  AdminChapterQuestionContext location,
+) {
+  final query = AdminChapterQuestionQuery.fromContext(location);
+  for (final filter in query.equalityFilters) {
+    expect(data[filter.field], filter.value, reason: filter.field);
+  }
+}
+
+extension on Question {
+  Question copyWithId(String id) {
+    return Question(
+      id: id,
+      courseId: courseId,
+      paperId: paperId,
+      question: question,
+      options: options,
+      correctOption: correctOption,
+      explanation: explanation,
+      difficulty: difficulty,
+      questionType: questionType,
+      marks: marks,
+      negativeMarks: negativeMarks,
+      tags: tags,
+      estimatedTime: estimatedTime,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      isActive: isActive,
+      status: status,
+      content: content,
+      syllabus: syllabus,
+    );
+  }
 }

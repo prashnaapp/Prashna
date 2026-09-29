@@ -149,9 +149,11 @@ void main() {
   test('search stays inside the bank and paginates by prefix cursor', () {
     final paper = queryFor(paperScope, searchText: '  Capital   City ');
     expect(paper.normalizedSearch, 'capital city');
-    expect(paper.cursorPlan.orderBy, ['questionSearchText', '__name__']);
-    expect(paper.cursorPlan.startAt, ['capital city', '']);
-    expect(paper.cursorPlan.endAt?.first, 'capital city\uf8ff');
+    expect(paper.searchPrefix, 'city');
+    expect(paper.cursorPlan.orderBy, ['__name__']);
+    expect(paper.cursorPlan.arrayContains, 'city');
+    expect(paper.cursorPlan.startAt, isNull);
+    expect(paper.cursorPlan.endAt, isNull);
     expect(paper.cursorPlan.limit, 51);
     expect(paper.cursorPlan.usesOffset, isFalse);
     expect(
@@ -178,7 +180,8 @@ void main() {
       cursorSearchText: 'capital of telangana',
     );
     expect(second.cursorPlan.startAt, isNull);
-    expect(second.cursorPlan.startAfter, ['capital of telangana', 'q-2']);
+    expect(second.cursorPlan.arrayContains, 'capital');
+    expect(second.cursorPlan.startAfter, ['q-2']);
     final cleared = queryFor(paperScope, searchText: '   ');
     expect(cleared.normalizedSearch, isNull);
     expect(cleared.cursorPlan.orderBy, ['__name__']);
@@ -628,6 +631,41 @@ void main() {
       find.byKey(const ValueKey('test-series-question-bank-page-error')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('one character does not search and two characters do', (
+    tester,
+  ) async {
+    final service = _PagingService();
+    await tester.pumpWidget(_bank(service));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('test-series-question-bank-search')),
+      'd',
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(service.calls.last.searchPrefix, isNull);
+    expect(service.calls.last.cursorPlan.arrayContains, isNull);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('test-series-question-bank-search')),
+      'da',
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(service.calls.last.searchPrefix, 'da');
+    expect(service.calls.last.cursorPlan.arrayContains, 'da');
+
+    await tester.enterText(
+      find.byKey(const ValueKey('test-series-question-bank-search')),
+      '',
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(service.calls.last.searchPrefix, isNull);
+    expect(service.calls.last.cursorPlan.arrayContains, isNull);
   });
 
   testWidgets(

@@ -1,3 +1,5 @@
+import '../data/admin_chapter_question_context.dart';
+import '../data/admin_chapter_question_query.dart';
 import '../data/admin_question_scope.dart';
 import '../data/admin_test_series_question_query.dart';
 import '../../course_enrollment/model/course.dart';
@@ -20,7 +22,13 @@ class AdminQuestionService {
   }) : _questions = questionRepository ?? QuestionCloudRepository(),
        _courses = courseCatalogService;
 
-  static final AdminQuestionService instance = AdminQuestionService();
+  static AdminQuestionService instance = AdminQuestionService();
+
+  /// Replaces the default test-friendly instance once Firebase is initialized
+  /// by the Admin application composition root.
+  static void configureProduction(QuestionCloudRepository repository) {
+    instance = AdminQuestionService(questionRepository: repository);
+  }
 
   final QuestionCloudRepository _questions;
   final CourseCatalogService? _courses;
@@ -61,6 +69,38 @@ class AdminQuestionService {
       cursorSearchText: cursorSearchText,
     );
     return _questions.loadTestSeriesQuestionPage(query);
+  }
+
+  /// One Chapter bank page. Does not call [loadQuestions].
+  Future<QuestionBankPage> loadChapterQuestionPage(
+    AdminChapterQuestionContext location, {
+    QuestionPublicationStatus? status,
+    String? searchText,
+    String? cursorDocumentId,
+    String? cursorSearchText,
+  }) {
+    final query = AdminChapterQuestionQuery.fromContext(
+      location,
+      status: status,
+      searchText: searchText,
+      cursorDocumentId: cursorDocumentId,
+      cursorSearchText: cursorSearchText,
+    );
+    return _questions.loadChapterQuestionPage(query);
+  }
+
+  /// Aggregate count for the same Chapter query, ignoring the cursor.
+  Future<int> countChapterQuestions(
+    AdminChapterQuestionContext location, {
+    QuestionPublicationStatus? status,
+    String? searchText,
+  }) {
+    final query = AdminChapterQuestionQuery.fromContext(
+      location,
+      status: status,
+      searchText: searchText,
+    );
+    return _questions.countChapterQuestions(query);
   }
 
   Future<Question?> getQuestion(String questionId) {

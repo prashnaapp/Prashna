@@ -23,6 +23,7 @@ class QuestionBankCursorPlan {
     required this.limit,
     required this.orderBy,
     required this.usesOffset,
+    this.arrayContains,
     this.startAt,
     this.startAfter,
     this.endAt,
@@ -31,6 +32,9 @@ class QuestionBankCursorPlan {
   final int limit;
   final List<String> orderBy;
   final bool usesOffset;
+
+  /// `questionSearchPrefixes` array-contains value. Null while browsing.
+  final String? arrayContains;
   final List<Object>? startAt;
   final List<Object>? startAfter;
   final List<Object>? endAt;
@@ -104,37 +108,17 @@ class AdminTestSeriesQuestionQuery {
     return normalized.isEmpty ? null : normalized;
   }
 
+  /// Final token used by the any-word prefix query.
+  String? get searchPrefix => QuestionSearchPrefixes.queryTerm(searchText);
+
   /// Firestore read size. One extra row detects the last page.
   int get readLimit => pageSize + 1;
 
-  QuestionBankCursorPlan get cursorPlan {
-    final search = normalizedSearch;
-    if (search == null) {
-      final cursor = cursorDocumentId?.trim();
-      return QuestionBankCursorPlan(
-        limit: readLimit,
-        orderBy: const [documentOrderField],
-        usesOffset: false,
-        startAfter: cursor == null || cursor.isEmpty ? null : [cursor],
-      );
-    }
-    final end = '$search\uf8ff';
-    final cursorId = cursorDocumentId?.trim();
-    final cursorText = cursorSearchText?.trim();
-    final hasCursor =
-        cursorId != null &&
-        cursorId.isNotEmpty &&
-        cursorText != null &&
-        cursorText.isNotEmpty;
-    return QuestionBankCursorPlan(
-      limit: readLimit,
-      orderBy: const [QuestionSearchText.field, documentOrderField],
-      usesOffset: false,
-      startAt: hasCursor ? null : [search, ''],
-      startAfter: hasCursor ? [cursorText, cursorId] : null,
-      endAt: [end, '\uf8ff'],
-    );
-  }
+  QuestionBankCursorPlan get cursorPlan => buildQuestionBankCursorPlan(
+    searchPrefix: searchPrefix,
+    cursorDocumentId: cursorDocumentId,
+    readLimit: readLimit,
+  );
 
   /// Equality filters applied by Firestore. No client-side course scan.
   List<({String field, Object value})> get equalityFilters {
@@ -153,4 +137,24 @@ class AdminTestSeriesQuestionQuery {
     }
     return filters;
   }
+}
+
+/// Shared cursor for Test Series and Chapter banks.
+///
+/// Browse and any-word search both order by document ID. Search adds one
+/// `questionSearchPrefixes` array-contains filter and never invents a
+/// document path.
+QuestionBankCursorPlan buildQuestionBankCursorPlan({
+  required String? searchPrefix,
+  required String? cursorDocumentId,
+  required int readLimit,
+}) {
+  final cursor = cursorDocumentId?.trim();
+  return QuestionBankCursorPlan(
+    limit: readLimit,
+    orderBy: const [AdminTestSeriesQuestionQuery.documentOrderField],
+    usesOffset: false,
+    arrayContains: searchPrefix,
+    startAfter: cursor == null || cursor.isEmpty ? null : [cursor],
+  );
 }

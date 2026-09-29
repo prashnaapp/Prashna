@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:telangana_prep/features/admin/admin_routes.dart';
 import 'package:telangana_prep/features/admin/data/admin_chapter_question_context.dart';
+import 'package:telangana_prep/features/admin/data/admin_chapter_question_query.dart';
+import 'package:telangana_prep/features/admin/data/admin_question_scope.dart';
+import 'package:telangana_prep/features/admin/data/admin_test_series_question_query.dart';
+import 'package:telangana_prep/features/question_bank/data/question_search_text.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_chapter_questions_browser_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_question_form_screen.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_question_import_screen.dart';
@@ -12,7 +16,9 @@ import 'package:telangana_prep/features/admin/presentation/screens/admin_test_se
 import 'package:telangana_prep/features/admin/presentation/widgets/admin_question_form.dart';
 import 'package:telangana_prep/features/admin/services/admin_question_service.dart';
 import 'package:telangana_prep/features/admin/services/question_import_parser.dart';
+import 'package:telangana_prep/features/admin/services/question_import_service.dart';
 import 'package:telangana_prep/features/admin/services/question_import_validator.dart';
+import 'package:telangana_prep/features/question_bank/repository/question_cloud_repository.dart';
 import 'package:telangana_prep/features/course_enrollment/model/course.dart';
 import 'package:telangana_prep/features/question_bank/data/models/question_models.dart';
 import 'package:telangana_prep/features/syllabus/data/models/syllabus_models.dart';
@@ -82,6 +88,7 @@ Question _question({
     updatedAt: now,
     isActive: true,
     content: content,
+    contentArea: AdminQuestionScope.contentAreaChapter,
     syllabus: QuestionSyllabusAttribution(
       courseId: courseId,
       paperId: paperId,
@@ -125,10 +132,92 @@ class _FakeQuestions extends AdminQuestionService {
   @override
   Future<List<Course>> loadCourses() async => const [_groupIi, _groupIii];
 
+  int loadQuestionsCalls = 0;
+
   @override
   Future<List<Question>> loadQuestions(String courseId) async {
+    loadQuestionsCalls += 1;
     loadedCourseId = courseId;
     return questions;
+  }
+
+  @override
+  Future<QuestionBankPage> loadChapterQuestionPage(
+    AdminChapterQuestionContext location, {
+    QuestionPublicationStatus? status,
+    String? searchText,
+    String? cursorDocumentId,
+    String? cursorSearchText,
+  }) async {
+    final query = AdminChapterQuestionQuery.fromContext(
+      location,
+      status: status,
+      searchText: searchText,
+      cursorDocumentId: cursorDocumentId,
+      cursorSearchText: cursorSearchText,
+    );
+    loadedCourseId = query.courseId;
+    final matched =
+        questions.where((question) => _matches(question, query)).toList()
+          ..sort((a, b) => a.id.compareTo(b.id));
+    final start = cursorDocumentId == null
+        ? 0
+        : matched.indexWhere((question) => question.id == cursorDocumentId) + 1;
+    final slice = matched.skip(start < 0 ? 0 : start);
+    final page = slice.take(AdminTestSeriesQuestionQuery.pageSize).toList();
+    return QuestionBankPage(
+      questions: page,
+      hasMore: slice.length > AdminTestSeriesQuestionQuery.pageSize,
+      cursorDocumentId: page.isEmpty ? null : page.last.id,
+    );
+  }
+
+  @override
+  Future<int> countChapterQuestions(
+    AdminChapterQuestionContext location, {
+    QuestionPublicationStatus? status,
+    String? searchText,
+  }) async {
+    final query = AdminChapterQuestionQuery.fromContext(
+      location,
+      status: status,
+      searchText: searchText,
+    );
+    return questions.where((question) => _matches(question, query)).length;
+  }
+
+  bool _matches(Question question, AdminChapterQuestionQuery query) {
+    for (final filter in query.equalityFilters) {
+      if (_value(question, filter.field) != filter.value) return false;
+    }
+    final search = query.normalizedSearch;
+    if (search == null) return true;
+    return QuestionSearchText.normalize(question.question).startsWith(search);
+  }
+
+  Object? _value(Question question, String field) {
+    switch (field) {
+      case 'contentArea':
+        return question.contentArea;
+      case 'courseId':
+        return question.courseId;
+      case 'paperId':
+        return question.paperId;
+      case 'majorStudyAreaId':
+        return question.majorStudyAreaId;
+      case 'contentTopicId':
+        return question.contentTopicId;
+      case 'partId':
+        return question.partId;
+      case 'topicId':
+        return question.syllabus?.topicId;
+      case 'syllabusUnitId':
+        return question.syllabusUnitId;
+      case 'status':
+        return question.status?.name;
+      default:
+        return null;
+    }
   }
 }
 
@@ -835,10 +924,91 @@ void main() {
     },
   );
 
+  test(
+    'scoped chapter import writes contentArea=chapter without a JSON field',
+    () async {
+      final course = syllabus.getCourseById('group-ii')!;
+      final paper = course.papers.firstWhere(
+        (item) => item.hasCanonicalPaperIContent,
+      );
+      final area = paper.majorStudyAreas.first;
+      final topic = area.contentTopics.first;
+      final location = AdminChapterQuestionContext(
+        courseId: 'group-ii',
+        paperId: paper.id,
+        majorStudyAreaId: area.id,
+        contentTopicId: topic.id,
+      );
+      final created = <Map<String, dynamic>>[];
+      final service = QuestionImportService(
+        chapterContext: location,
+        questionRepository: QuestionCloudRepository.withHandlers(
+          createBatch: ({required items}) async {
+            created.addAll([for (final item in items) item.data]);
+          },
+          idGenerator: () => 'imported-${created.length + 1}',
+        ),
+      );
+
+      final omitted = await service.validateAndImportJson(
+        jsonEncode({
+          'questions': [_importRecord()],
+        }),
+      );
+      expect(omitted.succeeded, isTrue);
+      expect(_importRecord().containsKey('contentArea'), isFalse);
+      expect(created.single['contentArea'], 'chapter');
+      _expectImportMatchesChapterQuery(created.single, location);
+
+      final explicit = await service.validateAndImportJson(
+        jsonEncode({
+          'questions': [
+            _importRecord()..['contentArea'] = 'chapter',
+          ],
+        }),
+      );
+      expect(explicit.succeeded, isTrue);
+      expect(created[1]['contentArea'], 'chapter');
+
+      final conflict = await service.validateJson(
+        jsonEncode({
+          'questions': [
+            _importRecord()
+              ..['contentArea'] = 'testSeries'
+              ..['testSeriesCategory'] = 'part',
+          ],
+        }),
+      );
+      expect(conflict.canImport, isFalse);
+      expect(
+        conflict.errors.any((issue) => issue.field == 'contentArea'),
+        isTrue,
+      );
+      expect(created, hasLength(2));
+    },
+  );
+
   test('Test Series browser type is unchanged by the chapter browser', () {
     expect(
       const AdminTestSeriesQuestionsBrowserScreen().scope.contentArea,
       'testSeries',
     );
   });
+}
+
+void _expectImportMatchesChapterQuery(
+  Map<String, dynamic> data,
+  AdminChapterQuestionContext location,
+) {
+  final query = AdminChapterQuestionQuery.fromContext(
+    location,
+    status: QuestionPublicationStatus.draft,
+  );
+  for (final filter in query.equalityFilters) {
+    expect(data[filter.field], filter.value, reason: filter.field);
+  }
+  expect(
+    query.equalityFilters.any((filter) => filter.field == 'lessonId'),
+    isFalse,
+  );
 }

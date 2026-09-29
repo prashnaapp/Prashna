@@ -367,6 +367,14 @@ void main() {
       wrap([validPaperIRecord(), validPaperIIRecord()]),
     );
     await svc.importValidatedBatch(validation);
+    expect(created[0]['contentArea'], 'chapter');
+    expect(created[0]['questionSearchPrefixes'], contains('city'));
+    expect(
+      created[0]['questionSearchText'],
+      'which city is the capital of telangana?',
+    );
+    expect(created[0].containsKey('testSeriesCategory'), isFalse);
+    expect(created[1]['contentArea'], 'chapter');
     expect(created[0]['majorStudyAreaId'], paperIArea);
     expect(created[0]['contentTopicId'], paperITopic);
     expect(created[0].containsKey('partId'), isFalse);
