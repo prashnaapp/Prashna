@@ -149,7 +149,7 @@ void main() {
     });
   });
 
-  testWidgets('dashboard exposes Chapters and Test Series, not Mock Tests', (
+  testWidgets('dashboard exposes Tests landing, not Mock Tests', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -161,11 +161,11 @@ void main() {
       ),
     );
 
-    expect(find.text('Chapters'), findsOneWidget);
-    expect(find.text('Test Series'), findsOneWidget);
+    expect(find.text('Tests'), findsOneWidget);
+    expect(find.text('Chapters'), findsNothing);
     expect(find.text('Mock Tests'), findsNothing);
     expect(
-      find.text('Browse the syllabus hierarchy and manage chapter tests'),
+      find.text('Manage chapter tests and test series'),
       findsOneWidget,
     );
   });

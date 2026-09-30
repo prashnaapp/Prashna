@@ -70,20 +70,12 @@ class AdminDashboardScreen extends StatelessWidget {
             onTap: () => _goMajor(context, AdminRoutes.questionImport),
           ),
           _DestinationCard(
-            key: const ValueKey('dashboard-dest-chapters'),
-            icon: Icons.account_tree_outlined,
-            title: 'Chapters',
-            subtitle: 'Browse the syllabus hierarchy and manage chapter tests',
-            accent: AdminDestinationAccent.chapters,
-            onTap: () => _goMajor(context, AdminRoutes.chapters),
-          ),
-          _DestinationCard(
-            key: const ValueKey('dashboard-dest-test-series'),
+            key: const ValueKey('dashboard-dest-tests'),
             icon: Icons.assignment_outlined,
-            title: 'Test Series',
-            subtitle: 'Manage paper-wise tests, grand tests, and previous papers',
-            accent: AdminDestinationAccent.testSeries,
-            onTap: () => _goMajor(context, AdminRoutes.testSeries),
+            title: 'Tests',
+            subtitle: 'Manage chapter tests and test series',
+            accent: AdminDestinationAccent.tests,
+            onTap: () => _goMajor(context, AdminRoutes.tests),
           ),
         ];
 
@@ -307,13 +299,16 @@ class _DestinationGrid extends StatelessWidget {
       );
     }
 
-    return Column(
-      children: [
-        pair(cards[0], cards[1]),
-        const SizedBox(height: AdminSpacing.xl),
-        pair(cards[2], cards[3]),
-      ],
-    );
+    final rows = <Widget>[];
+    for (var i = 0; i < cards.length; i += 2) {
+      if (i > 0) rows.add(const SizedBox(height: AdminSpacing.xl));
+      if (i + 1 < cards.length) {
+        rows.add(pair(cards[i], cards[i + 1]));
+      } else {
+        rows.add(pair(cards[i], const SizedBox.shrink()));
+      }
+    }
+    return Column(children: rows);
   }
 }
 

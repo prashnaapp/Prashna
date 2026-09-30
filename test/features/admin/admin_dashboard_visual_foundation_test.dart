@@ -56,16 +56,11 @@ void main() {
     expect(adminWorkspaceTransitionDuration, Duration.zero);
     expect(find.byKey(const ValueKey('dashboard-dest-questions')), findsOneWidget);
     expect(find.byKey(const ValueKey('dashboard-dest-import')), findsOneWidget);
-    expect(find.byKey(const ValueKey('dashboard-dest-chapters')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('dashboard-dest-test-series')),
-      findsOneWidget,
-    );
-    expect(find.byType(AdminHoverLift), findsNWidgets(4));
+    expect(find.byKey(const ValueKey('dashboard-dest-tests')), findsOneWidget);
+    expect(find.byType(AdminHoverLift), findsNWidgets(3));
     expect(find.text('Questions'), findsOneWidget);
     expect(find.text('Import Questions'), findsOneWidget);
-    expect(find.text('Chapters'), findsOneWidget);
-    expect(find.text('Test Series'), findsOneWidget);
+    expect(find.text('Tests'), findsOneWidget);
     expect(find.textContaining('Welcome,'), findsOneWidget);
     expect(find.text('Content Management'), findsOneWidget);
     expect(find.text('Quick Stats'), findsNothing);

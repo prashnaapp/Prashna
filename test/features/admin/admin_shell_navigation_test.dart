@@ -39,8 +39,9 @@ void main() {
     expect(find.text('Dashboard'), findsWidgets);
     expect(find.text('Questions'), findsWidgets);
     expect(find.text('Import Questions'), findsWidgets);
-    expect(find.text('Chapters'), findsWidgets);
-    expect(find.text('Test Series'), findsWidgets);
+    expect(find.text('Tests'), findsWidgets);
+    expect(find.text('Chapters'), findsNothing);
+    expect(find.text('Test Series'), findsNothing);
   });
 
   testWidgets('dirty leave dialog stay vs discard', (tester) async {

@@ -17,6 +17,7 @@ import '../screens/admin_questions_home_screen.dart';
 import '../screens/admin_test_series_questions_browser_screen.dart';
 import '../screens/admin_test_form_screen.dart';
 import '../screens/admin_test_assignment_screen.dart';
+import '../screens/admin_tests_home_screen.dart';
 import '../screens/admin_test_series_browser_screen.dart';
 import 'admin_dirty_scope.dart';
 import 'admin_nav_destination.dart';
@@ -236,10 +237,11 @@ class _AdminShellState extends State<AdminShell> {
       AdminRoutes.questionImport => const AdminQuestionImportEntryScreen(
         embeddedInShell: true,
       ),
+      AdminRoutes.tests => const AdminTestsHomeScreen(embeddedInShell: true),
       AdminRoutes.chapters => const AdminChaptersBrowserScreen(
         embeddedInShell: true,
       ),
-      AdminRoutes.testSeries || AdminRoutes.tests =>
+      AdminRoutes.testSeries =>
         const AdminTestSeriesBrowserScreen(embeddedInShell: true),
       AdminRoutes.testCreate => () {
         final createArgs = settings.arguments;

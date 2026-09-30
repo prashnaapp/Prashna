@@ -98,15 +98,9 @@ class AdminDestinationAccent {
     strong: AdminColors.importStrong,
   );
 
-  /// Syllabus / chapter identity — muted warm amber.
-  static const chapters = AdminDestinationAccent(
+  /// Chapter + Test Series management.
+  static const tests = AdminDestinationAccent(
     soft: AdminColors.testsSoft,
     strong: AdminColors.testsStrong,
-  );
-
-  /// Examination series identity — muted indigo.
-  static const testSeries = AdminDestinationAccent(
-    soft: AdminColors.chaptersSoft,
-    strong: AdminColors.chaptersStrong,
   );
 }
