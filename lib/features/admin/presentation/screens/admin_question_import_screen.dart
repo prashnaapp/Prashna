@@ -130,6 +130,33 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
     );
   }
 
+  String get _formatGuidance {
+    final shared =
+        '• JSON object: { "questions": [ ... ] }.\n'
+        '• Each record needs a bilingual question, exactly four bilingual '
+        'options, correctOption A/B/C/D, and a bilingual explanation.\n'
+        '• Optional id is allowed.\n'
+        '• Successful import creates draft/inactive questions only.';
+    if (widget.chapterContext != null) {
+      return '$shared\n'
+          '• Hierarchy IDs are inherited from the selected chapter location. '
+          'Do not paste courseId, paperId, partId, topicId, lessonId, or '
+          'other syllabus IDs. A value that does not match this location is '
+          'rejected.';
+    }
+    if (widget.scope?.isQuestionBank == true) {
+      return '$shared\n'
+          '• Course, paper, series, and year are inherited from the selected '
+          'Test Series question bank. Do not paste those ownership IDs.\n'
+          '• Optional testId assigns the question to a compatible test in this '
+          'bank. Omit it to leave the question unassigned.';
+    }
+    return '$shared\n'
+        '• Choose Chapter Questions or a Test Series question bank before '
+        'importing. Content-only JSON is accepted only after that location '
+        'is selected.';
+  }
+
   void _leave() {
     if (!mounted) return;
     if (Navigator.of(context).canPop()) {
@@ -322,15 +349,8 @@ class _AdminQuestionImportScreenState extends State<AdminQuestionImportScreen> {
                   ),
                   const SizedBox(height: AdminSpacing.sm),
                   Text(
-                    '• JSON object: { "questions": [ ... ] }.\n'
-                    '• Standard MCQ uses itemFormat "standard_mcq" or omits it, '
-                    'with four bilingual options.\n'
-                    '• Statement MCQ uses itemFormat "statement_mcq" and a '
-                    'statements array of { "en", "te" }.\n'
-                    '• Optional testId assigns a Test Series question after '
-                    'create. Omit it to leave the question unassigned.\n'
-                    '• Chapter import keeps the existing syllabus fields.\n'
-                    '• Successful import creates draft/inactive questions only.',
+                    key: const ValueKey('import-format-guidance'),
+                    _formatGuidance,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: AdminColors.textSecondary,
                       height: 1.45,

@@ -717,7 +717,7 @@ class QuestionImportValidator {
       ),
       partId: lockedOptional(record.partId, chapter.partId, 'partId'),
       topicId: lockedOptional(record.topicId, chapter.topicId, 'topicId'),
-      lessonId: record.lessonId,
+      lessonId: lockedOptional(record.lessonId, chapter.lessonId, 'lessonId'),
       syllabusUnitId: lockedOptional(
         record.syllabusUnitId,
         chapter.syllabusUnitId,
