@@ -344,6 +344,12 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
                 'Remaining capacity: $_remaining',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              Text(
+                'Changes are saved immediately.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AdminColors.textSecondary,
+                ),
+              ),
             ],
           ),
           AdminStatusBadge.test(_current.status),

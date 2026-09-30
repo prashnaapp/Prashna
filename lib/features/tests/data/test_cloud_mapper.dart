@@ -130,16 +130,10 @@ abstract final class TestCloudMapper {
         if (seriesId == null || seriesId.isEmpty) {
           errors.add('Grand Test group is required.');
         }
-        if (paperId == null || paperId.isEmpty) {
-          errors.add('Paper is required for Grand Tests.');
-        }
       case TestCategoryType.previousYear:
         final year = test.year;
         if (year == null || year < 1900 || year > 2100) {
           errors.add('A valid exam year is required.');
-        }
-        if (paperId == null || paperId.isEmpty) {
-          errors.add('Paper is required for Previous Papers.');
         }
       case TestCategoryType.chapterTests:
       case TestCategoryType.paperTests:

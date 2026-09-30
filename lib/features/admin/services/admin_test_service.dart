@@ -10,6 +10,22 @@ import '../../syllabus/services/syllabus_service.dart';
 import '../data/admin_content_callable_client.dart';
 import '../data/admin_question_scope.dart';
 import '../data/admin_test_series_question_query.dart';
+import 'admin_question_test_assignment.dart';
+
+/// Draft creation succeeded, then the Manage Questions assignment update failed.
+///
+/// The draft is left in place. Questions are not deleted.
+class InitialQuestionAssignmentException implements Exception {
+  const InitialQuestionAssignmentException(this.testId);
+
+  final String testId;
+
+  static const message =
+      'Draft created, but initial Question assignment failed.';
+
+  @override
+  String toString() => message;
+}
 
 /// Admin-only orchestration for Test Series definitions.
 ///
@@ -61,6 +77,207 @@ class AdminTestService {
     return _questions.getQuestionAssignmentState(ids);
   }
 
+  /// Compatible, unassigned Questions for optional seeding on Test create.
+  ///
+  /// Uses the same bank query as Manage Questions, then drops Questions that
+  /// are already owned by another Test. Chapter and Test Series banks stay
+  /// separate.
+  Future<QuestionBankPage> loadAvailableInitialQuestionPage(
+    TestModel test, {
+    String? searchText,
+    String? cursorDocumentId,
+    String? cursorSearchText,
+  }) async {
+    final page = await loadCompatibleQuestionPage(
+      test,
+      searchText: searchText,
+      cursorDocumentId: cursorDocumentId,
+      cursorSearchText: cursorSearchText,
+    );
+    final state = await loadQuestionAssignmentState([
+      for (final question in page.questions) question.id,
+    ]);
+    return QuestionBankPage(
+      questions: [
+        for (final question in page.questions)
+          if (_isAssignableQuestion(question) &&
+              questionIsCompatibleWithTest(question, test) &&
+              !questionIsOwnedElsewhere(state, question.id))
+            question,
+      ],
+      hasMore: page.hasMore,
+      cursorDocumentId: page.cursorDocumentId,
+      cursorSearchText: page.cursorSearchText,
+    );
+  }
+
+  /// Validates and orders optional initial Question IDs for one draft.
+  ///
+  /// Duplicates collapse to the first occurrence. An incompatible, missing,
+  /// or already-owned ID fails the whole selection.
+  Future<List<String>> normalizeInitialQuestionIds(
+    TestModel test,
+    List<String> rawIds,
+  ) async {
+    final ids = dedupeQuestionIds(rawIds);
+    if (ids.length > AdminQuestionTestAssignment.maxAssignedQuestionsPerTest) {
+      throw const FormatException('A Test can assign at most 160 Questions.');
+    }
+    if (ids.isEmpty) return const [];
+
+    final questions = await loadQuestionsByIds(ids);
+    final byId = {for (final question in questions) question.id: question};
+    final state = await loadQuestionAssignmentState(ids);
+    for (final id in ids) {
+      final question = byId[id];
+      if (question == null) {
+        throw FormatException('Question "$id" does not exist.');
+      }
+      if (!_isAssignableQuestion(question)) {
+        throw FormatException('Archived Question "$id" cannot be assigned.');
+      }
+      if (!questionIsCompatibleWithTest(question, test)) {
+        throw FormatException(
+          'Question "$id" is not compatible with this Test.',
+        );
+      }
+      if (questionIsOwnedElsewhere(state, id)) {
+        throw FormatException(
+          'Question "$id" is already assigned to another Test.',
+        );
+      }
+    }
+    return ids;
+  }
+
+  /// Creates a draft with no Questions, then assigns [initialQuestionIds]
+  /// through [updateTest] — the same callable transaction as Manage Questions.
+  Future<String> createDraftWithInitialQuestions(
+    TestModel test, {
+    List<String> initialQuestionIds = const [],
+  }) async {
+    final ids = await normalizeInitialQuestionIds(test, initialQuestionIds);
+    final createdId = await createTest(_withoutQuestionIds(test));
+    if (ids.isEmpty) return createdId;
+    try {
+      final created = await getTest(createdId);
+      if (created == null) {
+        throw const FormatException('Test was not found.');
+      }
+      await updateTest(_withQuestionIds(created, ids));
+    } catch (error) {
+      if (error is InitialQuestionAssignmentException) rethrow;
+      throw InitialQuestionAssignmentException(createdId);
+    }
+    return createdId;
+  }
+
+  static List<String> dedupeQuestionIds(Iterable<String> rawIds) {
+    final ids = <String>[];
+    final seen = <String>{};
+    for (final raw in rawIds) {
+      for (final part in raw.split(RegExp(r'[\n,]'))) {
+        final id = part.trim();
+        if (id.isEmpty || !seen.add(id)) continue;
+        ids.add(id);
+      }
+    }
+    return ids;
+  }
+
+  static bool questionIsOwnedElsewhere(
+    AdminQuestionAssignmentState state,
+    String questionId,
+  ) {
+    final owner = state.owners[questionId]?.trim();
+    if (owner != null && owner.isNotEmpty) return true;
+    return state.legacyTestIds[questionId]?.isNotEmpty ?? false;
+  }
+
+  static bool questionIsCompatibleWithTest(Question question, TestModel test) {
+    if (question.courseId.trim() != test.examId.trim()) return false;
+    switch (test.category) {
+      case TestCategoryType.partTests:
+        return question.contentArea ==
+                AdminQuestionScope.contentAreaTestSeries &&
+            question.testSeriesCategory == AdminQuestionScope.categoryPart &&
+            question.paperId == test.paperId;
+      case TestCategoryType.mockTests:
+        return question.contentArea ==
+                AdminQuestionScope.contentAreaTestSeries &&
+            question.testSeriesCategory == AdminQuestionScope.categoryMock &&
+            question.seriesId == test.seriesId;
+      case TestCategoryType.previousYear:
+        return question.contentArea ==
+                AdminQuestionScope.contentAreaTestSeries &&
+            question.testSeriesCategory ==
+                AdminQuestionScope.categoryPreviousYear &&
+            question.year == test.year;
+      case TestCategoryType.chapterTests:
+      case TestCategoryType.paperTests:
+        return question.contentArea == AdminQuestionScope.contentAreaChapter &&
+            questionMatchesChapterTest(question, test);
+    }
+  }
+
+  static bool _isAssignableQuestion(Question question) {
+    return question.status != QuestionPublicationStatus.archived;
+  }
+
+  static TestModel _withoutQuestionIds(TestModel test) {
+    return TestModel(
+      id: test.id,
+      examId: test.examId,
+      category: test.category,
+      title: test.title,
+      description: test.description,
+      questionCount: test.questionCount,
+      marks: test.marks,
+      durationMinutes: test.durationMinutes,
+      negativeMarking: test.negativeMarking,
+      difficulty: test.difficulty,
+      questionIds: const [],
+      status: TestPublicationStatus.draft,
+      paperId: test.paperId,
+      partId: test.partId,
+      syllabusUnitId: test.syllabusUnitId,
+      majorStudyAreaId: test.majorStudyAreaId,
+      contentTopicId: test.contentTopicId,
+      canonicalTopicId: test.canonicalTopicId,
+      lessonId: test.lessonId,
+      scopeShape: test.scopeShape,
+      year: test.year,
+      seriesId: test.seriesId,
+    );
+  }
+
+  static TestModel _withQuestionIds(TestModel test, List<String> ids) {
+    return TestModel(
+      id: test.id,
+      examId: test.examId,
+      category: test.category,
+      title: test.title,
+      description: test.description,
+      questionCount: ids.length,
+      marks: test.marks,
+      durationMinutes: test.durationMinutes,
+      negativeMarking: test.negativeMarking,
+      difficulty: test.difficulty,
+      questionIds: ids,
+      status: test.status,
+      paperId: test.paperId,
+      partId: test.partId,
+      syllabusUnitId: test.syllabusUnitId,
+      majorStudyAreaId: test.majorStudyAreaId,
+      contentTopicId: test.contentTopicId,
+      canonicalTopicId: test.canonicalTopicId,
+      lessonId: test.lessonId,
+      scopeShape: test.scopeShape,
+      year: test.year,
+      seriesId: test.seriesId,
+    );
+  }
+
   Future<QuestionBankPage> loadCompatibleQuestionPage(
     TestModel test, {
     String? searchText,
@@ -74,13 +291,22 @@ class AdminTestService {
           'Test Series ownership is incomplete for this Test.',
         );
       }
-      return _questions.loadTestSeriesQuestionPage(
+      final page = await _questions.loadTestSeriesQuestionPage(
         AdminTestSeriesQuestionQuery.fromScope(
           scope,
           searchText: searchText,
           cursorDocumentId: cursorDocumentId,
           cursorSearchText: cursorSearchText,
         ),
+      );
+      return QuestionBankPage(
+        questions: [
+          for (final question in page.questions)
+            if (_isAssignableQuestion(question)) question,
+        ],
+        hasMore: page.hasMore,
+        cursorDocumentId: page.cursorDocumentId,
+        cursorSearchText: page.cursorSearchText,
       );
     }
 
@@ -98,6 +324,7 @@ class AdminTestService {
         if ((question.contentArea == null ||
                 question.contentArea ==
                     AdminQuestionScope.contentAreaChapter) &&
+            _isAssignableQuestion(question) &&
             questionMatchesChapterTest(question, test) &&
             (normalizedSearch.isEmpty ||
                 _questionSearchText(question).contains(normalizedSearch)))
@@ -193,34 +420,80 @@ class AdminTestService {
     return _tests.createTest(draft);
   }
 
-  Future<void> updateTest(TestModel test) async {
-    final errors = validate(test, documentId: test.id);
-    if (errors.isNotEmpty) {
-      throw FormatException(errors.join(' '));
-    }
-    await _validateAssignedQuestions(test);
-
-    // Form Save can change status. Apply the same publication guards as
-    // [publishTest] so archived → published cannot bypass the list path.
+  Future<void> updateTest(
+    TestModel test, {
+    bool preserveAssignments = false,
+  }) async {
+    // Re-read for current client-side validation. The preserve intent is also
+    // sent to the callable, which re-reads membership inside its transaction;
+    // this client snapshot is not the concurrency boundary.
     final current = await _tests.getAdminTestById(test.id);
     if (current == null) {
       throw const FormatException('Test was not found.');
     }
-    if (test.status == TestPublicationStatus.published &&
+    final effective = preserveAssignments
+        ? _withServerAssignments(test, current)
+        : test;
+    final errors = validate(effective, documentId: effective.id);
+    if (errors.isNotEmpty) {
+      throw FormatException(errors.join(' '));
+    }
+    await _validateAssignedQuestions(effective);
+
+    if (effective.status == TestPublicationStatus.published &&
         current.status != TestPublicationStatus.published) {
       if (current.status == TestPublicationStatus.archived) {
         throw const FormatException('Archived tests cannot be published.');
       }
       final publicationErrors = TestCloudMapper.validateForPublication(
-        test,
-        documentId: test.id,
+        effective,
+        documentId: effective.id,
       );
       if (publicationErrors.isNotEmpty) {
         throw FormatException(publicationErrors.join(' '));
       }
     }
 
-    await _tests.updateTest(test);
+    await _tests.updateTest(
+      effective,
+      preserveQuestionAssignments: preserveAssignments,
+    );
+  }
+
+  /// Metadata edits keep the assignment set that is already stored.
+  ///
+  /// [questionIds] always come from [current]. When that set is non-empty,
+  /// question count, marks, and duration are the assignment transaction's
+  /// values, not the form copy captured when Edit Test opened.
+  static TestModel _withServerAssignments(TestModel form, TestModel current) {
+    final ids = List<String>.unmodifiable(current.questionIds);
+    final assigned = ids.isNotEmpty;
+    return TestModel(
+      id: form.id,
+      examId: form.examId,
+      category: form.category,
+      title: form.title,
+      description: form.description,
+      questionCount: assigned ? ids.length : form.questionCount,
+      marks: assigned ? current.marks : form.marks,
+      durationMinutes: assigned
+          ? current.durationMinutes
+          : form.durationMinutes,
+      negativeMarking: form.negativeMarking,
+      difficulty: form.difficulty,
+      questionIds: ids,
+      status: form.status,
+      paperId: form.paperId,
+      partId: form.partId,
+      syllabusUnitId: form.syllabusUnitId,
+      majorStudyAreaId: form.majorStudyAreaId ?? current.majorStudyAreaId,
+      contentTopicId: form.contentTopicId ?? current.contentTopicId,
+      canonicalTopicId: form.canonicalTopicId ?? current.canonicalTopicId,
+      lessonId: form.lessonId ?? current.lessonId,
+      scopeShape: form.scopeShape ?? current.scopeShape,
+      year: form.year,
+      seriesId: form.seriesId,
+    );
   }
 
   Future<void> publishTest(String testId) async {
@@ -348,7 +621,7 @@ class AdminTestService {
           partId: partId,
           unitId: unitId,
           paperRequired: true,
-          partRequiredIfPaperHasParts: true,
+          partRequiredIfPaperHasParts: false,
           unitRequired: false,
         );
       case TestCategoryType.mockTests:
@@ -361,7 +634,7 @@ class AdminTestService {
             paperId: paperId,
             partId: partId,
             unitId: unitId,
-            paperRequired: true,
+            paperRequired: false,
             partRequiredIfPaperHasParts: false,
             unitRequired: false,
           ),
@@ -378,7 +651,7 @@ class AdminTestService {
             paperId: paperId,
             partId: partId,
             unitId: unitId,
-            paperRequired: true,
+            paperRequired: false,
             partRequiredIfPaperHasParts: false,
             unitRequired: false,
           ),

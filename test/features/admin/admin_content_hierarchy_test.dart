@@ -10,6 +10,7 @@ import 'package:telangana_prep/features/admin/services/admin_test_service.dart';
 import 'package:telangana_prep/features/authentication/models/auth_user.dart';
 import 'package:telangana_prep/features/course_enrollment/model/course.dart';
 import 'package:telangana_prep/features/syllabus/services/syllabus_service.dart';
+import 'package:telangana_prep/features/tests/data/grand_test_series.dart';
 import 'package:telangana_prep/features/tests/data/models/test_models.dart';
 import 'package:telangana_prep/features/tests/repository/test_cloud_repository.dart';
 
@@ -102,6 +103,14 @@ void main() {
           paperId: 'group-ii-paper-i',
           year: 2016,
         ),
+        testDoc(
+          id: 'pw-legacy',
+          examId: 'group-ii',
+          category: TestCategoryType.partTests,
+          title: 'Legacy Part Test',
+          paperId: 'group-ii-paper-ii',
+          partId: 'part-i',
+        ),
       ];
 
       expect(
@@ -118,17 +127,24 @@ void main() {
           tests: tests,
           courseId: 'group-ii',
           seriesId: 'Grand Test 1',
-          paperId: 'group-ii-paper-i',
         ).map((test) => test.id),
         ['gt-1'],
       );
+      expect(AdminTestHierarchy.years(tests: tests, courseId: 'group-ii'), [
+        2016,
+        2024,
+      ]);
+      expect(AdminTestHierarchy.years(tests: tests, courseId: 'group-iii'), [
+        2018,
+        2024,
+      ]);
       expect(
-        AdminTestHierarchy.years(tests: tests, courseId: 'group-ii'),
-        [2016],
-      );
-      expect(
-        AdminTestHierarchy.years(tests: tests, courseId: 'group-iii'),
-        isEmpty,
+        AdminTestHierarchy.paperWise(
+          tests: tests,
+          courseId: 'group-ii',
+          paperId: 'group-ii-paper-ii',
+        ).map((test) => test.id),
+        ['pw-legacy'],
       );
     });
   });
@@ -149,9 +165,7 @@ void main() {
     expect(find.text('Test Series'), findsOneWidget);
     expect(find.text('Mock Tests'), findsNothing);
     expect(
-      find.text(
-        'Browse the syllabus hierarchy and manage chapter tests',
-      ),
+      find.text('Browse the syllabus hierarchy and manage chapter tests'),
       findsOneWidget,
     );
   });
@@ -175,13 +189,12 @@ void main() {
 
     expect(syllabus.papers, hasLength(4));
     for (final paper in syllabus.papers) {
-      expect(
-        find.text(AdminTestHierarchy.paperLabel(paper)),
-        findsOneWidget,
-      );
+      expect(find.text(AdminTestHierarchy.paperLabel(paper)), findsOneWidget);
     }
 
-    await tester.tap(find.text(AdminTestHierarchy.paperLabel(syllabus.papers.first)));
+    await tester.tap(
+      find.text(AdminTestHierarchy.paperLabel(syllabus.papers.first)),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Parts'), findsNothing);
@@ -248,10 +261,7 @@ void main() {
 
     expect(syllabus.papers, hasLength(3));
     for (final paper in syllabus.papers) {
-      expect(
-        find.text(AdminTestHierarchy.paperLabel(paper)),
-        findsOneWidget,
-      );
+      expect(find.text(AdminTestHierarchy.paperLabel(paper)), findsOneWidget);
     }
   });
 
@@ -280,39 +290,39 @@ void main() {
     expect(find.text('Mock Tests'), findsNothing);
   });
 
-  testWidgets('Paper-wise Tests: Paper II opens Parts as the next level', (
-    tester,
-  ) async {
-    final paper = SyllabusService.instance.getPaper(
-      courseId: 'group-ii',
-      paperId: 'group-ii-paper-ii',
-    )!;
-    final service = _FakeAdminTestService(
-      courses: const [groupIi],
-      tests: const [],
-    );
+  testWidgets('Paper-wise papers open Managed Tests directly', (tester) async {
+    for (final course in const [groupIi, groupIii]) {
+      final syllabus = SyllabusService.instance.getCourseById(course.courseId)!;
+      for (final paper in syllabus.papers) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AdminTestSeriesBrowserScreen(
+              service: _FakeAdminTestService(
+                courses: [course],
+                tests: [
+                  testDoc(
+                    id: 'legacy-${paper.id}',
+                    examId: course.courseId,
+                    category: TestCategoryType.partTests,
+                    title: 'Legacy Part Test',
+                    paperId: paper.id,
+                    partId: paper.parts.isEmpty ? null : paper.parts.first.id,
+                  ),
+                ],
+              ),
+              courseId: course.courseId,
+              mode: AdminTestSeriesMode.paperWise,
+              paperId: paper.id,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AdminTestSeriesBrowserScreen(
-          service: service,
-          courseId: 'group-ii',
-          mode: AdminTestSeriesMode.paperWise,
-          paperId: paper.id,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Parts'), findsWidgets);
-    expect(find.text('Create Test'), findsNothing);
-    for (final part in paper.parts) {
-      expect(find.text(part.displayName), findsOneWidget);
+        expect(find.text('Create Test'), findsOneWidget);
+        expect(find.text('Parts'), findsNothing);
+        expect(find.text('Managed Tests'), findsOneWidget);
+      }
     }
-
-    await tester.tap(find.text(paper.parts.first.displayName));
-    await tester.pumpAndSettle();
-    expect(find.text('Create Test'), findsOneWidget);
   });
 
   testWidgets('Grand Tests always lists the four approved series', (
@@ -341,6 +351,40 @@ void main() {
     expect(find.textContaining('No Grand Test groups yet'), findsNothing);
     expect(find.text('Grand Test 1'), findsNothing);
     expect(find.text('+ Grand Test group'), findsNothing);
+  });
+
+  testWidgets('every Grand series opens managed tests without a paper folder', (
+    tester,
+  ) async {
+    for (final seriesId in GrandTestSeries.ids) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AdminTestSeriesBrowserScreen(
+            service: _FakeAdminTestService(
+              courses: const [groupIi],
+              tests: [
+                testDoc(
+                  id: 'legacy-$seriesId',
+                  examId: 'group-ii',
+                  category: TestCategoryType.mockTests,
+                  title: 'Legacy Paper I',
+                  paperId: 'group-ii-paper-i',
+                  seriesId: seriesId,
+                ),
+              ],
+            ),
+            courseId: 'group-ii',
+            mode: AdminTestSeriesMode.grandTests,
+            seriesId: seriesId,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create Test'), findsOneWidget);
+      expect(find.text('Paper I'), findsNothing);
+      expect(find.text('Paper II'), findsNothing);
+    }
   });
 
   testWidgets('Grand Tests keep legacy seriesIds visible without rewriting', (
@@ -403,7 +447,55 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('2016'), findsOneWidget);
-    expect(find.text('2024'), findsNothing);
+    expect(find.text('2024'), findsOneWidget);
+    expect(find.text('Examination year'), findsNothing);
+  });
+
+  testWidgets(
+    'Previous year opens the managed tests list without a paper folder',
+    (tester) async {
+      final service = _FakeAdminTestService(
+        courses: const [groupIi],
+        tests: const [],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AdminTestSeriesBrowserScreen(
+            service: service,
+            courseId: 'group-ii',
+            mode: AdminTestSeriesMode.previousPapers,
+            year: 2016,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create Test'), findsOneWidget);
+      expect(find.text('Paper I'), findsNothing);
+    },
+  );
+
+  testWidgets('Group-III renders its configured previous-paper years', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AdminTestSeriesBrowserScreen(
+          service: _FakeAdminTestService(
+            courses: const [groupIii],
+            tests: const [],
+          ),
+          courseId: 'group-iii',
+          mode: AdminTestSeriesMode.previousPapers,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2018'), findsOneWidget);
+    expect(find.text('2024'), findsOneWidget);
+    expect(find.text('Examination year'), findsNothing);
   });
 
   testWidgets('chapter leaf create passes locked scope', (tester) async {

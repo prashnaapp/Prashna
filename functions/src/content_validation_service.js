@@ -87,8 +87,23 @@ export function isDeleteSentinel(value) {
   );
 }
 
+function isFirestoreDeleteSentinel(value) {
+  try {
+    return Boolean(
+      value
+      && typeof value === 'object'
+      && typeof value.isEqual === 'function'
+      && value.isEqual(FieldValue.delete()),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function trimToNull(value) {
-  if (isDeleteSentinel(value) || value == null) return null;
+  if (isDeleteSentinel(value) || isFirestoreDeleteSentinel(value) || value == null) {
+    return null;
+  }
   const trimmed = String(value).trim();
   return trimmed === '' ? null : trimmed;
 }

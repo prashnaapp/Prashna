@@ -283,8 +283,14 @@ class TestCloudRepository {
     }
   }
 
-  /// Updates editable metadata, including explicit [questionIds] assignment.
-  Future<void> updateTest(TestModel test) async {
+  /// Updates metadata or explicit [questionIds] assignment.
+  ///
+  /// Metadata forms set [preserveQuestionAssignments], making the callable's
+  /// transaction keep canonical server membership regardless of this model.
+  Future<void> updateTest(
+    TestModel test, {
+    bool preserveQuestionAssignments = false,
+  }) async {
     final testId = test.id.trim();
     if (testId.isEmpty) {
       throw const FormatException('Test ID is required for update.');
@@ -298,7 +304,11 @@ class TestCloudRepository {
       if (_updateForTest != null) {
         await _updateForTest(testId: testId, data: data);
       } else {
-        await _callables.updateTest(testId: testId, data: data);
+        await _callables.updateTest(
+          testId: testId,
+          data: data,
+          preserveQuestionAssignments: preserveQuestionAssignments,
+        );
       }
     } on FirebaseException catch (error, stack) {
       debugPrint(

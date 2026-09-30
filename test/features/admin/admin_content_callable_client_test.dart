@@ -88,6 +88,68 @@ void main() {
     },
   );
 
+  test('metadata test update sends server-side membership intent', () async {
+    Map<String, dynamic>? calledData;
+    final client = AdminContentCallableClient(
+      callOverride: (name, data) async {
+        expect(name, 'adminUpdateTest');
+        calledData = data;
+        return const {};
+      },
+    );
+
+    await client.updateTest(
+      testId: 't-1',
+      data: const {
+        'id': 't-1',
+        'questionIds': ['stale-question'],
+      },
+      preserveQuestionAssignments: true,
+    );
+
+    expect(calledData?['preserveQuestionAssignments'], isTrue);
+    expect((calledData?['data'] as Map)['questionIds'], ['stale-question']);
+  });
+
+  test(
+    'test repository forwards metadata intent but not assignment intent',
+    () async {
+      final calls = <Map<String, dynamic>>[];
+      final repository = TestCloudRepository(
+        contentCallables: AdminContentCallableClient(
+          callOverride: (name, data) async {
+            expect(name, 'adminUpdateTest');
+            calls.add(data);
+            return const {};
+          },
+        ),
+      );
+      TestModel model(List<String> ids) => TestModel(
+        id: 't-contract',
+        examId: 'group-ii',
+        category: TestCategoryType.chapterTests,
+        title: 'Contract Test',
+        questionCount: ids.length,
+        marks: ids.length,
+        durationMinutes: ids.length,
+        negativeMarking: '0',
+        difficulty: 'Medium',
+        questionIds: ids,
+        status: TestPublicationStatus.draft,
+      );
+
+      await repository.updateTest(
+        model(const ['q-1']),
+        preserveQuestionAssignments: true,
+      );
+      await repository.updateTest(model(const ['q-1', 'q-2']));
+
+      expect(calls[0]['preserveQuestionAssignments'], isTrue);
+      expect(calls[1]['preserveQuestionAssignments'], isFalse);
+      expect((calls[1]['data'] as Map)['questionIds'], ['q-1', 'q-2']);
+    },
+  );
+
   test('assignment owner lookup uses the bounded admin callable', () async {
     String? calledName;
     Map<String, dynamic>? calledData;

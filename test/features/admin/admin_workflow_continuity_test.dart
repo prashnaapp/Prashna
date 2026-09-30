@@ -428,5 +428,8 @@ class _FakeTestService extends AdminTestService {
   Future<String> createTest(TestModel test) async => test.id;
 
   @override
-  Future<void> updateTest(TestModel test) async {}
+  Future<void> updateTest(
+    TestModel test, {
+    bool preserveAssignments = false,
+  }) async {}
 }

@@ -48,6 +48,21 @@ function sumMarks(questionDocs) {
   return questionDocs.reduce((total, doc) => total + marksValue(doc?.data), 0);
 }
 
+function assignmentAggregates(testData, questionDocs, questionIds) {
+  if (questionIds.length > 0) {
+    return {
+      questionCount: questionIds.length,
+      totalMarks: sumMarks(questionDocs),
+      durationMinutes: questionIds.length,
+    };
+  }
+  return {
+    questionCount: Number(testData.questionCount),
+    totalMarks: Number(testData.totalMarks ?? testData.marks ?? 0),
+    durationMinutes: Number(testData.durationMinutes),
+  };
+}
+
 function rejectAssignedStatusChange(questionId) {
   fail(
     'failed-precondition',
@@ -59,7 +74,7 @@ function rejectAssignedStatusChange(questionId) {
  * Claim/release assignment docs, align assigned question status, and return
  * server aggregates. Every read happens before any write. Must run inside the
  * same transaction as the test write. Does not delete Question documents and
- * does not change contentArea. Released questions are left unchanged.
+ * does not change contentArea. Released questions become draft/inactive.
  */
 async function syncAssignmentsInTransaction(db, tx, {
   testId,
@@ -71,8 +86,18 @@ async function syncAssignmentsInTransaction(db, tx, {
   targetStatus,
 }) {
   const loaded = [];
+  const previousSet = new Set(previousIds);
   for (const questionId of nextIds) {
     const question = await readQuestion(db, questionId, tx);
+    if (
+      trimToNull(question.data?.status) === 'archived'
+      && !previousSet.has(questionId)
+    ) {
+      fail(
+        'failed-precondition',
+        `Archived Question "${questionId}" cannot be assigned to a test.`,
+      );
+    }
     assertQuestionCompatibleWithTest(question.data, testData, questionId);
     if (targetStatus === 'published') {
       validateQuestionPayload(
@@ -81,6 +106,14 @@ async function syncAssignmentsInTransaction(db, tx, {
       );
     }
     loaded.push(question);
+  }
+
+  const nextSet = new Set(nextIds);
+  const released = new Map();
+  for (const questionId of previousIds) {
+    if (nextSet.has(questionId)) continue;
+    const question = await readQuestion(db, questionId, tx);
+    if (question.snap.exists) released.set(questionId, question);
   }
 
   const assignmentIds = [];
@@ -96,7 +129,6 @@ async function syncAssignmentsInTransaction(db, tx, {
     assignments.set(questionId, { ref, snap: await tx.get(ref) });
   }
 
-  const nextSet = new Set(nextIds);
   for (const questionId of previousIds) {
     if (nextSet.has(questionId)) continue;
     const { ref, snap } = assignments.get(questionId);
@@ -135,33 +167,20 @@ async function syncAssignmentsInTransaction(db, tx, {
     });
   }
 
-  return {
-    questionCount: nextIds.length,
-    totalMarks: sumMarks(loaded),
-    durationMinutes: nextIds.length,
-  };
-}
-
-async function recomputeAssignedTestAggregates(db, testId, changedQuestionId, changedMarks) {
-  await db.runTransaction(async (tx) => {
-    const test = await readTest(db, testId, tx);
-    if (!test.snap.exists) return;
-    const ids = orderedUniqueQuestionIds(test.data?.questionIds);
-    let totalMarks = 0;
-    for (const questionId of ids) {
-      if (questionId === changedQuestionId) {
-        totalMarks += changedMarks;
-        continue;
-      }
-      const question = await readQuestion(db, questionId, tx);
-      totalMarks += marksValue(question.data);
-    }
-    tx.update(test.ref, {
-      questionCount: ids.length,
-      totalMarks,
-      durationMinutes: ids.length,
+  for (const [questionId, question] of released.entries()) {
+    const assignment = assignments.get(questionId)?.snap;
+    const owner = assignment?.exists
+      ? trimToNull(assignment.data()?.testId)
+      : null;
+    if (owner && owner !== testId) continue;
+    tx.update(question.ref, {
+      status: 'draft',
+      isActive: false,
+      updatedAt: FieldValue.serverTimestamp(),
     });
-  });
+  }
+
+  return assignmentAggregates(testData, loaded, nextIds);
 }
 
 async function readQuestion(db, questionId, tx) {
@@ -194,8 +213,6 @@ export function createAdminContentService(db) {
     async updateQuestion({ questionId, data } = {}) {
       const id = trimToNull(questionId) || trimToNull(data?.id);
       if (!id) fail('invalid-argument', 'Question ID is required.');
-      let assignedTestId = null;
-      let nextMarks = null;
       await db.runTransaction(async (tx) => {
         const { snap, data: existing, ref } = await readQuestion(db, id, tx);
         if (!snap.exists) fail('not-found', 'Question was not found.');
@@ -211,15 +228,34 @@ export function createAdminContentService(db) {
         if (assignment.exists && statusChanging) {
           rejectAssignedStatusChange(id);
         }
+        if (
+          assignment.exists
+          && Number(existing?.marks) !== Number(payload.marks)
+        ) {
+          const assignedTestId = trimToNull(assignment.data()?.testId);
+          if (assignedTestId) {
+            const test = await readTest(db, assignedTestId, tx);
+            if (test.snap.exists) {
+              const ids = orderedUniqueQuestionIds(test.data?.questionIds);
+              let totalMarks = 0;
+              for (const assignedQuestionId of ids) {
+                if (assignedQuestionId === id) {
+                  totalMarks += marksValue(payload);
+                  continue;
+                }
+                const assignedQuestion = await readQuestion(db, assignedQuestionId, tx);
+                totalMarks += marksValue(assignedQuestion.data);
+              }
+              tx.update(test.ref, {
+                questionCount: ids.length,
+                totalMarks,
+                durationMinutes: ids.length,
+              });
+            }
+          }
+        }
         tx.update(ref, payload);
-        if (!assignment.exists) return;
-        if (Number(existing?.marks) === Number(payload.marks)) return;
-        assignedTestId = trimToNull(assignment.data()?.testId);
-        nextMarks = Number(payload.marks);
       });
-      if (assignedTestId && Number.isFinite(nextMarks)) {
-        await recomputeAssignedTestAggregates(db, assignedTestId, id, nextMarks);
-      }
       return { questionId: id };
     },
 
@@ -437,21 +473,29 @@ export function createAdminContentService(db) {
       return { testId: id, ...aggregates, status: 'draft', isPublished: false };
     },
 
-    async updateTest({ testId, data } = {}, options = {}) {
+    async updateTest({ testId, data, preserveQuestionAssignments = false } = {}, options = {}) {
       const id = trimToNull(testId) || trimToNull(data?.id);
       if (!id) fail('invalid-argument', 'Test ID is required.');
       const assignedBy = actorId(options.assignedBy);
-      const payload = prepareTestWrite(data || {}, { documentId: id, forUpdate: true });
-      delete payload.assignedBy;
-      if (payload.negativeMarks == null) payload.negativeMarks = 0;
-      const nextIds = orderedUniqueQuestionIds(payload.questionIds);
       const ref = testsCol(db).doc(id);
-      let writtenStatus = payload.status;
+      let writtenStatus;
 
       const aggregates = await db.runTransaction(async (tx) => {
         const current = await readTest(db, id, tx);
         if (!current.snap.exists) fail('not-found', 'Test was not found.');
         const previousIds = orderedUniqueQuestionIds(current.data?.questionIds);
+        const intended = preserveQuestionAssignments === true
+          ? { ...(data || {}), questionIds: previousIds }
+          : (data || {});
+        const payload = prepareTestWrite(intended, {
+          documentId: id,
+          forUpdate: true,
+        });
+        delete payload.assignedBy;
+        if (payload.negativeMarks == null) payload.negativeMarks = 0;
+        const nextIds = preserveQuestionAssignments === true
+          ? previousIds
+          : orderedUniqueQuestionIds(payload.questionIds);
         const totals = await syncAssignmentsInTransaction(db, tx, {
           testId: id,
           courseId: payload.courseId,

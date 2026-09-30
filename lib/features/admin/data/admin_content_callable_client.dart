@@ -171,10 +171,12 @@ class AdminContentCallableClient {
   Future<void> updateTest({
     required String testId,
     required Map<String, dynamic> data,
+    bool preserveQuestionAssignments = false,
   }) {
     return _call('adminUpdateTest', {
       'testId': testId,
       'data': encodeCallableWriteData(data),
+      'preserveQuestionAssignments': preserveQuestionAssignments,
     }).then((_) {});
   }
 

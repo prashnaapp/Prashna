@@ -67,10 +67,7 @@ void main() {
         courses: const [course],
         tests: [
           buildTest(id: 'draft-1'),
-          buildTest(
-            id: 'archived-1',
-            status: TestPublicationStatus.archived,
-          ),
+          buildTest(id: 'archived-1', status: TestPublicationStatus.archived),
         ],
       );
 
@@ -90,7 +87,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('test-publish-draft-1')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('test-publish-draft-1')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('test-publish-archived-1')),
         findsNothing,
@@ -107,63 +107,68 @@ void main() {
       expect(changeCount, 1);
     });
 
-    test('updateTest rejects archived → published (same as publishTest)',
-        () async {
-      final current = buildTest(
-        id: 'archived-update',
-        status: TestPublicationStatus.archived,
-      );
-      var updated = false;
-      final repo = TestCloudRepository.withLoader(
-        (_) async => const [],
-        getById: (_) async => current,
-        update: ({required testId, required data}) async {
-          updated = true;
-        },
-      );
-      final service = AdminTestService(testRepository: repo);
+    test(
+      'updateTest rejects archived → published (same as publishTest)',
+      () async {
+        final current = buildTest(
+          id: 'archived-update',
+          status: TestPublicationStatus.archived,
+        );
+        var updated = false;
+        final repo = TestCloudRepository.withLoader(
+          (_) async => const [],
+          getById: (_) async => current,
+          update: ({required testId, required data}) async {
+            updated = true;
+          },
+        );
+        final service = AdminTestService(testRepository: repo);
 
-      await expectLater(
-        () => service.updateTest(
+        await expectLater(
+          () => service.updateTest(
+            buildTest(
+              id: 'archived-update',
+              status: TestPublicationStatus.published,
+            ),
+          ),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('Archived tests cannot be published'),
+            ),
+          ),
+        );
+        expect(updated, isFalse);
+      },
+    );
+
+    test(
+      'updateTest allows draft → published when publication-valid',
+      () async {
+        final current = buildTest(id: 'draft-update');
+        Map<String, dynamic>? updatedData;
+        final repo = TestCloudRepository.withLoader(
+          (_) async => const [],
+          getById: (_) async => current,
+          update: ({required testId, required data}) async {
+            updatedData = data;
+          },
+        );
+        final service = AdminTestService(testRepository: repo);
+
+        await service.updateTest(
           buildTest(
-            id: 'archived-update',
+            id: 'draft-update',
             status: TestPublicationStatus.published,
           ),
-        ),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('Archived tests cannot be published'),
-          ),
-        ),
-      );
-      expect(updated, isFalse);
-    });
+        );
 
-    test('updateTest allows draft → published when publication-valid', () async {
-      final current = buildTest(id: 'draft-update');
-      Map<String, dynamic>? updatedData;
-      final repo = TestCloudRepository.withLoader(
-        (_) async => const [],
-        getById: (_) async => current,
-        update: ({required testId, required data}) async {
-          updatedData = data;
-        },
-      );
-      final service = AdminTestService(testRepository: repo);
-
-      await service.updateTest(
-        buildTest(
-          id: 'draft-update',
-          status: TestPublicationStatus.published,
-        ),
-      );
-
-      expect(updatedData, isNotNull);
-      expect(updatedData!['isPublished'], isTrue);
-      expect(updatedData!['status'], 'published');
-    });
+        expect(updatedData, isNotNull);
+        expect(updatedData!['isPublished'], isTrue);
+        expect(updatedData!['status'], 'published');
+      },
+    );
   });
 
   group('Hierarchy labels and cascading (Phase 4D)', () {
@@ -173,10 +178,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: AdminTestRow(
-              test: buildTest(),
-              onEdit: () {},
-            ),
+            body: AdminTestRow(test: buildTest(), onEdit: () {}),
           ),
         ),
       );
@@ -188,7 +190,9 @@ void main() {
       expect(find.text('group-ii-paper-i-area-01'), findsNothing);
     });
 
-    testWidgets('course change clears seriesId on unlocked form', (tester) async {
+    testWidgets('course change clears seriesId on unlocked form', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(const Size(900, 2200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -245,8 +249,8 @@ void main() {
     });
   });
 
-  group('Previous Papers year continuity (Phase 4D)', () {
-    testWidgets('added examination year remains listed after drill and back', (
+  group('Previous Papers configured years', () {
+    testWidgets('configured years open the managed tests screen directly', (
       tester,
     ) async {
       final service = _FakeManagedTestService(
@@ -265,22 +269,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('No examination years yet'), findsOneWidget);
+      expect(find.text('2016'), findsOneWidget);
+      expect(find.text('2024'), findsOneWidget);
+      expect(find.text('Examination year'), findsNothing);
 
-      await tester.tap(find.text('Examination year'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), '2018');
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Paper I'), findsOneWidget);
-
-      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-      navigator.pop();
+      await tester.tap(find.text('2016'));
       await tester.pumpAndSettle();
 
-      expect(find.text('2018'), findsOneWidget);
-      expect(find.text('No examination years yet'), findsNothing);
+      expect(find.text('Create Test'), findsOneWidget);
+      expect(find.text('Paper I'), findsNothing);
     });
   });
 }

@@ -153,7 +153,7 @@ void main() {
     expect(errors, contains(contains('does not belong')));
   });
 
-  test('paper-wise tests require paper and part when the paper has parts', () {
+  test('paper-wise tests require paper without a part', () {
     final service = AdminTestService(
       testRepository: TestCloudRepository.withLoader((_) async => const []),
     );
@@ -173,7 +173,7 @@ void main() {
         ),
         documentId: 'pw-1',
       ),
-      contains(contains('Part is required')),
+      isEmpty,
     );
     expect(
       service.validate(
@@ -237,6 +237,24 @@ void main() {
       ),
       isEmpty,
     );
+    expect(
+      service.validate(
+        const TestModel(
+          id: 'gt-3',
+          examId: 'group-ii',
+          category: TestCategoryType.mockTests,
+          title: 'Series Grand Test',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          seriesId: 'Grand Test - I',
+        ),
+        documentId: 'gt-3',
+      ),
+      isEmpty,
+    );
   });
 
   test('previous papers require year and paper', () {
@@ -277,6 +295,24 @@ void main() {
           year: 2016,
         ),
         documentId: 'py-2',
+      ),
+      isEmpty,
+    );
+    expect(
+      service.validate(
+        const TestModel(
+          id: 'py-3',
+          examId: 'group-ii',
+          category: TestCategoryType.previousYear,
+          title: '2016 Paper',
+          questionCount: 1,
+          marks: 1,
+          durationMinutes: 1,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          year: 2016,
+        ),
+        documentId: 'py-3',
       ),
       isEmpty,
     );
@@ -734,7 +770,8 @@ void main() {
       );
 
       expect(
-        () => service.createTest(currentAffairsTest(questionIds: const ['ir-1'])),
+        () =>
+            service.createTest(currentAffairsTest(questionIds: const ['ir-1'])),
         throwsA(
           isA<FormatException>().having(
             (error) => error.message,

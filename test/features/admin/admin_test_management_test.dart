@@ -229,10 +229,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Draft'), findsOneWidget);
-    expect(
-      service.statuses['test-group-ii-001'],
-      TestPublicationStatus.draft,
-    );
+    expect(service.statuses['test-group-ii-001'], TestPublicationStatus.draft);
   });
 
   testWidgets('8: locked chapter scope hides category pickers', (tester) async {
@@ -266,10 +263,8 @@ void main() {
     expect(submitted!.paperId, 'group-ii-paper-i');
     expect(submitted!.syllabusUnitId, 'group-ii-paper-i-area-01');
     expect(submitted!.partId, isNull);
-    expect(
-      find.text('Append questions from this Chapter/Topic'),
-      findsOneWidget,
-    );
+    expect(find.text('Question IDs (optional)'), findsNothing);
+    expect(find.text('Filter-based question selection'), findsNothing);
     expect(find.text('Paper ID'), findsNothing);
   });
 
@@ -307,6 +302,170 @@ void main() {
     expect(submitted!.seriesId, isNull);
   });
 
+  testWidgets('Grand create scope does not require a paper', (tester) async {
+    TestModel? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdminTestForm(
+            courses: const [course],
+            scope: const AdminTestScope(
+              category: TestCategoryType.mockTests,
+              courseId: 'group-ii',
+              seriesId: GrandTestSeries.grandTestI,
+            ),
+            onSubmit: (model) async => submitted = model,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.textContaining('Grand Test: ${GrandTestSeries.grandTestI}'),
+      findsOneWidget,
+    );
+    await tester.enterText(find.byType(TextFormField).first, 'Grand Test I');
+    await tapSubmit(tester);
+
+    expect(submitted, isNotNull);
+    expect(submitted!.category, TestCategoryType.mockTests);
+    expect(submitted!.examId, 'group-ii');
+    expect(submitted!.seriesId, GrandTestSeries.grandTestI);
+    expect(submitted!.paperId, isNull);
+  });
+
+  testWidgets('Previous create scope does not require a paper', (tester) async {
+    TestModel? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdminTestForm(
+            courses: const [course],
+            scope: const AdminTestScope(
+              category: TestCategoryType.previousYear,
+              courseId: 'group-ii',
+              year: 2016,
+            ),
+            onSubmit: (model) async => submitted = model,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Examination year: 2016'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField).first, 'Previous 2016');
+    await tapSubmit(tester);
+
+    expect(submitted, isNotNull);
+    expect(submitted!.category, TestCategoryType.previousYear);
+    expect(submitted!.examId, 'group-ii');
+    expect(submitted!.year, 2016);
+    expect(submitted!.paperId, isNull);
+  });
+
+  testWidgets('Paper-wise create scope requires only the paper', (
+    tester,
+  ) async {
+    TestModel? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdminTestForm(
+            courses: const [course],
+            scope: const AdminTestScope(
+              category: TestCategoryType.partTests,
+              courseId: 'group-ii',
+              paperId: 'group-ii-paper-ii',
+            ),
+            onSubmit: (model) async => submitted = model,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Placement'), findsOneWidget);
+    expect(find.text('Part'), findsNothing);
+    await tester.enterText(find.byType(TextFormField).first, 'Paper II Test');
+    await tapSubmit(tester);
+
+    expect(submitted, isNotNull);
+    expect(submitted!.category, TestCategoryType.partTests);
+    expect(submitted!.examId, 'group-ii');
+    expect(submitted!.paperId, 'group-ii-paper-ii');
+    expect(submitted!.partId, isNull);
+  });
+
+  testWidgets('new draft keeps question assignment empty', (tester) async {
+    TestModel? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      formApp(
+        buildTest(id: '', title: 'Empty Draft'),
+        (model) async => submitted = model,
+      ),
+    );
+
+    expect(find.text('Initial Questions (Optional)'), findsOneWidget);
+    expect(find.text('Question IDs (optional)'), findsNothing);
+    expect(find.text('Filter-based question selection'), findsNothing);
+    expect(find.text('Paper ID'), findsNothing);
+    expect(find.text('Part ID'), findsNothing);
+    expect(find.text('Topic ID'), findsNothing);
+    expect(find.text('Lesson ID'), findsNothing);
+    expect(find.text('Syllabus Unit ID'), findsNothing);
+    expect(find.text('Append matching question IDs'), findsNothing);
+
+    await tapSubmit(tester);
+
+    expect(submitted, isNotNull);
+    expect(submitted!.status, TestPublicationStatus.draft);
+    expect(submitted!.questionIds, isEmpty);
+  });
+
+  testWidgets('editing metadata preserves existing questionIds', (
+    tester,
+  ) async {
+    TestModel? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      formApp(
+        TestModel(
+          id: 'assigned-test',
+          examId: 'group-ii',
+          category: TestCategoryType.partTests,
+          title: 'Paper Test',
+          questionCount: 2,
+          marks: 10,
+          durationMinutes: 30,
+          negativeMarking: '0',
+          difficulty: 'Medium',
+          questionIds: const ['q-1', 'q-2'],
+          paperId: 'group-ii-paper-i',
+        ),
+        (model) async => submitted = model,
+      ),
+    );
+
+    expect(find.text('Initial Questions (Optional)'), findsNothing);
+    expect(find.byKey(const ValueKey('initial-question-ids')), findsNothing);
+    expect(find.text('Assigned Questions: 2'), findsWidgets);
+    await tester.enterText(find.byType(TextFormField).first, 'Renamed Test');
+    await tapSubmit(tester);
+
+    expect(submitted, isNotNull);
+    expect(submitted!.title, 'Renamed Test');
+    expect(submitted!.questionIds, ['q-1', 'q-2']);
+    expect(submitted!.questionCount, 2);
+  });
+
   testWidgets('Grand Tests selector lists the four approved seriesIds', (
     tester,
   ) async {
@@ -337,7 +496,10 @@ void main() {
     expect(find.text(GrandTestSeries.grandTestI).hitTestable(), findsWidgets);
     expect(find.text(GrandTestSeries.grandTestII).hitTestable(), findsWidgets);
     expect(find.text(GrandTestSeries.grandTestIII).hitTestable(), findsWidgets);
-    expect(find.text(GrandTestSeries.oldGrandTests).hitTestable(), findsWidgets);
+    expect(
+      find.text(GrandTestSeries.oldGrandTests).hitTestable(),
+      findsWidgets,
+    );
     expect(find.text('Grand Test 1'), findsNothing);
     expect(find.text('Grand Test-I'), findsNothing);
   });

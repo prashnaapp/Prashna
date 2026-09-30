@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { FieldValue } from 'firebase-admin/firestore';
 
 import { createAdminContentService } from '../src/admin_content_service.js';
 import {
@@ -167,6 +168,28 @@ test('empty draft test is created with zero aggregates', async () => {
   assert.equal(stored.negativeMarks, 0);
 });
 
+test('zero-question draft preserves planning count, marks, and duration', async () => {
+  const { db, svc } = harness();
+  await svc.createTest(
+    {
+      testId: 't-planning',
+      data: draftTest({
+        id: 't-planning',
+        questionCount: 10,
+        totalMarks: 15,
+        durationMinutes: 30,
+      }),
+    },
+    { assignedBy: ACTOR },
+  );
+
+  const stored = (await db.collection('tests').doc('t-planning').get()).data();
+  assert.deepEqual(stored.questionIds, []);
+  assert.equal(stored.questionCount, 10);
+  assert.equal(stored.totalMarks, 15);
+  assert.equal(stored.durationMinutes, 30);
+});
+
 test('empty draft test cannot be published', async () => {
   const { svc } = harness();
   await svc.createTest(
@@ -296,11 +319,17 @@ test('removing a question releases only the assignment', async () => {
     },
     { assignedBy: ACTOR },
   );
+  await svc.publishTest({ testId: 't1' }, { assignedBy: ACTOR });
 
   await svc.updateTest(
     {
       testId: 't1',
-      data: draftTest({ id: 't1', questionIds: ['q-b'] }),
+      data: draftTest({
+        id: 't1',
+        questionIds: ['q-b'],
+        status: 'published',
+        isPublished: true,
+      }),
     },
     { assignedBy: ACTOR },
   );
@@ -310,12 +339,172 @@ test('removing a question releases only the assignment', async () => {
   assert.equal(kept.contentArea, 'testSeries');
   assert.equal(kept.testSeriesCategory, 'part');
   assert.equal(kept.paperId, 'group-ii-paper-i');
+  assert.equal(kept.status, 'draft');
+  assert.equal(kept.isActive, false);
   assert.equal((await db.collection('questions').doc('q-a').get()).exists, true);
   const stored = (await db.collection('tests').doc('t1').get()).data();
   assert.deepEqual(stored.questionIds, ['q-b']);
   assert.equal(stored.questionCount, 1);
   assert.equal(stored.totalMarks, 1);
   assert.equal(stored.durationMinutes, 1);
+});
+
+test('assigning to an already-published test publishes the added question', async () => {
+  const { db, svc } = harness();
+  await svc.createQuestion({ questionId: 'q-a', data: paperWiseQuestion({ id: 'q-a' }) });
+  await svc.createQuestion({ questionId: 'q-b', data: paperWiseQuestion({ id: 'q-b' }) });
+  await svc.createTest(
+    { testId: 't-live', data: draftTest({ id: 't-live', questionIds: ['q-a'] }) },
+    { assignedBy: ACTOR },
+  );
+  await svc.publishTest({ testId: 't-live' }, { assignedBy: ACTOR });
+
+  await svc.updateTest(
+    {
+      testId: 't-live',
+      data: draftTest({
+        id: 't-live',
+        questionIds: ['q-a', 'q-b'],
+        status: 'published',
+        isPublished: true,
+      }),
+    },
+    { assignedBy: ACTOR },
+  );
+
+  const added = (await db.collection('questions').doc('q-b').get()).data();
+  assert.equal(added.status, 'published');
+  assert.equal(added.isActive, true);
+  assert.equal(
+    (await db.collection('question_assignments').doc('q-b').get()).data().testId,
+    't-live',
+  );
+});
+
+test('archived questions cannot be newly assigned', async () => {
+  const { db, svc } = harness();
+  await svc.createQuestion({
+    questionId: 'q-archived',
+    data: paperWiseQuestion({
+      id: 'q-archived',
+      status: 'archived',
+      isActive: false,
+    }),
+  });
+
+  await assert.rejects(
+    () => svc.createTest(
+      {
+        testId: 't-archived-question',
+        data: draftTest({
+          id: 't-archived-question',
+          questionIds: ['q-archived'],
+        }),
+      },
+      { assignedBy: ACTOR },
+    ),
+    (err) => err.code === 'failed-precondition' && /Archived Question/.test(err.message),
+  );
+  assert.equal((await db.collection('tests').doc('t-archived-question').get()).exists, false);
+  assert.equal(
+    (await db.collection('question_assignments').doc('q-archived').get()).exists,
+    false,
+  );
+});
+
+test('metadata-only updates preserve canonical membership in both stale directions', async () => {
+  const { db, svc } = harness();
+  const ids = ['q-1', 'q-2', 'q-3', 'q-4', 'q-5'];
+  for (const id of ids) {
+    await svc.createQuestion({ questionId: id, data: paperWiseQuestion({ id }) });
+  }
+  await svc.createTest(
+    { testId: 't-metadata', data: draftTest({ id: 't-metadata', questionIds: ids }) },
+    { assignedBy: ACTOR },
+  );
+
+  await svc.updateTest(
+    {
+      testId: 't-metadata',
+      preserveQuestionAssignments: true,
+      data: draftTest({
+        id: 't-metadata',
+        title: 'Stale form with four',
+        questionIds: ids.slice(0, 4),
+      }),
+    },
+    { assignedBy: ACTOR },
+  );
+  let stored = (await db.collection('tests').doc('t-metadata').get()).data();
+  assert.deepEqual(stored.questionIds, ids);
+  assert.equal(stored.questionCount, 5);
+
+  await svc.updateTest(
+    {
+      testId: 't-metadata',
+      data: draftTest({ id: 't-metadata', questionIds: ids.slice(0, 4) }),
+    },
+    { assignedBy: ACTOR },
+  );
+  await svc.updateTest(
+    {
+      testId: 't-metadata',
+      preserveQuestionAssignments: true,
+      data: draftTest({
+        id: 't-metadata',
+        title: 'Stale form with five',
+        questionIds: ids,
+      }),
+    },
+    { assignedBy: ACTOR },
+  );
+  stored = (await db.collection('tests').doc('t-metadata').get()).data();
+  assert.deepEqual(stored.questionIds, ids.slice(0, 4));
+  assert.equal(stored.questionCount, 4);
+  assert.equal((await db.collection('question_assignments').doc('q-5').get()).exists, false);
+});
+
+test('decoded delete marker is absent during compatibility checks', async () => {
+  const { db, svc } = harness();
+  await svc.createQuestion({ questionId: 'q-no-part', data: paperWiseQuestion({ id: 'q-no-part' }) });
+  await svc.createTest(
+    {
+      testId: 't-no-part',
+      data: draftTest({ id: 't-no-part', questionIds: ['q-no-part'] }),
+    },
+    { assignedBy: ACTOR },
+  );
+
+  await svc.updateTest(
+    {
+      testId: 't-no-part',
+      preserveQuestionAssignments: true,
+      data: draftTest({
+        id: 't-no-part',
+        title: 'No false part mismatch',
+        partId: { _fieldDelete: true },
+        questionIds: ['stale-id'],
+      }),
+    },
+    { assignedBy: ACTOR },
+  );
+
+  const stored = (await db.collection('tests').doc('t-no-part').get()).data();
+  assert.equal(stored.partId, undefined);
+  assert.deepEqual(stored.questionIds, ['q-no-part']);
+  assert.doesNotThrow(() => assertQuestionCompatibleWithTest(
+    paperWiseQuestion({ id: 'q-delete' }),
+    draftTest({ partId: FieldValue.delete() }),
+    'q-delete',
+  ));
+  assert.throws(
+    () => assertQuestionCompatibleWithTest(
+      paperWiseQuestion({ id: 'q-wrong-part', partId: 'part-b' }),
+      draftTest({ partId: 'part-a' }),
+      'q-wrong-part',
+    ),
+    (err) => err.code === 'failed-precondition' && /test part/.test(err.message),
+  );
 });
 
 test('editing assigned question marks refreshes test totalMarks', async () => {
@@ -373,6 +562,64 @@ test('publish, draft, and archive follow the test without releasing assignments'
   assert.equal(questionDoc.isActive, false);
   assert.equal((await db.collection('tests').doc('t1').get()).data().status, 'archived');
   assert.equal((await db.collection('question_assignments').doc('q-part').get()).data().testId, 't1');
+});
+
+test('restoring an archived test to draft preserves ownership and aggregates', async () => {
+  const { db, svc } = harness();
+  await svc.createQuestion({
+    questionId: 'q-restore-a',
+    data: paperWiseQuestion({ id: 'q-restore-a', marks: 2 }),
+  });
+  await svc.createQuestion({
+    questionId: 'q-restore-b',
+    data: paperWiseQuestion({ id: 'q-restore-b', marks: 3 }),
+  });
+  await svc.createTest(
+    {
+      testId: 't-restore',
+      data: draftTest({
+        id: 't-restore',
+        questionIds: ['q-restore-b', 'q-restore-a'],
+      }),
+    },
+    { assignedBy: ACTOR },
+  );
+
+  await svc.setTestStatus(
+    { testId: 't-restore', status: 'archived' },
+    { assignedBy: ACTOR },
+  );
+  for (const id of ['q-restore-b', 'q-restore-a']) {
+    const questionData = (await db.collection('questions').doc(id).get()).data();
+    assert.equal(questionData.status, 'archived');
+    assert.equal(questionData.isActive, false);
+    assert.equal(
+      (await db.collection('question_assignments').doc(id).get()).data().testId,
+      't-restore',
+    );
+  }
+
+  await svc.setTestStatus(
+    { testId: 't-restore', status: 'draft' },
+    { assignedBy: ACTOR },
+  );
+
+  const restored = (await db.collection('tests').doc('t-restore').get()).data();
+  assert.equal(restored.status, 'draft');
+  assert.equal(restored.isPublished, false);
+  assert.deepEqual(restored.questionIds, ['q-restore-b', 'q-restore-a']);
+  assert.equal(restored.questionCount, 2);
+  assert.equal(restored.totalMarks, 5);
+  assert.equal(restored.durationMinutes, 2);
+  for (const id of restored.questionIds) {
+    const questionData = (await db.collection('questions').doc(id).get()).data();
+    assert.equal(questionData.status, 'draft');
+    assert.equal(questionData.isActive, false);
+    assert.equal(
+      (await db.collection('question_assignments').doc(id).get()).data().testId,
+      't-restore',
+    );
+  }
 });
 
 test('question context accepts chapter, paper-wise, grand, and previous shapes', () => {

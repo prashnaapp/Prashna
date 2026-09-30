@@ -446,7 +446,9 @@ void main() {
       expect(dirty, isTrue);
     });
 
-    testWidgets('question assignment text marks dirty', (tester) async {
+    testWidgets('test title edit marks dirty without assignment fields', (
+      tester,
+    ) async {
       var dirty = false;
       await tester.pumpWidget(
         MaterialApp(
@@ -465,10 +467,9 @@ void main() {
       );
       await settleDirtyTracking(tester);
       expect(dirty, isFalse);
+      expect(find.byKey(const ValueKey('question-ids')), findsNothing);
 
-      final idsField = find.byKey(const ValueKey('question-ids'));
-      await tester.ensureVisible(idsField);
-      await tester.enterText(idsField, 'q-1\nq-2');
+      await tester.enterText(find.byType(TextFormField).first, 'Updated title');
       await tester.pump();
       expect(dirty, isTrue);
     });
@@ -608,11 +609,11 @@ void main() {
       expect(find.text('Test Classification & Scope'), findsOneWidget);
       expect(find.text('Test Details'), findsOneWidget);
       expect(find.text('Exam Configuration'), findsOneWidget);
-      expect(find.text('Question Assignment'), findsOneWidget);
+      expect(find.text('Question Assignment'), findsNothing);
       expect(find.byKey(const ValueKey('submit-test')), findsOneWidget);
       expect(find.text('Create draft'), findsOneWidget);
       expect(find.byKey(const ValueKey('test-course')), findsOneWidget);
-      expect(find.byKey(const ValueKey('question-ids')), findsOneWidget);
+      expect(find.byKey(const ValueKey('question-ids')), findsNothing);
       expect(find.text('Publication'), findsNothing);
     });
 

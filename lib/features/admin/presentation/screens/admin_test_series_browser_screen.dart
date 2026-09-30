@@ -19,7 +19,13 @@ import '../widgets/admin_ui/admin_nav_tile.dart';
 import '../widgets/admin_ui/admin_page_header.dart';
 import '../widgets/admin_ui/admin_surface.dart';
 
-enum AdminTestSeriesMode { home, categories, paperWise, grandTests, previousPapers }
+enum AdminTestSeriesMode {
+  home,
+  categories,
+  paperWise,
+  grandTests,
+  previousPapers,
+}
 
 /// Admin TEST SERIES browser. Completely separate from Chapters.
 ///
@@ -61,8 +67,6 @@ class _AdminTestSeriesBrowserScreenState
 
   List<Course> _courses = const [];
   List<TestModel> _tests = const [];
-  /// Years added via "+ Examination year" before any test documents exist.
-  final Set<int> _knownYears = <int>{};
   bool _loading = true;
   String? _error;
 
@@ -132,51 +136,8 @@ class _AdminTestSeriesBrowserScreenState
     if (mounted && changed == true) await _load();
   }
 
-  Future<void> _addYear() async {
-    final controller = TextEditingController();
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Examination year'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Year',
-            hintText: '2016',
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-    // Dispose after the dialog route has finished tearing down.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      controller.dispose();
-    });
-    final year = int.tryParse(value ?? '');
-    if (year == null || year < 1900 || year > 2100) return;
-    setState(() => _knownYears.add(year));
-    _open(mode: AdminTestSeriesMode.previousPapers, year: year);
-  }
-
   String get _paperWiseTitle {
     if (widget.paperId == null) return 'Paper-wise Tests';
-    if (widget.partId != null) return 'Tests';
-    final paper = _syllabus.getPaper(
-      courseId: widget.courseId ?? '',
-      paperId: widget.paperId!,
-    );
-    if (paper != null && paper.hasCanonicalParts) return 'Parts';
     return 'Tests';
   }
 
@@ -190,12 +151,14 @@ class _AdminTestSeriesBrowserScreenState
       AdminTestSeriesMode.home => 'Test Series',
       AdminTestSeriesMode.categories => 'Test Series',
       AdminTestSeriesMode.paperWise => _paperWiseTitle,
-      AdminTestSeriesMode.grandTests => widget.seriesId == null
-          ? 'Grand Tests'
-          : (widget.paperId == null ? widget.seriesId! : 'Tests'),
-      AdminTestSeriesMode.previousPapers => widget.year == null
-          ? 'Previous Papers'
-          : (widget.paperId == null ? '${widget.year}' : 'Tests'),
+      AdminTestSeriesMode.grandTests =>
+        widget.seriesId == null
+            ? 'Grand Tests'
+            : (widget.paperId == null ? widget.seriesId! : 'Tests'),
+      AdminTestSeriesMode.previousPapers =>
+        widget.year == null
+            ? 'Previous Papers'
+            : (widget.paperId == null ? '${widget.year}' : 'Tests'),
     };
   }
 
@@ -219,14 +182,6 @@ class _AdminTestSeriesBrowserScreenState
             paperId: widget.paperId!,
           );
           parts.add(paper?.title ?? widget.paperId!);
-        }
-        if (widget.partId != null) {
-          final part = _syllabus.getPart(
-            courseId: courseId ?? '',
-            paperId: widget.paperId ?? '',
-            partId: widget.partId!,
-          );
-          parts.add(part?.displayName ?? widget.partId!);
         }
       case AdminTestSeriesMode.grandTests:
         parts.add('Grand Tests');
@@ -353,13 +308,13 @@ class _AdminTestSeriesBrowserScreenState
         ),
         _NavItem(
           title: 'Grand Tests',
-          subtitle: 'Grand Test → Paper → Test',
+          subtitle: 'Grand Test → Tests',
           icon: Icons.emoji_events_outlined,
           onTap: () => _open(mode: AdminTestSeriesMode.grandTests),
         ),
         _NavItem(
           title: 'Previous Papers',
-          subtitle: 'Examination year → Paper → Test',
+          subtitle: 'Examination year → Tests',
           icon: Icons.history_edu_outlined,
           onTap: () => _open(mode: AdminTestSeriesMode.previousPapers),
         ),
@@ -376,14 +331,10 @@ class _AdminTestSeriesBrowserScreenState
         for (final paper in course.papers)
           _NavItem(
             title: AdminTestHierarchy.paperLabel(paper),
-            subtitle: paper.hasCanonicalParts
-                ? '${paper.parts.length} parts'
-                : 'Tests',
+            subtitle: 'Tests',
             icon: Icons.description_outlined,
-            onTap: () => _open(
-              mode: AdminTestSeriesMode.paperWise,
-              paperId: paper.id,
-            ),
+            onTap: () =>
+                _open(mode: AdminTestSeriesMode.paperWise, paperId: paper.id),
           ),
       ]);
     }
@@ -400,27 +351,10 @@ class _AdminTestSeriesBrowserScreenState
       );
     }
 
-    if (paper.hasCanonicalParts && widget.partId == null) {
-      return _tileList([
-        for (final part in paper.parts)
-          _NavItem(
-            title: part.displayName,
-            subtitle: 'Actual test',
-            icon: Icons.folder_outlined,
-            onTap: () => _open(
-              mode: AdminTestSeriesMode.paperWise,
-              paperId: paper.id,
-              partId: part.id,
-            ),
-          ),
-      ]);
-    }
-
     final tests = AdminTestHierarchy.paperWise(
       tests: _tests,
       courseId: course.id,
       paperId: paper.id,
-      partId: widget.partId,
     );
     return _managedList(
       tests: tests,
@@ -429,7 +363,6 @@ class _AdminTestSeriesBrowserScreenState
           category: TestCategoryType.partTests,
           courseId: course.id,
           paperId: paper.id,
-          partId: widget.partId,
         ),
       ),
     );
@@ -452,28 +385,10 @@ class _AdminTestSeriesBrowserScreenState
         for (final id in ids)
           _NavItem(
             title: id,
-            subtitle: 'Paper → Actual test',
+            subtitle: 'Tests',
             icon: Icons.emoji_events_outlined,
-            onTap: () => _open(
-              mode: AdminTestSeriesMode.grandTests,
-              seriesId: id,
-            ),
-          ),
-      ]);
-    }
-
-    if (widget.paperId == null) {
-      return _tileList([
-        for (final paper in course.papers)
-          _NavItem(
-            title: AdminTestHierarchy.paperLabel(paper),
-            subtitle: 'Actual test',
-            icon: Icons.description_outlined,
-            onTap: () => _open(
-              mode: AdminTestSeriesMode.grandTests,
-              seriesId: widget.seriesId,
-              paperId: paper.id,
-            ),
+            onTap: () =>
+                _open(mode: AdminTestSeriesMode.grandTests, seriesId: id),
           ),
       ]);
     }
@@ -482,7 +397,6 @@ class _AdminTestSeriesBrowserScreenState
       tests: _tests,
       courseId: course.id,
       seriesId: widget.seriesId!,
-      paperId: widget.paperId!,
     );
     return _managedList(
       tests: tests,
@@ -490,7 +404,6 @@ class _AdminTestSeriesBrowserScreenState
         AdminTestScope(
           category: TestCategoryType.mockTests,
           courseId: course.id,
-          paperId: widget.paperId,
           seriesId: widget.seriesId,
         ),
       ),
@@ -499,44 +412,28 @@ class _AdminTestSeriesBrowserScreenState
 
   Widget _previousPapers(SyllabusCourse course) {
     if (widget.year == null) {
-      final years = <int>{
-        ...AdminTestHierarchy.years(
-          tests: _tests,
-          courseId: course.id,
-        ),
-        ..._knownYears,
-      }.toList()
-        ..sort();
+      final years = AdminTestHierarchy.years(
+        tests: _tests,
+        courseId: course.id,
+      );
       return ListView(
         padding: const EdgeInsets.all(AdminSpacing.pagePadding),
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
-              onPressed: _addYear,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Examination year'),
-            ),
-          ),
-          const SizedBox(height: AdminSpacing.lg),
           if (years.isEmpty)
             const AdminEmptyState(
-              title: 'No examination years yet',
+              title: 'No configured examination years',
               message:
-                  'Add the year the exam was conducted, then add one test '
-                  'per paper.',
+                  'No previous-paper years are configured for this course.',
               icon: Icons.history_edu_outlined,
             )
           else
             for (final year in years) ...[
               AdminNavTile(
                 title: '$year',
-                subtitle: 'Paper → Actual test',
+                subtitle: 'Tests',
                 icon: Icons.calendar_today_outlined,
-                onTap: () => _open(
-                  mode: AdminTestSeriesMode.previousPapers,
-                  year: year,
-                ),
+                onTap: () =>
+                    _open(mode: AdminTestSeriesMode.previousPapers, year: year),
               ),
               const SizedBox(height: AdminSpacing.md),
             ],
@@ -544,27 +441,10 @@ class _AdminTestSeriesBrowserScreenState
       );
     }
 
-    if (widget.paperId == null) {
-      return _tileList([
-        for (final paper in course.papers)
-          _NavItem(
-            title: AdminTestHierarchy.paperLabel(paper),
-            subtitle: 'Actual test',
-            icon: Icons.description_outlined,
-            onTap: () => _open(
-              mode: AdminTestSeriesMode.previousPapers,
-              year: widget.year,
-              paperId: paper.id,
-            ),
-          ),
-      ]);
-    }
-
     final tests = AdminTestHierarchy.previousPapers(
       tests: _tests,
       courseId: course.id,
       year: widget.year!,
-      paperId: widget.paperId!,
     );
     return _managedList(
       tests: tests,
@@ -572,7 +452,6 @@ class _AdminTestSeriesBrowserScreenState
         AdminTestScope(
           category: TestCategoryType.previousYear,
           courseId: course.id,
-          paperId: widget.paperId,
           year: widget.year,
         ),
       ),
@@ -617,9 +496,9 @@ class _AdminTestSeriesBrowserScreenState
             padding: const EdgeInsets.all(AdminSpacing.lg),
             child: Text(
               _contextPath!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AdminColors.textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AdminColors.textSecondary),
             ),
           );
         }

@@ -32,6 +32,7 @@ class AdminTestFormScreen extends StatefulWidget {
 class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
   late final AdminTestService _service;
   late final Future<List<Course>> _coursesFuture;
+  TestModel? _test;
   bool _dirty = false;
   AdminDirtyController? _dirtyController;
 
@@ -41,6 +42,7 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
   void initState() {
     super.initState();
     _service = widget.service ?? AdminTestService.instance;
+    _test = widget.test;
     _coursesFuture = _service.loadCourses();
   }
 
@@ -62,12 +64,31 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
   }
 
   Future<void> _save(TestModel test) async {
-    if (widget.test == null) {
-      await _service.createTest(test);
-    } else {
-      await _service.updateTest(test);
-    }
+    await _service.updateTest(test, preserveAssignments: true);
     if (mounted) Navigator.of(context).pop(true);
+  }
+
+  Future<void> _create(TestModel test, List<String> initialQuestionIds) async {
+    await _service.createDraftWithInitialQuestions(
+      test,
+      initialQuestionIds: initialQuestionIds,
+    );
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
+  Future<void> _openManageQuestions() async {
+    final test = _test;
+    if (test == null || _dirty) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            AdminTestAssignmentScreen(test: test, service: _service),
+      ),
+    );
+    if (!mounted) return;
+    final fresh = await _service.getTest(test.id);
+    if (!mounted || fresh == null) return;
+    setState(() => _test = fresh);
   }
 
   Future<void> _handlePopRequest() async {
@@ -128,20 +149,11 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
                 )
               : null,
           actions: [
-            if (widget.test != null)
+            if (_test != null)
               IconButton(
                 key: const ValueKey('test-form-manage-questions'),
                 tooltip: 'Manage Questions',
-                onPressed: _dirty
-                    ? null
-                    : () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => AdminTestAssignmentScreen(
-                            test: widget.test!,
-                            service: _service,
-                          ),
-                        ),
-                      ),
+                onPressed: _dirty ? null : _openManageQuestions,
                 icon: const Icon(Icons.quiz_outlined),
               ),
           ],
@@ -174,12 +186,19 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
                   width: double.infinity,
                   height: double.infinity,
                   child: AdminTestForm(
+                    key: ValueKey(
+                      '${_test?.id ?? 'new'}:${_test?.questionIds.join(',') ?? ''}',
+                    ),
                     courses: courses,
-                    initialTest: widget.test,
+                    initialTest: _test,
                     initialCourseId: widget.initialCourseId,
                     scope: widget.scope,
                     service: _service,
                     onSubmit: _save,
+                    onCreateDraft: _test == null ? _create : null,
+                    onManageQuestions: _test == null
+                        ? null
+                        : _openManageQuestions,
                     onCancel: () => _handlePopRequest(),
                     onDirtyChanged: (dirty) {
                       if (!mounted) return;

@@ -1,4 +1,5 @@
 import '../../syllabus/data/models/syllabus_models.dart';
+import '../../tests/data/previous_paper_years.dart';
 import '../../tests/data/models/test_models.dart';
 
 /// Filters Admin catalog tests by explicit metadata only.
@@ -16,9 +17,7 @@ abstract final class AdminTestHierarchy {
             test.category == TestCategoryType.chapterTests &&
             test.paperId == paperId &&
             test.syllabusUnitId == syllabusUnitId &&
-            (partId == null ||
-                partId.isEmpty ||
-                test.partId == partId))
+            (partId == null || partId.isEmpty || test.partId == partId))
           test,
     ];
   }
@@ -27,16 +26,12 @@ abstract final class AdminTestHierarchy {
     required List<TestModel> tests,
     required String courseId,
     required String paperId,
-    String? partId,
   }) {
     return [
       for (final test in tests)
         if (test.examId == courseId &&
             test.category == TestCategoryType.partTests &&
-            test.paperId == paperId &&
-            (partId == null
-                ? (test.partId == null || test.partId!.isEmpty)
-                : test.partId == partId))
+            test.paperId == paperId)
           test,
     ];
   }
@@ -45,14 +40,12 @@ abstract final class AdminTestHierarchy {
     required List<TestModel> tests,
     required String courseId,
     required String seriesId,
-    required String paperId,
   }) {
     return [
       for (final test in tests)
         if (test.examId == courseId &&
             test.category == TestCategoryType.mockTests &&
-            test.seriesId == seriesId &&
-            test.paperId == paperId)
+            test.seriesId == seriesId)
           test,
     ];
   }
@@ -61,14 +54,12 @@ abstract final class AdminTestHierarchy {
     required List<TestModel> tests,
     required String courseId,
     required int year,
-    required String paperId,
   }) {
     return [
       for (final test in tests)
         if (test.examId == courseId &&
             test.category == TestCategoryType.previousYear &&
-            test.year == year &&
-            test.paperId == paperId)
+            test.year == year)
           test,
     ];
   }
@@ -89,21 +80,12 @@ abstract final class AdminTestHierarchy {
     return list;
   }
 
-  /// Examination years as stored on test documents. Never inferred or rewritten.
+  /// Configured product years. These are navigation metadata, not documents.
   static List<int> years({
     required List<TestModel> tests,
     required String courseId,
   }) {
-    final values = <int>{};
-    for (final test in tests) {
-      if (test.examId != courseId) continue;
-      if (test.category != TestCategoryType.previousYear) continue;
-      final year = test.year;
-      if (year == null) continue;
-      values.add(year);
-    }
-    final list = values.toList()..sort();
-    return list;
+    return List<int>.of(PreviousPaperYears.forExam(courseId));
   }
 
   static String paperLabel(SyllabusPaper paper) =>

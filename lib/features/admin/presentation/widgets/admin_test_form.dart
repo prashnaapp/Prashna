@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../course_enrollment/model/course.dart';
+import '../../../question_bank/data/models/question_models.dart';
 import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
 import '../../../tests/data/grand_test_series.dart';
@@ -10,10 +11,14 @@ import '../../services/admin_test_service.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
 import 'admin_ui/admin_form_section.dart';
+import 'admin_ui/admin_question_row.dart';
 import 'admin_ui/admin_status_badge.dart';
 import 'admin_ui/admin_surface.dart';
 
 typedef AdminTestSubmit = Future<void> Function(TestModel test);
+
+typedef AdminTestCreate =
+    Future<void> Function(TestModel test, List<String> initialQuestionIds);
 
 /// Create/edit form for the canonical [TestModel] catalog definition.
 class AdminTestForm extends StatefulWidget {
@@ -25,6 +30,8 @@ class AdminTestForm extends StatefulWidget {
     this.initialCourseId,
     this.scope,
     this.service,
+    this.onCreateDraft,
+    this.onManageQuestions,
     this.onCancel,
     this.syllabusService,
     this.onDirtyChanged,
@@ -36,6 +43,11 @@ class AdminTestForm extends StatefulWidget {
   final String? initialCourseId;
   final AdminTestScope? scope;
   final AdminTestService? service;
+
+  /// Create-only. Receives metadata plus optional initial Question IDs.
+  /// Membership is not written onto [TestModel.questionIds] by this form.
+  final AdminTestCreate? onCreateDraft;
+  final VoidCallback? onManageQuestions;
   final VoidCallback? onCancel;
   final SyllabusService? syllabusService;
   final ValueChanged<bool>? onDirtyChanged;
@@ -52,13 +64,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
   late final TextEditingController _marks;
   late final TextEditingController _duration;
   late final TextEditingController _negativeMarking;
-  late final TextEditingController _questionIds;
-  late final TextEditingController _filterPaper;
-  late final TextEditingController _filterPart;
-  late final TextEditingController _filterTopic;
-  late final TextEditingController _filterLesson;
-  late final TextEditingController _filterSyllabusUnit;
   late final TextEditingController _year;
+  late final TextEditingController _initialQuestionIds;
   String? _seriesId;
 
   String? _courseId;
@@ -68,17 +75,16 @@ class _AdminTestFormState extends State<AdminTestForm> {
   TestCategoryType _category = TestCategoryType.chapterTests;
   TestPublicationStatus _status = TestPublicationStatus.draft;
   bool _saving = false;
-  bool _loadingFilter = false;
+  bool _draftPersisted = false;
+  bool _loadingAvailable = false;
   String? _submitError;
-  String? _filterMessage;
+  String? _availableMessage;
+  List<Question> _availableQuestions = const [];
+  final Set<String> _selectedQuestionIds = <String>{};
   bool _trackDirty = false;
   bool _isDirty = false;
 
   TestModel? get _initial => widget.initialTest;
-  AdminTestService? _service;
-
-  AdminTestService get _resolvedService =>
-      _service ??= widget.service ?? AdminTestService.instance;
 
   SyllabusService get _syllabus =>
       widget.syllabusService ?? SyllabusService.instance;
@@ -91,6 +97,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
   ];
 
   bool get _locked => widget.scope != null;
+
+  bool get _isEditing => _initial != null && _initial!.id.isNotEmpty;
 
   bool get _isLockedChapter =>
       _locked &&
@@ -136,7 +144,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
   @override
   void initState() {
     super.initState();
-    _service = widget.service;
     final initial = _initial;
     _title = TextEditingController(text: initial?.title ?? '');
     _description = TextEditingController(text: initial?.description ?? '');
@@ -150,14 +157,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
     _negativeMarking = TextEditingController(
       text: initial?.negativeMarking ?? '0',
     );
-    _questionIds = TextEditingController(
-      text: (initial?.questionIds ?? const []).join('\n'),
-    );
-    _filterPaper = TextEditingController();
-    _filterPart = TextEditingController();
-    _filterTopic = TextEditingController();
-    _filterLesson = TextEditingController();
-    _filterSyllabusUnit = TextEditingController();
+    _initialQuestionIds = TextEditingController();
     _year = TextEditingController(
       text: initial?.year == null
           ? (widget.scope?.year == null ? '' : '${widget.scope!.year}')
@@ -186,8 +186,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
         _marks,
         _duration,
         _negativeMarking,
-        _questionIds,
         _year,
+        _initialQuestionIds,
       ]) {
         controller.addListener(_markDirty);
       }
@@ -220,13 +220,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
     _marks.dispose();
     _duration.dispose();
     _negativeMarking.dispose();
-    _questionIds.dispose();
-    _filterPaper.dispose();
-    _filterPart.dispose();
-    _filterTopic.dispose();
-    _filterLesson.dispose();
-    _filterSyllabusUnit.dispose();
     _year.dispose();
+    _initialQuestionIds.dispose();
     super.dispose();
   }
 
@@ -247,20 +242,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
 
   int? _parseInt(String value) => int.tryParse(value.trim());
 
-  List<String> _parseQuestionIds(String raw) {
-    final ids = <String>[];
-    final seen = <String>{};
-    for (final part in raw.split(RegExp(r'[\n,]'))) {
-      final id = part.trim();
-      if (id.isEmpty || !seen.add(id)) continue;
-      ids.add(id);
-    }
-    return ids;
-  }
-
   TestModel _buildTest() {
     final initial = _initial;
-    final questionIds = _parseQuestionIds(_questionIds.text);
     final parsedCount = _parseInt(_questionCount.text) ?? 0;
     final isPaperWise = _category == TestCategoryType.partTests;
     final isGrand = _category == TestCategoryType.mockTests;
@@ -274,13 +257,13 @@ class _AdminTestFormState extends State<AdminTestForm> {
       category: _category,
       title: _title.text.trim(),
       description: _description.text.trim(),
-      questionCount: questionIds.isNotEmpty ? questionIds.length : parsedCount,
+      questionCount: parsedCount,
       marks: _parseInt(_marks.text) ?? 0,
       durationMinutes: _parseInt(_duration.text) ?? 0,
       negativeMarking: _negativeMarking.text.trim(),
       // Keep the legacy schema value without exposing Difficulty in the form.
       difficulty: _initial?.difficulty ?? 'Medium',
-      questionIds: questionIds,
+      questionIds: initial?.questionIds ?? const [],
       status: (_initial == null || _initial!.id.isEmpty)
           ? TestPublicationStatus.draft
           : _status,
@@ -303,108 +286,80 @@ class _AdminTestFormState extends State<AdminTestForm> {
     );
   }
 
-  Future<void> _appendFilteredQuestionIds() async {
-    if (_isLockedChapter) {
-      await _appendChapterQuestionIds();
-      return;
-    }
-    final courseId = _courseId;
-    if (courseId == null || courseId.isEmpty) {
-      setState(() => _filterMessage = 'Select a course first.');
-      return;
-    }
-    setState(() {
-      _loadingFilter = true;
-      _filterMessage = null;
-    });
-    try {
-      final ids = await _resolvedService.findQuestionIds(
-        courseId: courseId,
-        paperId: _optional(_filterPaper.text),
-        partId: _optional(_filterPart.text),
-        topicId: _optional(_filterTopic.text),
-        lessonId: _optional(_filterLesson.text),
-        syllabusUnitId: _optional(_filterSyllabusUnit.text),
-      );
-      if (!mounted) return;
-      _mergeQuestionIds(ids, emptyMessage: 'No matching questions found.');
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loadingFilter = false;
-        _filterMessage = 'Could not load questions: $error';
-      });
-    }
-  }
-
-  Future<void> _appendChapterQuestionIds() async {
-    final courseId = _courseId;
-    final paperId = _paperId;
-    final unitId = _syllabusUnitId;
-    if (courseId == null || paperId == null || unitId == null) {
-      setState(() => _filterMessage = 'Chapter location is missing.');
-      return;
-    }
-    setState(() {
-      _loadingFilter = true;
-      _filterMessage = null;
-    });
-    try {
-      final ids = await _resolvedService.findQuestionIdsForChapterTest(
-        courseId: courseId,
-        paperId: paperId,
-        partId: _partId,
-        syllabusUnitId: unitId,
-      );
-      if (!mounted) return;
-      _mergeQuestionIds(
-        ids,
-        emptyMessage: 'No published questions in this Chapter/Topic yet.',
-      );
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loadingFilter = false;
-        _filterMessage = 'Could not load questions: $error';
-      });
-    }
-  }
-
-  void _mergeQuestionIds(List<String> ids, {required String emptyMessage}) {
-    if (ids.isEmpty) {
-      setState(() {
-        _loadingFilter = false;
-        _filterMessage = emptyMessage;
-      });
-      return;
-    }
-    final merged = _parseQuestionIds('${_questionIds.text}\n${ids.join('\n')}');
-    _onUserEdit(() {
-      setState(() {
-        _questionIds.text = merged.join('\n');
-        _questionCount.text = '${merged.isEmpty ? 0 : merged.length}';
-        _loadingFilter = false;
-        _filterMessage = 'Appended ${ids.length} question ID(s).';
-      });
-    });
-  }
-
-  String? _optional(String value) => _optionalString(value);
-
   String? _optionalString(String? value) {
     final trimmed = value?.trim();
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
+  List<String> _selectedInitialIds() {
+    return AdminTestService.dedupeQuestionIds([
+      _initialQuestionIds.text,
+      ..._selectedQuestionIds,
+    ]);
+  }
+
+  Future<void> _loadAvailableQuestions() async {
+    final service = widget.service;
+    if (service == null) {
+      setState(() {
+        _availableMessage = 'Compatible Questions are not available.';
+      });
+      return;
+    }
+    setState(() {
+      _loadingAvailable = true;
+      _availableMessage = null;
+    });
+    try {
+      final page = await service.loadAvailableInitialQuestionPage(_buildTest());
+      if (!mounted) return;
+      setState(() {
+        _availableQuestions = page.questions;
+        _selectedQuestionIds.removeWhere(
+          (id) => !page.questions.any((question) => question.id == id),
+        );
+        _loadingAvailable = false;
+        _availableMessage = page.questions.isEmpty
+            ? 'No unassigned compatible Questions.'
+            : null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingAvailable = false;
+        _availableMessage = 'Could not load compatible Questions: $error';
+      });
+    }
+  }
+
   Future<void> _submit() async {
+    if (_draftPersisted) return;
     setState(() => _submitError = null);
     if (!_formKey.currentState!.validate()) return;
 
     final test = _buildTest();
     setState(() => _saving = true);
     try {
-      await widget.onSubmit(test);
+      if (_isEditing || widget.onCreateDraft == null) {
+        await widget.onSubmit(test);
+      } else {
+        var ids = _selectedInitialIds();
+        final service = widget.service;
+        if (service != null && ids.isNotEmpty) {
+          ids = await service.normalizeInitialQuestionIds(test, ids);
+        }
+        await widget.onCreateDraft!(test, ids);
+      }
       if (mounted) _clearDirty();
+    } on InitialQuestionAssignmentException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _submitError = error.toString();
+        _draftPersisted = true;
+        _saving = false;
+      });
+      _clearDirty();
+      return;
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -524,10 +479,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
           for (final item in paper.parts)
             DropdownMenuItem(
               value: item.id,
-              child: Text(
-                item.displayName,
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text(item.displayName, overflow: TextOverflow.ellipsis),
             ),
         ],
         onChanged: _saving
@@ -553,13 +505,9 @@ class _AdminTestFormState extends State<AdminTestForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 16),
-        Text(
-          'Paper-wise Tests',
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
+        Text('Paper-wise Tests', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         _paperDropdown(requiredField: true),
-        _partDropdown(requiredField: true),
       ],
     );
   }
@@ -585,16 +533,14 @@ class _AdminTestFormState extends State<AdminTestForm> {
             for (final id in options)
               DropdownMenuItem<String>(value: id, child: Text(id)),
           ],
-          onChanged: _saving
+          onChanged: _saving || _locked
               ? null
-              : (value) =>
-                    _onUserEdit(() => setState(() => _seriesId = value)),
+              : (value) => _onUserEdit(() => setState(() => _seriesId = value)),
           validator: (value) => value == null || value.trim().isEmpty
               ? 'Grand Test group is required.'
               : null,
         ),
         const SizedBox(height: 16),
-        _paperDropdown(requiredField: true),
       ],
     );
   }
@@ -615,7 +561,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
             border: OutlineInputBorder(),
           ),
           keyboardType: TextInputType.number,
-          enabled: !_saving,
+          enabled: !_saving && !_locked,
           onChanged: (_) => setState(() {}),
           validator: (value) {
             final year = _parseInt(value ?? '');
@@ -626,7 +572,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
           },
         ),
         const SizedBox(height: 16),
-        _paperDropdown(requiredField: true),
       ],
     );
   }
@@ -817,8 +762,6 @@ class _AdminTestFormState extends State<AdminTestForm> {
                   decoration: const InputDecoration(
                     labelText: 'Question count',
                     border: OutlineInputBorder(),
-                    helperText:
-                        'Auto-updates when explicit question IDs are provided.',
                   ),
                   keyboardType: TextInputType.number,
                   enabled: !_saving,
@@ -919,154 +862,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
             },
           ),
         ),
-        AdminFormSection(
-          key: const ValueKey('section-question-assignment'),
-          title: 'Question Assignment',
-          subtitle:
-              'Assign explicit question IDs or append matches from existing '
-              'helpers. Merge semantics are unchanged.',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                key: const ValueKey('question-ids'),
-                controller: _questionIds,
-                maxLines: 6,
-                decoration: InputDecoration(
-                  labelText: 'Question IDs (optional)',
-                  border: const OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                  helperText: _isLockedChapter
-                      ? 'Only questions from this Chapter/Topic are accepted. '
-                            'One ID per line or comma-separated.'
-                      : 'One ID per line or comma-separated. Leave empty for '
-                            'dynamic selection.',
-                ),
-                enabled: !_saving,
-                onChanged: (value) {
-                  final ids = _parseQuestionIds(value);
-                  if (ids.isNotEmpty) {
-                    _questionCount.text = '${ids.length}';
-                  }
-                  setState(() {});
-                },
-              ),
-              const SizedBox(height: AdminSpacing.md),
-              Text(
-                _parseQuestionIds(_questionIds.text).isEmpty
-                    ? 'Assigned IDs: none (dynamic selection)'
-                    : 'Assigned IDs: ${_parseQuestionIds(_questionIds.text).length}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AdminColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AdminSpacing.lg),
-              if (_isLockedChapter) ...[
-                Text(
-                  'Questions for this Chapter/Topic only',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: AdminSpacing.sm),
-                FilledButton.tonal(
-                  onPressed: _saving || _loadingFilter
-                      ? null
-                      : _appendChapterQuestionIds,
-                  child: Text(
-                    _loadingFilter
-                        ? 'Loading…'
-                        : 'Append questions from this Chapter/Topic',
-                  ),
-                ),
-              ] else ...[
-                Text(
-                  'Filter-based question selection',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: AdminSpacing.sm),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: 180,
-                      child: TextField(
-                        controller: _filterPaper,
-                        decoration: const InputDecoration(
-                          labelText: 'Paper ID',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 180,
-                      child: TextField(
-                        controller: _filterPart,
-                        decoration: const InputDecoration(
-                          labelText: 'Part ID',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 180,
-                      child: TextField(
-                        controller: _filterTopic,
-                        decoration: const InputDecoration(
-                          labelText: 'Topic ID',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 180,
-                      child: TextField(
-                        controller: _filterLesson,
-                        decoration: const InputDecoration(
-                          labelText: 'Lesson ID',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 220,
-                      child: TextField(
-                        controller: _filterSyllabusUnit,
-                        decoration: const InputDecoration(
-                          labelText: 'Syllabus Unit ID',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    FilledButton.tonal(
-                      onPressed: _saving || _loadingFilter
-                          ? null
-                          : _appendFilteredQuestionIds,
-                      child: Text(
-                        _loadingFilter
-                            ? 'Loading…'
-                            : 'Append matching question IDs',
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              if (_filterMessage != null) ...[
-                const SizedBox(height: AdminSpacing.sm),
-                Text(
-                  _filterMessage!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AdminColors.textSecondary,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
+        if (!editing) _initialQuestionsSection(),
+        if (editing) _assignedQuestionsSummary(),
         if (editing)
           AdminFormSection(
             key: const ValueKey('section-publication'),
@@ -1105,9 +902,9 @@ class _AdminTestFormState extends State<AdminTestForm> {
               children: [
                 Text(
                   preview.title.isEmpty ? 'Untitled test' : preview.title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 if (preview.description.isNotEmpty) ...[
                   const SizedBox(height: AdminSpacing.xs),
@@ -1115,13 +912,13 @@ class _AdminTestFormState extends State<AdminTestForm> {
                 ],
                 const SizedBox(height: AdminSpacing.sm),
                 Text(
-                  '${preview.questionCount} questions • ${preview.marks} marks • '
+                  '${preview.questionCount} planned questions • ${preview.marks} marks • '
                   '${preview.durationMinutes} min • negative ${preview.negativeMarking}',
                 ),
                 Text(
-                  preview.questionIds.isEmpty
-                      ? 'Question selection: dynamic'
-                      : 'Question selection: ${preview.questionIds.length} explicit IDs',
+                  editing
+                      ? 'Assigned Questions: ${preview.questionIds.length}'
+                      : '${_selectedInitialIds().length} currently selected',
                 ),
                 if (preview.syllabusUnitId != null)
                   Text(
@@ -1192,6 +989,109 @@ class _AdminTestFormState extends State<AdminTestForm> {
     );
   }
 
+  Widget _assignedQuestionsSummary() {
+    final count = _initial?.questionIds.length ?? 0;
+    return AdminFormSection(
+      key: const ValueKey('section-assigned-questions'),
+      title: 'Assigned Questions',
+      subtitle: 'Change membership from Manage Questions.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Assigned Questions: $count'),
+          if (widget.onManageQuestions != null) ...[
+            const SizedBox(height: AdminSpacing.sm),
+            TextButton(
+              key: const ValueKey('edit-manage-questions'),
+              onPressed: _saving ? null : widget.onManageQuestions,
+              child: const Text('Manage Questions'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _initialQuestionsSection() {
+    final selected = _selectedInitialIds().length;
+    return AdminFormSection(
+      key: const ValueKey('section-initial-questions'),
+      title: 'Initial Questions (Optional)',
+      subtitle:
+          'Seed this draft from the compatible Question Bank, or leave it empty. '
+          'Later changes stay in Manage Questions.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextFormField(
+            key: const ValueKey('initial-question-ids'),
+            controller: _initialQuestionIds,
+            maxLines: 4,
+            enabled: !_saving && !_draftPersisted,
+            decoration: const InputDecoration(
+              labelText: 'Manual Question IDs',
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(),
+              helperText: 'Optional. One ID per line or comma-separated.',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: AdminSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonal(
+              key: const ValueKey('load-available-questions'),
+              onPressed: _saving || _loadingAvailable || _draftPersisted
+                  ? null
+                  : _loadAvailableQuestions,
+              child: Text(
+                _loadingAvailable ? 'Loading…' : 'Load available Questions',
+              ),
+            ),
+          ),
+          if (_availableMessage != null) ...[
+            const SizedBox(height: AdminSpacing.sm),
+            Text(_availableMessage!),
+          ],
+          if (_availableQuestions.isNotEmpty) ...[
+            const SizedBox(height: AdminSpacing.md),
+            for (final question in _availableQuestions)
+              Material(
+                color: Colors.transparent,
+                child: CheckboxListTile(
+                  key: ValueKey('initial-question-${question.id}'),
+                  value: _selectedQuestionIds.contains(question.id),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(AdminQuestionRow.previewText(question)),
+                  subtitle: Text(question.id),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  onChanged: _saving || _draftPersisted
+                      ? null
+                      : (value) => _onUserEdit(() {
+                          setState(() {
+                            if (value == true) {
+                              _selectedQuestionIds.add(question.id);
+                            } else {
+                              _selectedQuestionIds.remove(question.id);
+                            }
+                          });
+                        }),
+                ),
+              ),
+          ],
+          const SizedBox(height: AdminSpacing.sm),
+          Text(
+            '$selected currently selected',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AdminColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _editorHeader(BuildContext context, {required bool editing}) {
     final theme = Theme.of(context);
     return Row(
@@ -1213,7 +1113,8 @@ class _AdminTestFormState extends State<AdminTestForm> {
               const SizedBox(height: AdminSpacing.xs),
               Text(
                 editing
-                    ? 'Update classification, exam config, questions, and status.'
+                    ? 'Update classification, exam config, and status. '
+                          'Question membership stays in Manage Questions.'
                     : 'Define a new catalog test for the selected Admin scope.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: AdminColors.textSecondary,
@@ -1266,7 +1167,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
               const Spacer(),
               FilledButton(
                 key: const ValueKey('submit-test'),
-                onPressed: _saving ? null : _submit,
+                onPressed: _saving || _draftPersisted ? null : _submit,
                 child: Text(
                   _saving
                       ? 'Saving…'
