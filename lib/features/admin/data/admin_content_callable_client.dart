@@ -111,6 +111,12 @@ class AdminContentCallableClient {
     }).then((_) {});
   }
 
+  Future<void> deleteQuestion({required String questionId}) {
+    return _call('adminDeleteQuestion', {
+      'questionId': questionId,
+    }).then((_) {});
+  }
+
   Future<Map<String, String>> getQuestionAssignments({
     required List<String> questionIds,
   }) async {

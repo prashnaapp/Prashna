@@ -8,6 +8,7 @@ import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
 import '../../admin_routes.dart';
 import '../../data/admin_chapter_question_context.dart';
+import '../../data/admin_content_callable_client.dart';
 import '../../data/admin_test_series_question_query.dart';
 import '../../debug/admin_perf_trace.dart';
 import '../../services/admin_question_service.dart';
@@ -73,6 +74,10 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
   int _chapterRequest = 0;
   Timer? _searchTimer;
   late final TextEditingController _searchController;
+  AdminQuestionAssignmentState _assignmentState =
+      const AdminQuestionAssignmentState(owners: {}, legacyTestIds: {});
+  bool _assignmentLookupFailed = false;
+  final Set<String> _deletingQuestionIds = {};
 
   bool get _serverBank => widget.chapterContext != null;
 
@@ -153,6 +158,38 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
     }
   }
 
+  Future<AdminQuestionAssignmentState> _loadAssignmentHints(
+    List<Question> questions,
+  ) async {
+    final ids = [
+      for (final question in questions)
+        if (question.id.trim().isNotEmpty) question.id,
+    ];
+    if (ids.isEmpty) {
+      _assignmentLookupFailed = false;
+      return const AdminQuestionAssignmentState(owners: {}, legacyTestIds: {});
+    }
+    try {
+      final owners = <String, String>{};
+      final legacyTestIds = <String, List<String>>{};
+      for (var offset = 0; offset < ids.length; offset += 500) {
+        final end = offset + 500 > ids.length ? ids.length : offset + 500;
+        final chunk = ids.sublist(offset, end);
+        final state = await _service.loadQuestionAssignmentState(chunk);
+        owners.addAll(state.owners);
+        legacyTestIds.addAll(state.legacyTestIds);
+      }
+      _assignmentLookupFailed = false;
+      return AdminQuestionAssignmentState(
+        owners: owners,
+        legacyTestIds: legacyTestIds,
+      );
+    } catch (_) {
+      _assignmentLookupFailed = true;
+      return const AdminQuestionAssignmentState(owners: {}, legacyTestIds: {});
+    }
+  }
+
   Future<void> _loadQuestions() async {
     if (_serverBank) {
       await _loadChapterFirstPage();
@@ -166,9 +203,11 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
     });
     try {
       final questions = await _service.loadQuestions(courseId);
+      final assignmentState = await _loadAssignmentHints(questions);
       if (!mounted) return;
       setState(() {
         _questions = questions;
+        _assignmentState = assignmentState;
         _loadingQuestions = false;
       });
     } catch (error) {
@@ -216,9 +255,11 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
       ]);
       final page = loaded[0] as QuestionBankPage;
       final total = loaded[1] as int;
+      final assignmentState = await _loadAssignmentHints(page.questions);
       if (!mounted || request != _chapterRequest) return;
       setState(() {
         _questions = page.questions;
+        _assignmentState = assignmentState;
         _hasMore = page.hasMore;
         _chapterTotal = total;
         _cursorDocumentId = page.cursorDocumentId;
@@ -249,6 +290,10 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
         cursorDocumentId: _cursorDocumentId,
         cursorSearchText: _cursorSearchText,
       );
+      final assignmentState = await _loadAssignmentHints([
+        ..._questions,
+        ...page.questions,
+      ]);
       if (!mounted || request != _chapterRequest) return;
       setState(() {
         final seen = {for (final question in _questions) question.id};
@@ -257,6 +302,7 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
           for (final question in page.questions)
             if (seen.add(question.id)) question,
         ];
+        _assignmentState = assignmentState;
         _hasMore = page.hasMore;
         _cursorDocumentId = page.cursorDocumentId;
         _cursorSearchText = page.cursorSearchText;
@@ -344,6 +390,46 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
       if (confirmed != true) return;
     }
     await _setStatus(question, status);
+  }
+
+  Future<void> _requestDelete(Question question) async {
+    if (_deletingQuestionIds.contains(question.id)) return;
+    final confirmed = await AdminQuestionRow.confirmPermanentDelete(context);
+    if (!confirmed || !mounted) return;
+    setState(() => _deletingQuestionIds.add(question.id));
+    try {
+      await _service.deleteQuestion(question.id);
+      if (!mounted) return;
+      setState(() {
+        _deletingQuestionIds.remove(question.id);
+        _questions = [
+          for (final item in _questions)
+            if (item.id != question.id) item,
+        ];
+        if (_serverBank && _chapterTotal > 0) {
+          _chapterTotal -= 1;
+        }
+        final owners = Map<String, String>.from(_assignmentState.owners);
+        owners.remove(question.id);
+        final legacy = Map<String, List<String>>.from(
+          _assignmentState.legacyTestIds,
+        );
+        legacy.remove(question.id);
+        _assignmentState = AdminQuestionAssignmentState(
+          owners: owners,
+          legacyTestIds: legacy,
+        );
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Question deleted.')));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _deletingQuestionIds.remove(question.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete question: $error')),
+      );
+    }
   }
 
   Future<void> _setStatus(
@@ -696,6 +782,15 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
                 onEdit: () => _openEdit(visible[i]),
                 onRequestStatus: (status) =>
                     _requestLifecycleStatus(visible[i], status),
+                onDelete:
+                    _assignmentLookupFailed ||
+                        _deletingQuestionIds.contains(visible[i].id) ||
+                        !AdminQuestionService.canDeleteQuestion(
+                          visible[i],
+                          _assignmentState,
+                        )
+                    ? null
+                    : () => _requestDelete(visible[i]),
               ),
               if (i != visible.length - 1)
                 const SizedBox(height: AdminSpacing.md),

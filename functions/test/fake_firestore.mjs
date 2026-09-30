@@ -179,10 +179,16 @@ class FakeCollectionRef {
   doc(id) {
     return new FakeDocRef(this.db, `${this.path}/${id}`);
   }
-  where(field, options = {}) {
+  where(field, op, value) {
+    if (typeof op === 'string') {
+      return new FakeCollectionRef(this.db, this.path, [
+        ...this.filters,
+        { field, op, value },
+      ]);
+    }
     return new FakeCollectionRef(this.db, this.path, [
       ...this.filters,
-      { field, options },
+      { field, options: op },
     ]);
   }
   async get() {
@@ -192,8 +198,19 @@ class FakeCollectionRef {
       if (!path.startsWith(prefix)) continue;
       const rest = path.slice(prefix.length);
       if (!rest || rest.includes('/')) continue;
-      const matches = this.filters.every(({ field, options }) => {
-        if (!Array.isArray(options['array-contains-any'])) return true;
+      const matches = this.filters.every((filter) => {
+        const field = filter.field;
+        if (filter.op === 'array-contains') {
+          const values = Array.isArray(data[field]) ? data[field] : [];
+          return values.includes(filter.value);
+        }
+        if (filter.op === 'array-contains-any') {
+          const values = Array.isArray(data[field]) ? data[field] : [];
+          const items = Array.isArray(filter.value) ? filter.value : [];
+          return items.some((item) => values.includes(item));
+        }
+        const options = filter.options;
+        if (!Array.isArray(options?.['array-contains-any'])) return true;
         const values = Array.isArray(data[field]) ? data[field] : [];
         return options['array-contains-any'].some((item) =>
           values.includes(item),
@@ -213,9 +230,16 @@ class FakeTransaction {
     this._writes = [];
     this._readVersions = new Map();
   }
-  async get(ref) {
-    this._readVersions.set(ref.path, this.db._version(ref.path));
-    return ref.get();
+  async get(refOrQuery) {
+    if (refOrQuery instanceof FakeCollectionRef) {
+      const snapshot = await refOrQuery.get();
+      for (const doc of snapshot.docs) {
+        this._readVersions.set(doc.ref.path, this.db._version(doc.ref.path));
+      }
+      return snapshot;
+    }
+    this._readVersions.set(refOrQuery.path, this.db._version(refOrQuery.path));
+    return refOrQuery.get();
   }
   set(ref, data, options = {}) {
     this._writes.push({ type: 'set', ref, data, options });

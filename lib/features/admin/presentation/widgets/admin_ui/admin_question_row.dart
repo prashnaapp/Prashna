@@ -13,11 +13,41 @@ class AdminQuestionRow extends StatefulWidget {
     required this.question,
     required this.onEdit,
     required this.onRequestStatus,
+    this.onDelete,
   });
 
   final Question question;
   final VoidCallback onEdit;
   final ValueChanged<QuestionPublicationStatus> onRequestStatus;
+  final VoidCallback? onDelete;
+
+  static Future<bool> confirmPermanentDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Permanently delete this Question?'),
+          content: const Text('This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('question-delete-confirm'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AdminColors.danger,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete Question'),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed == true;
+  }
 
   static QuestionPublicationStatus effectiveStatus(Question question) {
     return question.status ??
@@ -139,6 +169,16 @@ class _AdminQuestionRowState extends State<AdminQuestionRow> {
                     icon: Icon(lifecycleIcon, size: 18),
                     label: Text(lifecycleLabel),
                   ),
+                  if (widget.onDelete != null)
+                    TextButton.icon(
+                      key: ValueKey('question-delete-${question.id}'),
+                      onPressed: widget.onDelete,
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Delete'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AdminColors.danger,
+                      ),
+                    ),
                 ],
               );
 

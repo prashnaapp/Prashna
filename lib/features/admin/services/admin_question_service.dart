@@ -1,5 +1,6 @@
 import '../data/admin_chapter_question_context.dart';
 import '../data/admin_chapter_question_query.dart';
+import '../data/admin_content_callable_client.dart';
 import '../data/admin_question_scope.dart';
 import '../data/admin_test_series_question_query.dart';
 import '../../course_enrollment/model/course.dart';
@@ -186,6 +187,41 @@ class AdminQuestionService {
 
   Future<void> setStatus(String questionId, QuestionPublicationStatus status) {
     return _questions.setQuestionStatus(questionId, status);
+  }
+
+  Future<AdminQuestionAssignmentState> loadQuestionAssignmentState(
+    List<String> questionIds,
+  ) {
+    return _questions.getQuestionAssignmentState(questionIds);
+  }
+
+  /// Client hint only. [adminDeleteQuestion] re-validates on the server.
+  static bool canDeleteQuestion(
+    Question question,
+    AdminQuestionAssignmentState assignmentState,
+  ) {
+    final status =
+        question.status ??
+        (question.isActive
+            ? QuestionPublicationStatus.published
+            : QuestionPublicationStatus.archived);
+    if (status == QuestionPublicationStatus.published) return false;
+    if (assignmentState.owners[question.id]?.trim().isNotEmpty ?? false) {
+      return false;
+    }
+    if (assignmentState.legacyTestIds[question.id]?.isNotEmpty ?? false) {
+      return false;
+    }
+    return status == QuestionPublicationStatus.draft ||
+        status == QuestionPublicationStatus.archived;
+  }
+
+  Future<void> deleteQuestion(String questionId) {
+    final id = questionId.trim();
+    if (id.isEmpty) {
+      throw const FormatException('Question ID is required.');
+    }
+    return _questions.deleteQuestion(id);
   }
 
   List<String> _validateCanonicalAdminQuestion(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../question_bank/data/models/question_models.dart';
+import '../../data/admin_content_callable_client.dart';
 import '../../data/admin_question_scope.dart';
 import '../../data/question_create_outcome.dart';
 import '../../data/models/question_import_models.dart';
@@ -58,6 +59,10 @@ class _AdminTestSeriesQuestionBankScreenState
   String? _cursorSearchText;
   int _request = 0;
   Timer? _searchTimer;
+  AdminQuestionAssignmentState _assignmentState =
+      const AdminQuestionAssignmentState(owners: {}, legacyTestIds: {});
+  bool _assignmentLookupFailed = false;
+  final Set<String> _deletingQuestionIds = {};
 
   @override
   void initState() {
@@ -72,6 +77,75 @@ class _AdminTestSeriesQuestionBankScreenState
     _searchTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<AdminQuestionAssignmentState> _loadAssignmentHints(
+    List<Question> questions,
+  ) async {
+    final ids = [
+      for (final question in questions)
+        if (question.id.trim().isNotEmpty) question.id,
+    ];
+    if (ids.isEmpty) {
+      _assignmentLookupFailed = false;
+      return const AdminQuestionAssignmentState(owners: {}, legacyTestIds: {});
+    }
+    try {
+      final owners = <String, String>{};
+      final legacyTestIds = <String, List<String>>{};
+      for (var offset = 0; offset < ids.length; offset += 500) {
+        final end = offset + 500 > ids.length ? ids.length : offset + 500;
+        final chunk = ids.sublist(offset, end);
+        final state = await _service.loadQuestionAssignmentState(chunk);
+        owners.addAll(state.owners);
+        legacyTestIds.addAll(state.legacyTestIds);
+      }
+      _assignmentLookupFailed = false;
+      return AdminQuestionAssignmentState(
+        owners: owners,
+        legacyTestIds: legacyTestIds,
+      );
+    } catch (_) {
+      _assignmentLookupFailed = true;
+      return const AdminQuestionAssignmentState(owners: {}, legacyTestIds: {});
+    }
+  }
+
+  Future<void> _requestDelete(Question question) async {
+    if (_deletingQuestionIds.contains(question.id)) return;
+    final confirmed = await AdminQuestionRow.confirmPermanentDelete(context);
+    if (!confirmed || !mounted) return;
+    setState(() => _deletingQuestionIds.add(question.id));
+    try {
+      await _service.deleteQuestion(question.id);
+      if (!mounted) return;
+      setState(() {
+        _deletingQuestionIds.remove(question.id);
+        _questions = [
+          for (final item in _questions)
+            if (item.id != question.id) item,
+        ];
+        final owners = Map<String, String>.from(_assignmentState.owners);
+        owners.remove(question.id);
+        final legacy = Map<String, List<String>>.from(
+          _assignmentState.legacyTestIds,
+        );
+        legacy.remove(question.id);
+        _assignmentState = AdminQuestionAssignmentState(
+          owners: owners,
+          legacyTestIds: legacy,
+        );
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Question deleted.')));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _deletingQuestionIds.remove(question.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete question: $error')),
+      );
+    }
   }
 
   Future<void> _loadFirstPage() async {
@@ -91,9 +165,11 @@ class _AdminTestSeriesQuestionBankScreenState
         widget.scope,
         searchText: search,
       );
+      final assignmentState = await _loadAssignmentHints(page.questions);
       if (!mounted || request != _request) return;
       setState(() {
         _questions = page.questions;
+        _assignmentState = assignmentState;
         _hasMore = page.hasMore;
         _cursorDocumentId = page.cursorDocumentId;
         _cursorSearchText = page.cursorSearchText;
@@ -123,6 +199,10 @@ class _AdminTestSeriesQuestionBankScreenState
         cursorDocumentId: _cursorDocumentId,
         cursorSearchText: _cursorSearchText,
       );
+      final assignmentState = await _loadAssignmentHints([
+        ..._questions,
+        ...page.questions,
+      ]);
       if (!mounted || request != _request) return;
       setState(() {
         final seen = {for (final question in _questions) question.id};
@@ -131,6 +211,7 @@ class _AdminTestSeriesQuestionBankScreenState
           for (final question in page.questions)
             if (seen.add(question.id)) question,
         ];
+        _assignmentState = assignmentState;
         _hasMore = page.hasMore;
         _cursorDocumentId = page.cursorDocumentId;
         _cursorSearchText = page.cursorSearchText;
@@ -304,6 +385,21 @@ class _AdminTestSeriesQuestionBankScreenState
               ),
               const SizedBox(width: AdminSpacing.md),
               AdminStatusBadge.question(status),
+              if (!_assignmentLookupFailed &&
+                  AdminQuestionService.canDeleteQuestion(
+                    question,
+                    _assignmentState,
+                  ) &&
+                  !_deletingQuestionIds.contains(question.id))
+                TextButton.icon(
+                  key: ValueKey('test-series-question-delete-${question.id}'),
+                  onPressed: () => _requestDelete(question),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Delete'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AdminColors.danger,
+                  ),
+                ),
             ],
           ),
         );

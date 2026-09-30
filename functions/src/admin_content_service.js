@@ -70,6 +70,55 @@ function rejectAssignedStatusChange(questionId) {
   );
 }
 
+function effectiveQuestionStatus(data) {
+  const status = trimToNull(data?.status);
+  if (status) return status;
+  return data?.isActive === true ? 'published' : 'draft';
+}
+
+async function readQuestionForDelete(db, tx, questionId) {
+  const { snap, data, ref } = await readQuestion(db, questionId, tx);
+  if (!snap.exists) fail('not-found', 'Question was not found.');
+
+  const status = effectiveQuestionStatus(data);
+  if (status === 'published') {
+    fail(
+      'failed-precondition',
+      `Question "${questionId}" is published and cannot be deleted.`,
+    );
+  }
+  if (!['draft', 'archived'].includes(status)) {
+    fail(
+      'failed-precondition',
+      `Question "${questionId}" cannot be deleted while status is "${status}".`,
+    );
+  }
+
+  const assignment = await tx.get(assignmentsCol(db).doc(questionId));
+  if (assignment.exists) {
+    const owner = trimToNull(assignment.data()?.testId);
+    fail(
+      'failed-precondition',
+      owner
+        ? `Question "${questionId}" is assigned to test "${owner}". Remove it from the test before deleting.`
+        : `Question "${questionId}" has an ownership record and cannot be deleted.`,
+    );
+  }
+
+  const testsSnap = await tx.get(
+    testsCol(db).where('questionIds', 'array-contains', questionId),
+  );
+  if (!testsSnap.empty) {
+    const testIds = testsSnap.docs.map((doc) => doc.id);
+    fail(
+      'failed-precondition',
+      `Question "${questionId}" is still referenced by test(s): ${testIds.join(', ')}. Remove it from the test before deleting.`,
+    );
+  }
+
+  return { ref };
+}
+
 /**
  * Claim/release assignment docs, align assigned question status, and return
  * server aggregates. Every read happens before any write. Must run inside the
@@ -331,6 +380,16 @@ export function createAdminContentService(db) {
         });
       });
       return { questionId: id, status: nextStatus };
+    },
+
+    async deleteQuestion({ questionId } = {}) {
+      const id = trimToNull(questionId);
+      if (!id) fail('invalid-argument', 'Question ID is required.');
+      await db.runTransaction(async (tx) => {
+        const { ref } = await readQuestionForDelete(db, tx, id);
+        tx.delete(ref);
+      });
+      return { questionId: id, deleted: true };
     },
 
     async setQuestionActive({ questionId, isActive } = {}) {

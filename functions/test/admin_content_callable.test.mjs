@@ -298,3 +298,123 @@ test('adminUpdateQuestion: existing legacy Group-II paper-1 can be updated', asy
   assert.equal(stored.sectionId, 'section-1');
   assert.equal(stored.topicId, 'topic-1');
 });
+
+async function seedDraftQuestion(db, svc, id, overrides = {}) {
+  await svc.createQuestion({
+    questionId: id,
+    data: { ...draftQuestionData(id), ...overrides },
+  });
+}
+
+test('adminDeleteQuestion: draft unassigned question is deleted', async () => {
+  const db = new FakeFirestore();
+  const svc = createAdminContentService(db);
+  await seedDraftQuestion(db, svc, 'q-delete-ok');
+
+  const result = await invoke(
+    (content, data) => content.deleteQuestion(data),
+    {
+      ...adminRequest({ questionId: 'q-delete-ok' }),
+      _service: svc,
+    },
+  );
+
+  assert.deepEqual(result, { questionId: 'q-delete-ok', deleted: true });
+  assert.equal((await db.collection('questions').doc('q-delete-ok').get()).exists, false);
+});
+
+test('adminDeleteQuestion: archived unassigned question is deleted', async () => {
+  const db = new FakeFirestore();
+  const svc = createAdminContentService(db);
+  await seedDraftQuestion(db, svc, 'q-archived-ok', {
+    status: 'archived',
+    isActive: false,
+  });
+
+  await invoke(
+    (content, data) => content.deleteQuestion(data),
+    {
+      ...adminRequest({ questionId: 'q-archived-ok' }),
+      _service: svc,
+    },
+  );
+
+  assert.equal((await db.collection('questions').doc('q-archived-ok').get()).exists, false);
+});
+
+test('adminDeleteQuestion: published question is rejected', async () => {
+  const db = new FakeFirestore();
+  const svc = createAdminContentService(db);
+  await seedDraftQuestion(db, svc, 'q-published', {
+    status: 'published',
+    isActive: true,
+  });
+
+  await assert.rejects(
+    () => invoke(
+      (content, data) => content.deleteQuestion(data),
+      {
+        ...adminRequest({ questionId: 'q-published' }),
+        _service: svc,
+      },
+    ),
+    (err) => err.code === 'failed-precondition' && err.message.includes('published'),
+  );
+});
+
+test('adminDeleteQuestion: assigned draft question is rejected', async () => {
+  const db = new FakeFirestore();
+  const svc = createAdminContentService(db);
+  await seedDraftQuestion(db, svc, 'q-assigned');
+  await db.collection('question_assignments').doc('q-assigned').set({
+    questionId: 'q-assigned',
+    testId: 'test-1',
+  });
+
+  await assert.rejects(
+    () => invoke(
+      (content, data) => content.deleteQuestion(data),
+      {
+        ...adminRequest({ questionId: 'q-assigned' }),
+        _service: svc,
+      },
+    ),
+    (err) => err.code === 'failed-precondition' && err.message.includes('assigned'),
+  );
+});
+
+test('adminDeleteQuestion: reverse test reference is rejected', async () => {
+  const db = new FakeFirestore();
+  const svc = createAdminContentService(db);
+  await seedDraftQuestion(db, svc, 'q-referenced');
+  await db.collection('tests').doc('legacy-test').set({
+    questionIds: ['q-referenced'],
+  });
+
+  await assert.rejects(
+    () => invoke(
+      (content, data) => content.deleteQuestion(data),
+      {
+        ...adminRequest({ questionId: 'q-referenced' }),
+        _service: svc,
+      },
+    ),
+    (err) => err.code === 'failed-precondition' && err.message.includes('referenced'),
+  );
+});
+
+test('adminDeleteQuestion: missing question is not-found', async () => {
+  const db = new FakeFirestore();
+  const svc = createAdminContentService(db);
+
+  await assert.rejects(
+    () => invoke(
+      (content, data) => content.deleteQuestion(data),
+      {
+        ...adminRequest({ questionId: 'q-missing' }),
+        _service: svc,
+      },
+    ),
+    (err) => err.code === 'not-found',
+  );
+});

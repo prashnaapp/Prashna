@@ -718,6 +718,14 @@ class QuestionCloudRepository {
     }
   }
 
+  Future<void> deleteQuestion(String questionId) async {
+    final id = questionId.trim();
+    if (id.isEmpty) {
+      throw const FormatException('Question ID is required.');
+    }
+    await _callables.deleteQuestion(questionId: id);
+  }
+
   Future<void> setQuestionStatus(
     String questionId,
     QuestionPublicationStatus status,

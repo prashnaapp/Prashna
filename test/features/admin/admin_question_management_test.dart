@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:telangana_prep/features/admin/admin_routes.dart';
 import 'package:telangana_prep/features/admin/presentation/screens/admin_question_list_screen.dart';
+import 'package:telangana_prep/features/admin/data/admin_content_callable_client.dart';
 import 'package:telangana_prep/features/admin/services/admin_question_service.dart';
 import 'package:telangana_prep/features/admin/presentation/widgets/admin_question_form.dart';
 import 'package:telangana_prep/features/course_enrollment/model/course.dart';
@@ -135,9 +136,7 @@ void main() {
         onGenerateRoute: (settings) {
           if (settings.name == AdminRoutes.questionCreate) {
             return MaterialPageRoute<void>(
-              builder: (_) => const Scaffold(
-                body: Text('Create route opened'),
-              ),
+              builder: (_) => const Scaffold(body: Text('Create route opened')),
             );
           }
           return null;
@@ -309,9 +308,7 @@ void main() {
             expect(arg, isA<Question>());
             expect((arg as Question).id, 'q-edit-row');
             return MaterialPageRoute<void>(
-              builder: (_) => const Scaffold(
-                body: Text('Edit route opened'),
-              ),
+              builder: (_) => const Scaffold(body: Text('Edit route opened')),
             );
           }
           return null;
@@ -329,13 +326,36 @@ void main() {
     expect(find.text('Edit route opened'), findsOneWidget);
   });
 
-  testWidgets('10: no permanent delete affordance is shown', (tester) async {
+  testWidgets('10: published question has no delete affordance', (
+    tester,
+  ) async {
     final service = _FakeAdminQuestionService(
       courses: const [course],
       questions: [
         buildQuestion(
-          id: 'q-a',
-          status: QuestionPublicationStatus.archived,
+          id: 'q-published',
+          status: QuestionPublicationStatus.published,
+          isActive: true,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(listApp(service));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('question-delete-q-published')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('10b: draft unassigned question shows Delete', (tester) async {
+    final service = _FakeAdminQuestionService(
+      courses: const [course],
+      questions: [
+        buildQuestion(
+          id: 'q-draft-delete',
+          status: QuestionPublicationStatus.draft,
           isActive: false,
         ),
       ],
@@ -344,11 +364,10 @@ void main() {
     await tester.pumpWidget(listApp(service));
     await tester.pumpAndSettle();
 
-    expect(find.text('Delete'), findsNothing);
-    expect(find.text('Permanently Delete'), findsNothing);
-    expect(find.text('Remove'), findsNothing);
-    expect(find.byIcon(Icons.delete), findsNothing);
-    expect(find.byIcon(Icons.delete_outline), findsNothing);
+    expect(
+      find.byKey(const ValueKey('question-delete-q-draft-delete')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('11: Question Bank header and filter controls remain available', (
@@ -411,10 +430,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No questions found'), findsOneWidget);
-    expect(
-      find.textContaining('Try adjusting your filters'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Try adjusting your filters'), findsOneWidget);
   });
 }
 
@@ -428,6 +444,9 @@ class _FakeAdminQuestionService extends AdminQuestionService {
   final List<Course> courses;
   final List<Question> questions;
   final List<(String, QuestionPublicationStatus)> statusUpdates = [];
+  AdminQuestionAssignmentState assignmentState =
+      const AdminQuestionAssignmentState(owners: {}, legacyTestIds: {});
+  int deleteCalls = 0;
 
   @override
   Future<List<Course>> loadCourses() async => courses;
@@ -435,6 +454,19 @@ class _FakeAdminQuestionService extends AdminQuestionService {
   @override
   Future<List<Question>> loadQuestions(String courseId) async =>
       List<Question>.from(questions);
+
+  @override
+  Future<AdminQuestionAssignmentState> loadQuestionAssignmentState(
+    List<String> questionIds,
+  ) async {
+    return assignmentState;
+  }
+
+  @override
+  Future<void> deleteQuestion(String questionId) async {
+    deleteCalls++;
+    questions.removeWhere((question) => question.id == questionId);
+  }
 
   @override
   Future<void> setStatus(
