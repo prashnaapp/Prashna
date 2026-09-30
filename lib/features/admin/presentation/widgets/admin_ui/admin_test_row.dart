@@ -14,7 +14,6 @@ class AdminTestRow extends StatelessWidget {
     super.key,
     required this.test,
     required this.onEdit,
-    this.onManageQuestions,
     this.onPublish,
     this.onUnpublish,
     this.onArchive,
@@ -24,7 +23,6 @@ class AdminTestRow extends StatelessWidget {
 
   final TestModel test;
   final VoidCallback onEdit;
-  final VoidCallback? onManageQuestions;
   final VoidCallback? onPublish;
   final VoidCallback? onUnpublish;
   final VoidCallback? onArchive;
@@ -144,13 +142,6 @@ class AdminTestRow extends StatelessWidget {
           onPressed: onEdit,
           icon: const Icon(Icons.edit_outlined, size: 20),
         ),
-        if (onManageQuestions != null)
-          IconButton(
-            key: ValueKey('test-manage-questions-${test.id}'),
-            tooltip: 'Manage Questions',
-            onPressed: onManageQuestions,
-            icon: const Icon(Icons.quiz_outlined, size: 20),
-          ),
         if (onPublish != null)
           IconButton(
             key: ValueKey('test-publish-${test.id}'),

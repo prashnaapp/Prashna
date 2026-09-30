@@ -14,11 +14,11 @@ import '../widgets/admin_ui/admin_question_row.dart';
 import '../widgets/admin_ui/admin_status_badge.dart';
 import '../widgets/admin_ui/admin_surface.dart';
 
-/// Manage the ordered Question assignment for one existing Test.
+/// Stages an ordered Question membership edit for one existing Test.
 ///
-/// All mutations go through [AdminTestService.updateTest], which reaches the
-/// Phase 3A transaction. This screen never writes tests or assignments
-/// directly.
+/// The only write is the single [AdminTestService.updateTest] call made by
+/// Save Changes. Add, remove, manual-ID validation, Cancel, and back are all
+/// read-only with respect to the backend.
 class AdminTestAssignmentScreen extends StatefulWidget {
   const AdminTestAssignmentScreen({
     super.key,
@@ -39,8 +39,11 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
 
   late final AdminTestService _service;
   late final TextEditingController _search;
+  late final TextEditingController _manualIds;
   Timer? _searchTimer;
   TestModel? _test;
+  List<String> _originalQuestionIds = const [];
+  List<String> _stagedQuestionIds = const [];
   List<Question> _assigned = const [];
   List<Question> _available = const [];
   Map<String, String> _owners = const {};
@@ -48,6 +51,10 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
   final Set<String> _selected = <String>{};
   bool _loading = true;
   bool _loadingMore = false;
+  bool _saving = false;
+  bool _saveCommitted = false;
+  bool _validatingManualIds = false;
+  bool _discardPromptOpen = false;
   bool _hasMore = false;
   String? _cursorDocumentId;
   String? _cursorSearchText;
@@ -57,9 +64,10 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
   int _request = 0;
 
   TestModel get _current => _test ?? widget.test;
+  bool get _dirty => !_sameIds(_originalQuestionIds, _stagedQuestionIds);
   int get _remaining =>
       (AdminQuestionTestAssignment.maxAssignedQuestionsPerTest -
-              _current.questionIds.length)
+              _stagedQuestionIds.length)
           .clamp(0, AdminQuestionTestAssignment.maxAssignedQuestionsPerTest);
 
   bool get _isTestSeries =>
@@ -72,6 +80,7 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
     super.initState();
     _service = widget.service ?? AdminTestService.instance;
     _search = TextEditingController()..addListener(_onSearchChanged);
+    _manualIds = TextEditingController();
     _loadFirstPage();
   }
 
@@ -79,6 +88,7 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
   void dispose() {
     _searchTimer?.cancel();
     _search.dispose();
+    _manualIds.dispose();
     super.dispose();
   }
 
@@ -88,29 +98,39 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
       _loading = true;
       _error = null;
       _pageError = null;
-      _mutationError = null;
       _hasMore = false;
       _cursorDocumentId = null;
       _cursorSearchText = null;
       _selected.clear();
     });
     try {
-      final current = await _service.getTest(widget.test.id) ?? widget.test;
+      final initializing = _test == null;
+      final current = initializing
+          ? await _service.getTest(widget.test.id)
+          : _current;
+      if (current == null) {
+        throw const FormatException('Test was not found.');
+      }
+      final stagedIds = initializing
+          ? List<String>.of(current.questionIds)
+          : List<String>.of(_stagedQuestionIds);
       final page = await _service.loadCompatibleQuestionPage(
         current,
         searchText: _search.text,
       );
-      final assignedQuestions = await _service.loadQuestionsByIds(
-        current.questionIds,
-      );
+      final assignedQuestions = await _service.loadQuestionsByIds(stagedIds);
       final assignmentState = await _service.loadQuestionAssignmentState([
-        ...current.questionIds,
+        ...stagedIds,
         ...page.questions.map((question) => question.id),
       ]);
       if (!mounted || request != _request) return;
       setState(() {
         _test = current;
-        _assigned = _orderedAssigned(current, assignedQuestions);
+        if (initializing) {
+          _originalQuestionIds = List<String>.unmodifiable(current.questionIds);
+          _stagedQuestionIds = List<String>.of(current.questionIds);
+        }
+        _assigned = _orderedAssigned(stagedIds, assignedQuestions);
         _available = page.questions;
         _owners = assignmentState.owners;
         _legacyTestIds = assignmentState.legacyTestIds;
@@ -174,40 +194,42 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
     _searchTimer = Timer(_searchDebounce, _loadFirstPage);
   }
 
-  List<Question> _orderedAssigned(TestModel test, List<Question> questions) {
+  List<Question> _orderedAssigned(
+    List<String> ids,
+    Iterable<Question> questions,
+  ) {
     final byId = <String, Question>{
       for (final question in questions) question.id: question,
     };
     return [
-      for (final id in test.questionIds)
+      for (final id in ids)
         if (byId[id] != null) byId[id]!,
     ];
   }
 
-  Future<void> _mutateAssignments(List<String> ids) async {
-    final current = _current;
-    final unique = <String>[];
-    final seen = <String>{};
-    for (final id in ids) {
-      if (id.trim().isNotEmpty && seen.add(id.trim())) unique.add(id.trim());
-    }
+  void _stageQuestionIds(
+    List<String> ids, {
+    Iterable<Question> additionalQuestions = const [],
+  }) {
+    final unique = AdminTestService.dedupeQuestionIds(ids);
+    final questions = <String, Question>{
+      for (final question in _assigned) question.id: question,
+      for (final question in _available) question.id: question,
+      for (final question in additionalQuestions) question.id: question,
+    };
     setState(() {
+      _stagedQuestionIds = unique;
+      _assigned = [
+        for (final id in unique)
+          if (questions[id] != null) questions[id]!,
+      ];
+      _selected.clear();
       _mutationError = null;
-      _loading = true;
+      _saveCommitted = false;
     });
-    try {
-      await _service.updateTest(_withQuestionIds(current, unique));
-      await _loadFirstPage();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _mutationError = _friendlyError(error);
-      });
-    }
   }
 
-  Future<void> _assignSelected() async {
+  void _assignSelected() {
     if (_selected.isEmpty) return;
     if (_selected.length > _remaining) {
       setState(
@@ -216,7 +238,11 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
       );
       return;
     }
-    await _mutateAssignments([..._current.questionIds, ..._selected]);
+    final selectedInPageOrder = [
+      for (final question in _available)
+        if (_selected.contains(question.id)) question.id,
+    ];
+    _stageQuestionIds([..._stagedQuestionIds, ...selectedInPageOrder]);
   }
 
   Future<void> _remove(String questionId) async {
@@ -225,8 +251,7 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Remove Question?'),
         content: const Text(
-          'This removes the Question from this Test. The Question itself '
-          'will remain in its Question Bank.',
+          'This removal stays pending until you choose Save Changes.',
         ),
         actions: [
           TextButton(
@@ -241,10 +266,104 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    await _mutateAssignments([
-      for (final id in _current.questionIds)
+    _stageQuestionIds([
+      for (final id in _stagedQuestionIds)
         if (id != questionId) id,
     ]);
+  }
+
+  Future<void> _stageManualQuestionIds() async {
+    if (_validatingManualIds || _saving) return;
+    setState(() {
+      _validatingManualIds = true;
+      _mutationError = null;
+    });
+    try {
+      final ids = await _service.normalizeManagedQuestionIds(
+        _current,
+        _stagedQuestionIds,
+        [_manualIds.text],
+      );
+      final questions = await _service.loadQuestionsByIds(ids);
+      if (!mounted) return;
+      _manualIds.clear();
+      _stageQuestionIds([
+        ..._stagedQuestionIds,
+        ...ids,
+      ], additionalQuestions: questions);
+      setState(() => _validatingManualIds = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _validatingManualIds = false;
+        _mutationError = _friendlyError(error);
+      });
+    }
+  }
+
+  Future<void> _saveChanges() async {
+    if (!_dirty || _saving) return;
+    setState(() {
+      _saving = true;
+      _mutationError = null;
+    });
+    try {
+      if (!_saveCommitted) {
+        await _service.updateTest(
+          _withQuestionIds(_current, _stagedQuestionIds),
+        );
+        _saveCommitted = true;
+      }
+      final fresh = await _service.getTest(_current.id);
+      if (fresh == null) {
+        throw const FormatException('Saved Test could not be reloaded.');
+      }
+      await _service.loadQuestionAssignmentState(fresh.questionIds);
+      if (!mounted) return;
+      setState(() {
+        _test = fresh;
+        _originalQuestionIds = List<String>.unmodifiable(fresh.questionIds);
+        _stagedQuestionIds = List<String>.of(fresh.questionIds);
+        _saving = false;
+      });
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _mutationError = _friendlyError(error);
+      });
+    }
+  }
+
+  Future<void> _requestLeave() async {
+    if (_saving || _discardPromptOpen) return;
+    if (!_dirty) {
+      Navigator.of(context).pop(false);
+      return;
+    }
+    _discardPromptOpen = true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard unsaved Question changes?'),
+        content: const Text(
+          'Your staged Question membership changes have not been saved.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep editing'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    _discardPromptOpen = false;
+    if (discard == true && mounted) Navigator.of(context).pop(false);
   }
 
   TestModel _withQuestionIds(TestModel test, List<String> ids) {
@@ -279,18 +398,73 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
     return 'Could not update Question assignments. Please retry.';
   }
 
+  bool _sameIds(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   String _ownerLabel(String owner) => owner == _current.id
-      ? 'Already assigned to this Test'
+      ? 'Ownership record conflict'
       : 'Assigned to another Test';
+
+  bool _hasLegacyConflict(String id) {
+    final references = _legacyTestIds[id] ?? const <String>[];
+    return references.any(
+      (testId) => testId != _current.id || !_originalQuestionIds.contains(id),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AdminColors.backgroundTop,
-      appBar: AppBar(title: Text('Manage Questions · ${_current.title}')),
-      body: _loading && _test == null
-          ? const AdminLoadingSurface(rows: 5)
-          : _body(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _requestLeave();
+      },
+      child: Scaffold(
+        backgroundColor: AdminColors.backgroundTop,
+        appBar: AppBar(title: Text('Manage Questions · ${_current.title}')),
+        body: _loading ? const AdminLoadingSurface(rows: 5) : _body(context),
+        bottomNavigationBar: _footer(),
+      ),
+    );
+  }
+
+  Widget _footer() {
+    return SafeArea(
+      top: false,
+      child: Material(
+        elevation: 8,
+        color: Theme.of(context).colorScheme.surface,
+        child: Padding(
+          padding: const EdgeInsets.all(AdminSpacing.md),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                key: const ValueKey('cancel-assignment-changes'),
+                onPressed: _saving ? null : _requestLeave,
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: AdminSpacing.sm),
+              FilledButton.icon(
+                key: const ValueKey('save-assignment-changes'),
+                onPressed: _dirty && !_saving ? _saveChanges : null,
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: Text(_saving ? 'Saving…' : 'Save Changes'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -317,6 +491,8 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
         const SizedBox(height: AdminSpacing.lg),
         _assignedSection(context),
         const SizedBox(height: AdminSpacing.xl),
+        _manualIdsSection(context),
+        const SizedBox(height: AdminSpacing.xl),
         _availableSection(context),
       ],
     );
@@ -334,7 +510,7 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${_current.questionIds.length} / '
+                '${_stagedQuestionIds.length} / '
                 '${AdminQuestionTestAssignment.maxAssignedQuestionsPerTest} assigned',
                 style: Theme.of(
                   context,
@@ -345,9 +521,13 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               Text(
-                'Changes are saved immediately.',
+                _dirty
+                    ? 'Pending changes are not saved yet.'
+                    : 'Add or remove Questions, then choose Save Changes.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AdminColors.textSecondary,
+                  color: _dirty
+                      ? AdminColors.warning
+                      : AdminColors.textSecondary,
                 ),
               ),
             ],
@@ -369,13 +549,13 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: AdminSpacing.sm),
-        if (_assigned.isEmpty && _current.questionIds.isEmpty)
+        if (_assigned.isEmpty && _stagedQuestionIds.isEmpty)
           const Text('No Questions assigned yet.')
         else
-          for (var i = 0; i < _current.questionIds.length; i++)
+          for (var i = 0; i < _stagedQuestionIds.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: AdminSpacing.sm),
-              child: _assignedRow(context, _current.questionIds[i], i + 1),
+              child: _assignedRow(context, _stagedQuestionIds[i], i + 1),
             ),
       ],
     );
@@ -434,8 +614,57 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
           IconButton(
             key: ValueKey('remove-question-$id'),
             tooltip: 'Remove Question',
-            onPressed: _loading ? null : () => _remove(id),
+            onPressed: _saving ? null : () => _remove(id),
             icon: const Icon(Icons.remove_circle_outline),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _manualIdsSection(BuildContext context) {
+    return AdminSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Manual Question IDs',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: AdminSpacing.xs),
+          Text(
+            'Enter one ID per line or separate IDs with commas.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: AdminSpacing.sm),
+          TextField(
+            key: const ValueKey('managed-question-ids'),
+            controller: _manualIds,
+            enabled: !_saving && !_validatingManualIds,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'question-id-1, question-id-2',
+            ),
+          ),
+          const SizedBox(height: AdminSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              key: const ValueKey('stage-manual-question-ids'),
+              onPressed: _saving || _validatingManualIds
+                  ? null
+                  : _stageManualQuestionIds,
+              icon: _validatingManualIds
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.playlist_add, size: 18),
+              label: const Text('Stage IDs'),
+            ),
           ),
         ],
       ),
@@ -459,9 +688,9 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
             if (_selected.isNotEmpty)
               FilledButton.icon(
                 key: const ValueKey('assign-selected-questions'),
-                onPressed: _loading ? null : _assignSelected,
+                onPressed: _saving ? null : _assignSelected,
                 icon: const Icon(Icons.playlist_add),
-                label: Text('Assign ${_selected.length}'),
+                label: Text('Stage ${_selected.length}'),
               ),
           ],
         ),
@@ -500,7 +729,7 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: FilledButton.tonal(
-              key: ValueKey('test-assignment-load-more'),
+              key: const ValueKey('test-assignment-load-more'),
               onPressed: _loadMore,
               child: const Text('Load More'),
             ),
@@ -511,10 +740,14 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
 
   Widget _availableRow(BuildContext context, Question question) {
     final owner = _owners[question.id];
-    final legacyReferences = _legacyTestIds[question.id] ?? const <String>[];
-    final alreadyAssigned = _current.questionIds.contains(question.id);
+    final alreadyStaged = _stagedQuestionIds.contains(question.id);
+    final originalMember = _originalQuestionIds.contains(question.id);
+    final ownerConflict =
+        owner != null && (owner != _current.id || !originalMember);
+    final legacyConflict = _hasLegacyConflict(question.id);
+    final archived = question.status == QuestionPublicationStatus.archived;
     final unavailable =
-        alreadyAssigned || owner != null || legacyReferences.isNotEmpty;
+        alreadyStaged || ownerConflict || legacyConflict || archived;
     final selected = _selected.contains(question.id);
     return Padding(
       padding: const EdgeInsets.only(bottom: AdminSpacing.sm),
@@ -537,12 +770,14 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
                   },
             title: Text(AdminQuestionRow.previewText(question)),
             subtitle: Text(
-              unavailable
-                  ? alreadyAssigned
-                        ? 'Already assigned to this Test'
-                        : owner != null
-                        ? _ownerLabel(owner)
-                        : 'Legacy Test reference not verified'
+              alreadyStaged
+                  ? 'Already staged for this Test'
+                  : archived
+                  ? 'Archived Question cannot be assigned'
+                  : ownerConflict
+                  ? _ownerLabel(owner)
+                  : legacyConflict
+                  ? 'Legacy Test reference not verified'
                   : '${question.resolvedItemFormat.name} · ${question.marks} mark${question.marks == 1 ? '' : 's'}',
             ),
             controlAffinity: ListTileControlAffinity.leading,

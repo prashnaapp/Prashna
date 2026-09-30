@@ -150,6 +150,77 @@ class AdminTestService {
     return ids;
   }
 
+  /// Validates manual Question IDs before adding them to an existing Test's
+  /// staged membership. This is read-only; the authoritative write still
+  /// happens once through [updateTest] when the Admin saves the final order.
+  Future<List<String>> normalizeManagedQuestionIds(
+    TestModel test,
+    List<String> stagedIds,
+    Iterable<String> rawIds,
+  ) async {
+    final ids = dedupeQuestionIds(rawIds);
+    if (ids.isEmpty) {
+      throw const FormatException('Enter at least one Question ID.');
+    }
+    final staged = stagedIds.toSet();
+    for (final id in ids) {
+      if (staged.contains(id)) {
+        throw FormatException(
+          'Question "$id" is already staged for this Test.',
+        );
+      }
+    }
+    if (staged.length + ids.length >
+        AdminQuestionTestAssignment.maxAssignedQuestionsPerTest) {
+      throw const FormatException('A Test can assign at most 160 Questions.');
+    }
+
+    final questions = await loadQuestionsByIds(ids);
+    final byId = {for (final question in questions) question.id: question};
+    final state = await loadQuestionAssignmentState(ids);
+    final original = test.questionIds.toSet();
+    for (final id in ids) {
+      final question = byId[id];
+      if (question == null) {
+        throw FormatException('Question "$id" does not exist.');
+      }
+      if (!_isAssignableQuestion(question)) {
+        throw FormatException('Archived Question "$id" cannot be assigned.');
+      }
+      if (!questionIsCompatibleWithTest(question, test)) {
+        throw FormatException(
+          'Question "$id" is not compatible with this Test.',
+        );
+      }
+
+      final owner = state.owners[id]?.trim();
+      if (owner != null && owner.isNotEmpty) {
+        final validOriginalOwner = owner == test.id && original.contains(id);
+        if (!validOriginalOwner) {
+          if (owner == test.id) {
+            throw FormatException(
+              'Question "$id" has an ownership record conflict.',
+            );
+          }
+          throw FormatException(
+            'Question "$id" is already assigned to another Test.',
+          );
+        }
+      }
+
+      final references = state.legacyTestIds[id] ?? const <String>[];
+      final conflictingReferences = references.where(
+        (testId) => testId != test.id || !original.contains(id),
+      );
+      if (conflictingReferences.isNotEmpty) {
+        throw FormatException(
+          'Question "$id" is already referenced by another Test.',
+        );
+      }
+    }
+    return ids;
+  }
+
   /// Creates a draft with no Questions, then assigns [initialQuestionIds]
   /// through [updateTest] — the same callable transaction as Manage Questions.
   Future<String> createDraftWithInitialQuestions(
@@ -438,7 +509,10 @@ class AdminTestService {
     if (errors.isNotEmpty) {
       throw FormatException(errors.join(' '));
     }
-    await _validateAssignedQuestions(effective);
+    await _validateAssignedQuestions(
+      effective,
+      existingIds: current.questionIds.toSet(),
+    );
 
     if (effective.status == TestPublicationStatus.published &&
         current.status != TestPublicationStatus.published) {
@@ -750,7 +824,10 @@ class AdminTestService {
     return errors;
   }
 
-  Future<void> _validateAssignedQuestions(TestModel test) async {
+  Future<void> _validateAssignedQuestions(
+    TestModel test, {
+    Set<String> existingIds = const {},
+  }) async {
     if (test.questionIds.isEmpty) return;
 
     final questions = await _questions.getByIds(test.questionIds);
@@ -762,9 +839,9 @@ class AdminTestService {
         errors.add('Question "$id" does not exist.');
         continue;
       }
-      if (test.status == TestPublicationStatus.published &&
-          !question.isActive) {
-        errors.add('Question "$id" is inactive.');
+      if (question.status == QuestionPublicationStatus.archived &&
+          !existingIds.contains(id)) {
+        errors.add('Archived Question "$id" cannot be assigned.');
       }
       if (question.courseId != test.examId) {
         errors.add('Question "$id" belongs to another course.');

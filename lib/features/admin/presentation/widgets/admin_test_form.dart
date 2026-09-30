@@ -83,6 +83,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
   final Set<String> _selectedQuestionIds = <String>{};
   bool _trackDirty = false;
   bool _isDirty = false;
+  int _canonicalRevision = 0;
 
   TestModel? get _initial => widget.initialTest;
 
@@ -205,6 +206,66 @@ class _AdminTestFormState extends State<AdminTestForm> {
     if (!_isDirty) return;
     _isDirty = false;
     widget.onDirtyChanged?.call(false);
+  }
+
+  @override
+  void didUpdateWidget(covariant AdminTestForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final previous = oldWidget.initialTest;
+    final next = widget.initialTest;
+    if (next == null || _isDirty || _sameCanonicalTest(previous, next)) return;
+
+    _trackDirty = false;
+    _title.text = next.title;
+    _description.text = next.description;
+    _questionCount.text = '${next.questionCount}';
+    _marks.text = '${next.marks}';
+    _duration.text = '${next.durationMinutes}';
+    _negativeMarking.text = next.negativeMarking;
+    _year.text = next.year == null ? '' : '${next.year}';
+    _seriesId = _optionalString(next.seriesId);
+    _courseId = next.examId;
+    _paperId = next.paperId;
+    _partId = next.partId;
+    _syllabusUnitId = next.syllabusUnitId;
+    _category = next.category;
+    _status = next.status;
+    _canonicalRevision++;
+    _trackDirty = true;
+  }
+
+  bool _sameCanonicalTest(TestModel? a, TestModel b) {
+    if (a == null) return false;
+    return a.id == b.id &&
+        a.examId == b.examId &&
+        a.category == b.category &&
+        a.title == b.title &&
+        a.description == b.description &&
+        a.questionCount == b.questionCount &&
+        a.marks == b.marks &&
+        a.durationMinutes == b.durationMinutes &&
+        a.negativeMarking == b.negativeMarking &&
+        a.difficulty == b.difficulty &&
+        _sameIds(a.questionIds, b.questionIds) &&
+        a.status == b.status &&
+        a.paperId == b.paperId &&
+        a.partId == b.partId &&
+        a.syllabusUnitId == b.syllabusUnitId &&
+        a.majorStudyAreaId == b.majorStudyAreaId &&
+        a.contentTopicId == b.contentTopicId &&
+        a.canonicalTopicId == b.canonicalTopicId &&
+        a.lessonId == b.lessonId &&
+        a.scopeShape == b.scopeShape &&
+        a.year == b.year &&
+        a.seriesId == b.seriesId;
+  }
+
+  bool _sameIds(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void _onUserEdit(VoidCallback apply) {
@@ -722,6 +783,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextFormField(
+                key: const ValueKey('test-title'),
                 controller: _title,
                 decoration: const InputDecoration(
                   labelText: 'Title',
@@ -735,6 +797,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
               ),
               const SizedBox(height: AdminSpacing.lg),
               TextFormField(
+                key: const ValueKey('test-description'),
                 controller: _description,
                 maxLines: 3,
                 decoration: const InputDecoration(
@@ -758,6 +821,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
               final wide = constraints.maxWidth >= 640;
               final fields = [
                 TextFormField(
+                  key: const ValueKey('test-question-count'),
                   controller: _questionCount,
                   decoration: const InputDecoration(
                     labelText: 'Question count',
@@ -774,6 +838,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
                   },
                 ),
                 TextFormField(
+                  key: const ValueKey('test-total-marks'),
                   controller: _marks,
                   decoration: const InputDecoration(
                     labelText: 'Total marks',
@@ -791,6 +856,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
                   },
                 ),
                 TextFormField(
+                  key: const ValueKey('test-duration-minutes'),
                   controller: _duration,
                   decoration: const InputDecoration(
                     labelText: 'Duration (minutes)',
@@ -808,6 +874,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
                   },
                 ),
                 TextFormField(
+                  key: const ValueKey('test-negative-marking'),
                   controller: _negativeMarking,
                   decoration: const InputDecoration(
                     labelText: 'Negative marking',
@@ -947,44 +1014,47 @@ class _AdminTestFormState extends State<AdminTestForm> {
 
     return Form(
       key: _formKey,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final bounded =
-              constraints.hasBoundedHeight && constraints.maxHeight.isFinite;
-          final scroll = SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(
-              AdminSpacing.pagePadding,
-              AdminSpacing.pagePadding,
-              AdminSpacing.pagePadding,
-              AdminSpacing.lg,
-            ),
-            child: body,
-          );
-          if (!bounded) {
-            return SingleChildScrollView(
+      child: KeyedSubtree(
+        key: ValueKey('test-form-canonical-$_canonicalRevision'),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final bounded =
+                constraints.hasBoundedHeight && constraints.maxHeight.isFinite;
+            final scroll = SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
                 AdminSpacing.pagePadding,
                 AdminSpacing.pagePadding,
                 AdminSpacing.pagePadding,
                 AdminSpacing.lg,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  body,
-                  _actionBar(editing: editing),
-                ],
-              ),
+              child: body,
             );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: scroll),
-              _actionBar(editing: editing),
-            ],
-          );
-        },
+            if (!bounded) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                  AdminSpacing.pagePadding,
+                  AdminSpacing.pagePadding,
+                  AdminSpacing.pagePadding,
+                  AdminSpacing.lg,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    body,
+                    _actionBar(editing: editing),
+                  ],
+                ),
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: scroll),
+                _actionBar(editing: editing),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

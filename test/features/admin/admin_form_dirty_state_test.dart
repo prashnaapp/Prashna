@@ -295,6 +295,82 @@ void main() {
   });
 
   group('Test form dirty coverage', () {
+    testWidgets('clean form synchronizes a new canonical Test snapshot', (
+      tester,
+    ) async {
+      Widget form(TestModel test) => MaterialApp(
+        home: Scaffold(
+          body: AdminTestForm(
+            key: const ValueKey('synchronized-test-form'),
+            courses: const [groupIi, groupIii],
+            initialTest: test,
+            initialCourseId: 'group-ii',
+            onSubmit: (_) async {},
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(form(buildTest(questionIds: const ['q-1'])));
+      await settleDirtyTracking(tester);
+      await tester.pumpWidget(
+        form(
+          TestModel(
+            id: 'test-edit',
+            examId: 'group-ii',
+            category: TestCategoryType.chapterTests,
+            title: 'Canonical title',
+            questionCount: 2,
+            marks: 7,
+            durationMinutes: 11,
+            negativeMarking: '0.25',
+            difficulty: 'Medium',
+            questionIds: const ['q-1', 'q-2'],
+            status: TestPublicationStatus.published,
+            paperId: 'group-ii-paper-i',
+            syllabusUnitId: 'group-ii-paper-i-area-01',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_testFieldText(tester, 'test-title'), 'Canonical title');
+      expect(_testFieldText(tester, 'test-question-count'), '2');
+      expect(_testFieldText(tester, 'test-total-marks'), '7');
+      expect(_testFieldText(tester, 'test-duration-minutes'), '11');
+      expect(_testFieldText(tester, 'test-negative-marking'), '0.25');
+      expect(find.text('Assigned Questions: 2'), findsWidgets);
+      expect(find.text('Published'), findsWidgets);
+    });
+
+    testWidgets('unrelated parent rebuild preserves active metadata edits', (
+      tester,
+    ) async {
+      Widget form(TestModel test) => MaterialApp(
+        home: Scaffold(
+          body: AdminTestForm(
+            key: const ValueKey('stable-test-form'),
+            courses: const [groupIi, groupIii],
+            initialTest: test,
+            initialCourseId: 'group-ii',
+            onSubmit: (_) async {},
+          ),
+        ),
+      );
+      final initial = buildTest(questionIds: const ['q-1']);
+      await tester.pumpWidget(form(initial));
+      await settleDirtyTracking(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey('test-title')),
+        'Unsaved local title',
+      );
+
+      await tester.pumpWidget(form(buildTest(questionIds: const ['q-1'])));
+      await tester.pump();
+
+      expect(_testFieldText(tester, 'test-title'), 'Unsaved local title');
+      expect(find.text('Unsaved changes'), findsOneWidget);
+    });
+
     testWidgets('create and edit forms do not expose difficulty', (
       tester,
     ) async {
@@ -1050,6 +1126,13 @@ void main() {
       expect(find.text('Brand new exam question stem'), findsWidgets);
     });
   });
+}
+
+String _testFieldText(WidgetTester tester, String key) {
+  return tester
+      .widget<TextFormField>(find.byKey(ValueKey(key)))
+      .controller!
+      .text;
 }
 
 class _FakeQuestionFormService extends AdminQuestionService {

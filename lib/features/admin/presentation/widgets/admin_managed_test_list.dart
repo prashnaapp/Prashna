@@ -124,9 +124,6 @@ class AdminManagedTestList extends StatelessWidget {
             AdminTestRow(
               test: test,
               onEdit: () => _openEdit(context, test),
-              onManageQuestions: () => Navigator.of(
-                context,
-              ).pushNamed(AdminRoutes.testAssignments, arguments: test),
               onPublish: test.status == TestPublicationStatus.draft
                   ? () => _setStatus(
                       context,
@@ -135,18 +132,10 @@ class AdminManagedTestList extends StatelessWidget {
                     )
                   : null,
               onUnpublish: test.status == TestPublicationStatus.published
-                  ? () => _setStatus(
-                      context,
-                      test,
-                      TestPublicationStatus.draft,
-                    )
+                  ? () => _setStatus(context, test, TestPublicationStatus.draft)
                   : null,
               onRestore: test.status == TestPublicationStatus.archived
-                  ? () => _setStatus(
-                      context,
-                      test,
-                      TestPublicationStatus.draft,
-                    )
+                  ? () => _setStatus(context, test, TestPublicationStatus.draft)
                   : null,
             ),
             const SizedBox(height: AdminSpacing.md),

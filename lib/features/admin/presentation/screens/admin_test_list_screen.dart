@@ -282,9 +282,6 @@ class _AdminTestListScreenState extends State<AdminTestListScreen> {
                     return AdminTestRow(
                       test: test,
                       onEdit: () => _openEdit(test),
-                      onManageQuestions: () => Navigator.of(
-                        context,
-                      ).pushNamed(AdminRoutes.testAssignments, arguments: test),
                       onPublish: test.status == TestPublicationStatus.draft
                           ? () => _setStatus(
                               test,

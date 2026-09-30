@@ -33,6 +33,9 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
   late final AdminTestService _service;
   late final Future<List<Course>> _coursesFuture;
   TestModel? _test;
+  bool _loadingTest = false;
+  String? _testError;
+  bool _changed = false;
   bool _dirty = false;
   AdminDirtyController? _dirtyController;
 
@@ -42,8 +45,11 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
   void initState() {
     super.initState();
     _service = widget.service ?? AdminTestService.instance;
-    _test = widget.test;
     _coursesFuture = _service.loadCourses();
+    if (widget.test != null) {
+      _loadingTest = true;
+      _loadCanonicalTest();
+    }
   }
 
   @override
@@ -79,28 +85,53 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
   Future<void> _openManageQuestions() async {
     final test = _test;
     if (test == null || _dirty) return;
-    await Navigator.of(context).push(
+    final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) =>
             AdminTestAssignmentScreen(test: test, service: _service),
       ),
     );
     if (!mounted) return;
-    final fresh = await _service.getTest(test.id);
-    if (!mounted || fresh == null) return;
-    setState(() => _test = fresh);
+    if (changed == true) _changed = true;
+    await _loadCanonicalTest();
+  }
+
+  Future<void> _loadCanonicalTest() async {
+    final id = widget.test?.id ?? _test?.id;
+    if (id == null || id.trim().isEmpty) return;
+    setState(() {
+      _loadingTest = true;
+      _testError = null;
+    });
+    try {
+      final fresh = await _service.getTest(id);
+      if (fresh == null) {
+        throw const FormatException('Test was not found.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _test = fresh;
+        _loadingTest = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingTest = false;
+        _testError = error.toString().replaceFirst('FormatException: ', '');
+      });
+    }
   }
 
   Future<void> _handlePopRequest() async {
     if (!_dirty) {
-      if (mounted) Navigator.of(context).pop(false);
+      if (mounted) Navigator.of(context).pop(_changed);
       return;
     }
     final controller = _dirtyController;
     final leave = controller != null
         ? await controller.confirmLeaveIfNeeded(context)
         : await _showLocalDiscardDialog();
-    if (leave && mounted) Navigator.of(context).pop(false);
+    if (leave && mounted) Navigator.of(context).pop(_changed);
   }
 
   Future<bool> _showLocalDiscardDialog() async {
@@ -130,7 +161,7 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_dirty,
+      canPop: !_dirty && !_changed,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         await _handlePopRequest();
@@ -158,59 +189,77 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
               ),
           ],
         ),
-        body: FutureBuilder<List<Course>>(
-          future: _coursesFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const AdminLoadingSurface(rows: 3);
-            }
-            if (snapshot.hasError) {
-              return AdminEmptyState(
-                title: 'Unable to load courses',
-                message: 'Unable to load courses: ${snapshot.error}',
-                icon: Icons.error_outline,
-              );
-            }
-            final courses = snapshot.data ?? const <Course>[];
-            if (courses.isEmpty) {
-              return const AdminEmptyState(
-                title: 'No courses available',
-                message: 'No published courses are available.',
-                icon: Icons.school_outlined,
-              );
-            }
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 900),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: double.infinity,
-                  child: AdminTestForm(
-                    key: ValueKey(
-                      '${_test?.id ?? 'new'}:${_test?.questionIds.join(',') ?? ''}',
-                    ),
-                    courses: courses,
-                    initialTest: _test,
-                    initialCourseId: widget.initialCourseId,
-                    scope: widget.scope,
-                    service: _service,
-                    onSubmit: _save,
-                    onCreateDraft: _test == null ? _create : null,
-                    onManageQuestions: _test == null
-                        ? null
-                        : _openManageQuestions,
-                    onCancel: () => _handlePopRequest(),
-                    onDirtyChanged: (dirty) {
-                      if (!mounted) return;
-                      setState(() => _dirty = dirty);
-                    },
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
+        body: _buildBody(),
       ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (widget.test != null &&
+        (_loadingTest || _test == null) &&
+        _testError == null) {
+      return const AdminLoadingSurface(rows: 3);
+    }
+    if (_testError != null) {
+      return AdminEmptyState(
+        title: 'Unable to load Test',
+        message: _testError!,
+        icon: Icons.error_outline,
+        action: FilledButton.tonal(
+          onPressed: _loadCanonicalTest,
+          child: const Text('Retry'),
+        ),
+      );
+    }
+    return FutureBuilder<List<Course>>(
+      future: _coursesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const AdminLoadingSurface(rows: 3);
+        }
+        if (snapshot.hasError) {
+          return AdminEmptyState(
+            title: 'Unable to load courses',
+            message: 'Unable to load courses: ${snapshot.error}',
+            icon: Icons.error_outline,
+          );
+        }
+        final courses = snapshot.data ?? const <Course>[];
+        if (courses.isEmpty) {
+          return const AdminEmptyState(
+            title: 'No courses available',
+            message: 'No published courses are available.',
+            icon: Icons.school_outlined,
+          );
+        }
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: SizedBox(
+              width: double.infinity,
+              height: double.infinity,
+              child: AdminTestForm(
+                key: ValueKey(_test?.id ?? 'new'),
+                courses: courses,
+                initialTest: _test,
+                initialCourseId: widget.initialCourseId,
+                scope: _test == null
+                    ? widget.scope
+                    : AdminTestScope.fromTest(_test!),
+                service: _service,
+                onSubmit: _save,
+                onCreateDraft: _test == null ? _create : null,
+                onManageQuestions: _test == null ? null : _openManageQuestions,
+                onCancel: () => _handlePopRequest(),
+                onDirtyChanged: (dirty) {
+                  if (!mounted) return;
+                  setState(() => _dirty = dirty);
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

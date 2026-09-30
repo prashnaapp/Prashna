@@ -61,20 +61,23 @@ void main() {
     );
   }
 
-  TestModel buildTest({String id = 't-1'}) {
+  TestModel buildTest({
+    String id = 't-1',
+    List<String> questionIds = const ['q-1'],
+  }) {
     return TestModel(
       id: id,
       examId: 'group-ii',
       category: TestCategoryType.chapterTests,
       title: 'Practice Test',
       description: 'Desc',
-      questionCount: 1,
-      marks: 1,
-      durationMinutes: 30,
+      questionCount: questionIds.length,
+      marks: questionIds.length,
+      durationMinutes: questionIds.length,
       negativeMarking: '0',
       difficulty: 'easy',
       status: TestPublicationStatus.draft,
-      questionIds: const ['q-1'],
+      questionIds: questionIds,
     );
   }
 
@@ -279,6 +282,33 @@ void main() {
   });
 
   group('Test form / managed list continuity', () {
+    testWidgets('managed row removes direct Manage but keeps Edit', (
+      tester,
+    ) async {
+      final test = buildTest(questionIds: const ['q-1']);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdminManagedTestList(
+              tests: [test],
+              service: _FakeTestService(courses: const [course], tests: [test]),
+              onChanged: () async {},
+              onCreate: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Manage Questions'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('test-manage-questions-t-1')),
+        findsNothing,
+      );
+      expect(find.byTooltip('Edit'), findsOneWidget);
+    });
+
     testWidgets('Edit cancel does not call onChanged; save does', (
       tester,
     ) async {
@@ -423,6 +453,14 @@ class _FakeTestService extends AdminTestService {
   @override
   Future<List<TestModel>> loadTests(String courseId) async =>
       List<TestModel>.from(tests);
+
+  @override
+  Future<TestModel?> getTest(String testId) async {
+    for (final test in tests) {
+      if (test.id == testId) return test;
+    }
+    return null;
+  }
 
   @override
   Future<String> createTest(TestModel test) async => test.id;

@@ -95,6 +95,75 @@ void main() {
   });
 
   testWidgets(
+    'Edit entry fetches canonical Test before showing editable values',
+    (tester) async {
+      final stale = _test(
+        TestCategoryType.partTests,
+        questionIds: ['q-1', 'q-2'],
+        marks: 5,
+        duration: 5,
+      );
+      final service = _ScreenService(
+        _test(
+          TestCategoryType.partTests,
+          questionIds: ['q-1', 'q-2', 'q-3'],
+          marks: 3,
+          duration: 3,
+        ),
+      );
+      await tester.binding.setSurfaceSize(const Size(1200, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AdminTestFormScreen(test: stale, service: service),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(service.getTestCalls, 1);
+      expect(find.text('Assigned Questions: 3'), findsWidgets);
+      expect(_fieldText(tester, 'test-question-count'), '3');
+      expect(_fieldText(tester, 'test-total-marks'), '3');
+      expect(_fieldText(tester, 'test-duration-minutes'), '3');
+    },
+  );
+
+  testWidgets(
+    'Edit entry failure shows retry instead of stale bootstrap metadata',
+    (tester) async {
+      final service = _RetryScreenService(
+        _test(
+          TestCategoryType.partTests,
+          questionIds: ['q-1', 'q-2', 'q-3'],
+          marks: 3,
+          duration: 3,
+        ),
+      );
+      final stale = _test(
+        TestCategoryType.partTests,
+        questionIds: ['q-1', 'q-2'],
+        marks: 5,
+        duration: 5,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AdminTestFormScreen(test: stale, service: service),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unable to load Test'), findsOneWidget);
+      expect(find.text('Assigned Questions: 2'), findsNothing);
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Assigned Questions: 3'), findsWidgets);
+    },
+  );
+
+  testWidgets(
     'returning from Manage Questions shows the saved assignment count',
     (tester) async {
       final service = _ScreenService(
@@ -118,7 +187,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Changes are saved immediately.'), findsOneWidget);
+      expect(
+        find.text('Add or remove Questions, then choose Save Changes.'),
+        findsOneWidget,
+      );
       expect(find.text('5 / 160 assigned'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('remove-question-q-2')));
@@ -127,13 +199,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('4 / 160 assigned'), findsOneWidget);
+      expect(service.server.questionIds, ['q-1', 'q-2', 'q-3', 'q-4', 'q-5']);
+      expect(service.updateCalls, 0);
+
+      await tester.tap(find.byKey(const ValueKey('save-assignment-changes')));
+      await tester.pumpAndSettle();
+
       expect(service.server.questionIds, ['q-1', 'q-3', 'q-4', 'q-5']);
       expect(service.preserveAssignments, isFalse);
 
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-
       expect(find.text('Assigned Questions: 4'), findsWidgets);
+      expect(_fieldText(tester, 'test-question-count'), '4');
+      expect(_fieldText(tester, 'test-total-marks'), '4');
+      expect(_fieldText(tester, 'test-duration-minutes'), '4');
       await tester.enterText(find.byType(TextFormField).first, 'Updated title');
       final save = find.byKey(const ValueKey('submit-test'));
       await tester.ensureVisible(save);
@@ -145,6 +223,165 @@ void main() {
       expect(service.saved?.questionIds, ['q-1', 'q-3', 'q-4', 'q-5']);
     },
   );
+
+  testWidgets(
+    'Edit to Manage refreshes aggregates when membership order is unchanged',
+    (tester) async {
+      final service = _ScreenService(
+        _test(
+          TestCategoryType.partTests,
+          questionIds: ['q-1', 'q-2'],
+          marks: 2,
+          duration: 2,
+        ),
+      );
+      await tester.binding.setSurfaceSize(const Size(1200, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AdminTestFormScreen(test: service.server, service: service),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('test-form-manage-questions')),
+      );
+      await tester.pumpAndSettle();
+      service.server = _test(
+        TestCategoryType.partTests,
+        questionIds: ['q-1', 'q-2'],
+        marks: 8,
+        duration: 12,
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Assigned Questions: 2'), findsWidgets);
+      expect(_fieldText(tester, 'test-question-count'), '2');
+      expect(_fieldText(tester, 'test-total-marks'), '8');
+      expect(_fieldText(tester, 'test-duration-minutes'), '12');
+    },
+  );
+
+  testWidgets(
+    'assignment change returns true from Edit without metadata Save',
+    (tester) async {
+      final service = _ScreenService(
+        _test(
+          TestCategoryType.partTests,
+          questionIds: ['q-1', 'q-2'],
+          marks: 2,
+          duration: 2,
+        ),
+      );
+      bool? editResult;
+      await tester.binding.setSurfaceSize(const Size(1200, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                key: const ValueKey('open-edit'),
+                onPressed: () async {
+                  editResult = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => AdminTestFormScreen(
+                        test: service.server,
+                        service: service,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Open Edit'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('open-edit')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('test-form-manage-questions')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('remove-question-q-2')));
+      await tester.pump();
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+      expect(service.updateCalls, 0);
+      await tester.tap(find.byKey(const ValueKey('save-assignment-changes')));
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(editResult, isTrue);
+      expect(service.metadataSaves, 0);
+    },
+  );
+
+  testWidgets(
+    'Manage round trip without Save does not fabricate an Edit mutation',
+    (tester) async {
+      final service = _ScreenService(
+        _test(
+          TestCategoryType.partTests,
+          questionIds: ['q-1', 'q-2'],
+          marks: 2,
+          duration: 2,
+        ),
+      );
+      bool? editResult;
+      await tester.binding.setSurfaceSize(const Size(1200, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                key: const ValueKey('open-edit'),
+                onPressed: () async {
+                  editResult = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => AdminTestFormScreen(
+                        test: service.server,
+                        service: service,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Open Edit'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('open-edit')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('test-form-manage-questions')),
+      );
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(editResult, isNull);
+      expect(service.server.questionIds, ['q-1', 'q-2']);
+      expect(service.metadataSaves, 0);
+    },
+  );
+}
+
+String _fieldText(WidgetTester tester, String key) {
+  return tester
+      .widget<TextFormField>(find.byKey(ValueKey(key)))
+      .controller!
+      .text;
 }
 
 Future<Map<String, dynamic>> _saveMetadata({
@@ -253,12 +490,18 @@ class _ScreenService extends AdminTestService {
   TestModel server;
   bool? preserveAssignments;
   TestModel? saved;
+  int getTestCalls = 0;
+  int metadataSaves = 0;
+  int updateCalls = 0;
 
   @override
   Future<List<Course>> loadCourses() async => const [_course];
 
   @override
-  Future<TestModel?> getTest(String testId) async => server;
+  Future<TestModel?> getTest(String testId) async {
+    getTestCalls++;
+    return server;
+  }
 
   @override
   Future<List<Question>> loadQuestionsByIds(List<String> ids) async => [
@@ -290,7 +533,9 @@ class _ScreenService extends AdminTestService {
     TestModel test, {
     bool preserveAssignments = false,
   }) async {
+    updateCalls++;
     this.preserveAssignments = preserveAssignments;
+    if (preserveAssignments) metadataSaves++;
     saved = test;
     if (!preserveAssignments) {
       server = TestModel(
@@ -299,8 +544,8 @@ class _ScreenService extends AdminTestService {
         category: server.category,
         title: test.title,
         questionCount: test.questionIds.length,
-        marks: test.marks,
-        durationMinutes: test.durationMinutes,
+        marks: test.questionIds.length,
+        durationMinutes: test.questionIds.length,
         negativeMarking: server.negativeMarking,
         difficulty: server.difficulty,
         questionIds: test.questionIds,
@@ -308,5 +553,20 @@ class _ScreenService extends AdminTestService {
         paperId: server.paperId,
       );
     }
+  }
+}
+
+class _RetryScreenService extends _ScreenService {
+  _RetryScreenService(super.server);
+
+  bool failNextRead = true;
+
+  @override
+  Future<TestModel?> getTest(String testId) async {
+    if (failNextRead) {
+      failNextRead = false;
+      throw const FormatException('Canonical Test unavailable.');
+    }
+    return super.getTest(testId);
   }
 }
