@@ -515,13 +515,16 @@ class QuestionCloudRepository {
   /// Unlike [getByIds], this query is only used through an Admin Question
   /// service, where the admin Firestore rule permits the bounded batch query.
   Future<List<Question>> getAdminByIds(List<String> ids) async {
+    final testGet = _getByIdsForTest;
+    if (testGet != null) return testGet(ids);
     if (ids.isEmpty) return const [];
     try {
       final byId = <String, Question>{};
-      for (final chunk in QuestionFingerprintQuery.chunks(ids)) {
-        final snapshot = await _questions
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get();
+      final snapshots = await Future.wait([
+        for (final chunk in QuestionFingerprintQuery.chunks(ids))
+          _questions.where(FieldPath.documentId, whereIn: chunk).get(),
+      ]);
+      for (final snapshot in snapshots) {
         for (final doc in snapshot.docs) {
           final question = QuestionCloudMapper.fromFirestore(
             doc.id,

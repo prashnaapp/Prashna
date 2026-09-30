@@ -190,6 +190,7 @@ void main() {
 
     expect(service.updateCalls, 1);
     expect(service.updatedIds, const ['q-missing']);
+    expect(service.assignmentStateCalls, 1);
   });
 
   testWidgets('draft inactive released Question can be staged and saved', (
@@ -763,6 +764,7 @@ class _FakeAdminTestService extends AdminTestService {
   final Object? updateError;
   List<String>? updatedIds;
   int updateCalls = 0;
+  int assignmentStateCalls = 0;
 
   @override
   Future<TestModel?> getTest(String testId) async => test;
@@ -783,6 +785,7 @@ class _FakeAdminTestService extends AdminTestService {
   Future<AdminQuestionAssignmentState> loadQuestionAssignmentState(
     List<String> ids,
   ) async {
+    assignmentStateCalls++;
     return AdminQuestionAssignmentState(
       owners: {
         for (final id in ids)

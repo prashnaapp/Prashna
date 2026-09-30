@@ -8,6 +8,7 @@ import '../../../tests/data/models/test_models.dart';
 import '../../admin_routes.dart';
 import '../../data/admin_test_hierarchy.dart';
 import '../../data/admin_test_scope.dart';
+import '../../debug/admin_perf_trace.dart';
 import '../../services/admin_test_service.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
@@ -83,12 +84,12 @@ class _AdminTestSeriesBrowserScreenState
       _error = null;
     });
     try {
-      final courses = await _service.loadCourses();
-      var tests = const <TestModel>[];
-      final courseId = widget.courseId;
-      if (courseId != null) {
-        tests = await _service.loadTests(courseId);
-      }
+      final loaded = await AdminPerfTrace.span(
+        'testSeries.navigation',
+        () => _service.loadHierarchy(courseId: widget.courseId),
+      );
+      final courses = loaded.courses;
+      final tests = loaded.tests;
       if (!mounted) return;
       setState(() {
         _courses = courses;

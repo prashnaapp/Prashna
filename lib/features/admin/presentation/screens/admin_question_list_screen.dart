@@ -8,6 +8,8 @@ import '../../../syllabus/data/models/syllabus_models.dart';
 import '../../../syllabus/services/syllabus_service.dart';
 import '../../admin_routes.dart';
 import '../../data/admin_chapter_question_context.dart';
+import '../../data/admin_test_series_question_query.dart';
+import '../../debug/admin_perf_trace.dart';
 import '../../services/admin_question_service.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
@@ -121,16 +123,27 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
 
   Future<void> _loadCourses() async {
     try {
-      final courses = await _service.loadCourses();
+      final knownCourse = widget.chapterContext?.courseId;
+      final coursesFuture = AdminPerfTrace.span(
+        'questions.courses',
+        () => _service.loadCourses(),
+      );
+      final questionsFuture = _serverBank && knownCourse != null
+          ? _loadChapterFirstPage()
+          : null;
+      final courses = await coursesFuture;
       if (!mounted) return;
       setState(() {
         _courses = courses;
         _courseId =
-            widget.chapterContext?.courseId ??
-            (courses.isEmpty ? null : courses.first.courseId);
+            knownCourse ?? (courses.isEmpty ? null : courses.first.courseId);
         _loadingCourses = false;
       });
-      if (_courseId != null) await _loadQuestions();
+      if (questionsFuture != null) {
+        await questionsFuture;
+      } else if (_courseId != null) {
+        await _loadQuestions();
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -183,16 +196,26 @@ class _AdminQuestionListScreenState extends State<AdminQuestionListScreen> {
       _cursorSearchText = null;
     });
     try {
-      final page = await _service.loadChapterQuestionPage(
-        location,
-        status: status,
-        searchText: search,
-      );
-      final total = await _service.countChapterQuestions(
-        location,
-        status: status,
-        searchText: search,
-      );
+      final loaded = await Future.wait([
+        AdminPerfTrace.span(
+          'questions.chapterPage',
+          () => _service.loadChapterQuestionPage(
+            location,
+            status: status,
+            searchText: search,
+          ),
+        ),
+        AdminPerfTrace.span(
+          'questions.chapterCount',
+          () => _service.countChapterQuestions(
+            location,
+            status: status,
+            searchText: search,
+          ),
+        ),
+      ]);
+      final page = loaded[0] as QuestionBankPage;
+      final total = loaded[1] as int;
       if (!mounted || request != _chapterRequest) return;
       setState(() {
         _questions = page.questions;

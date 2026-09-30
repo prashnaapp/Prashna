@@ -7,6 +7,7 @@ import '../../../tests/data/models/test_models.dart';
 import '../../admin_routes.dart';
 import '../../data/admin_test_hierarchy.dart';
 import '../../data/admin_test_scope.dart';
+import '../../debug/admin_perf_trace.dart';
 import '../../services/admin_test_service.dart';
 import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
@@ -46,7 +47,8 @@ class AdminChaptersBrowserScreen extends StatefulWidget {
       _AdminChaptersBrowserScreenState();
 }
 
-class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen> {
+class _AdminChaptersBrowserScreenState
+    extends State<AdminChaptersBrowserScreen> {
   late final AdminTestService _service;
   SyllabusService get _syllabus =>
       widget.syllabusService ?? SyllabusService.instance;
@@ -69,12 +71,12 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
       _error = null;
     });
     try {
-      final courses = await _service.loadCourses();
-      var tests = const <TestModel>[];
-      final courseId = widget.courseId;
-      if (courseId != null) {
-        tests = await _service.loadTests(courseId);
-      }
+      final loaded = await AdminPerfTrace.span(
+        'chapters.navigation',
+        () => _service.loadHierarchy(courseId: widget.courseId),
+      );
+      final courses = loaded.courses;
+      final tests = loaded.tests;
       if (!mounted) return;
       setState(() {
         _courses = courses;
@@ -315,11 +317,8 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
               title: part.displayName,
               subtitle: '${part.syllabusUnits.length} chapters',
               icon: Icons.folder_outlined,
-              onTap: () => _open(
-                courseId: courseId,
-                paperId: paperId,
-                partId: part.id,
-              ),
+              onTap: () =>
+                  _open(courseId: courseId, paperId: paperId, partId: part.id),
             ),
         ],
       );
@@ -396,9 +395,9 @@ class _AdminChaptersBrowserScreenState extends State<AdminChaptersBrowserScreen>
             padding: const EdgeInsets.all(AdminSpacing.lg),
             child: Text(
               path!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AdminColors.textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AdminColors.textSecondary),
             ),
           );
         }

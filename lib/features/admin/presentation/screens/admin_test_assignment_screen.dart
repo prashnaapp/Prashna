@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../question_bank/data/models/question_models.dart';
+import '../../data/admin_test_series_question_query.dart';
 import '../../../tests/data/models/test_models.dart';
+import '../../debug/admin_perf_trace.dart';
 import '../../services/admin_question_test_assignment.dart';
 import '../../services/admin_test_service.dart';
 import '../../theme/admin_colors.dart';
@@ -106,7 +108,10 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
     try {
       final initializing = _test == null;
       final current = initializing
-          ? await _service.getTest(widget.test.id)
+          ? await AdminPerfTrace.span(
+              'manageQuestions.load.test',
+              () => _service.getTest(widget.test.id),
+            )
           : _current;
       if (current == null) {
         throw const FormatException('Test was not found.');
@@ -114,15 +119,28 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
       final stagedIds = initializing
           ? List<String>.of(current.questionIds)
           : List<String>.of(_stagedQuestionIds);
-      final page = await _service.loadCompatibleQuestionPage(
-        current,
-        searchText: _search.text,
-      );
-      final assignedQuestions = await _service.loadQuestionsByIds(stagedIds);
-      final assignmentState = await _service.loadQuestionAssignmentState([
-        ...stagedIds,
-        ...page.questions.map((question) => question.id),
+      final loaded = await Future.wait([
+        AdminPerfTrace.span(
+          'manageQuestions.load.compatible',
+          () => _service.loadCompatibleQuestionPage(
+            current,
+            searchText: _search.text,
+          ),
+        ),
+        AdminPerfTrace.span(
+          'manageQuestions.load.assigned',
+          () => _service.loadQuestionsByIds(stagedIds),
+        ),
       ]);
+      final page = loaded[0] as QuestionBankPage;
+      final assignedQuestions = loaded[1] as List<Question>;
+      final assignmentState = await AdminPerfTrace.span(
+        'manageQuestions.load.ownership',
+        () => _service.loadQuestionAssignmentState([
+          ...stagedIds,
+          ...page.questions.map((question) => question.id),
+        ]),
+      );
       if (!mounted || request != _request) return;
       setState(() {
         _test = current;
@@ -309,16 +327,21 @@ class _AdminTestAssignmentScreenState extends State<AdminTestAssignmentScreen> {
     });
     try {
       if (!_saveCommitted) {
-        await _service.updateTest(
-          _withQuestionIds(_current, _stagedQuestionIds),
+        await AdminPerfTrace.span(
+          'manageQuestions.save.write',
+          () => _service.updateTest(
+            _withQuestionIds(_current, _stagedQuestionIds),
+          ),
         );
         _saveCommitted = true;
       }
-      final fresh = await _service.getTest(_current.id);
+      final fresh = await AdminPerfTrace.span(
+        'manageQuestions.save.reloadTest',
+        () => _service.getTest(_current.id),
+      );
       if (fresh == null) {
         throw const FormatException('Saved Test could not be reloaded.');
       }
-      await _service.loadQuestionAssignmentState(fresh.questionIds);
       if (!mounted) return;
       setState(() {
         _test = fresh;

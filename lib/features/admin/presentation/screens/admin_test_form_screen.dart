@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../course_enrollment/model/course.dart';
 import '../../../tests/data/models/test_models.dart';
 import '../../data/admin_test_scope.dart';
+import '../../debug/admin_perf_trace.dart';
 import '../../services/admin_test_service.dart';
 import '../../theme/admin_colors.dart';
 import '../shell/admin_dirty_scope.dart';
@@ -104,7 +105,10 @@ class _AdminTestFormScreenState extends State<AdminTestFormScreen> {
       _testError = null;
     });
     try {
-      final fresh = await _service.getTest(id);
+      final fresh = await AdminPerfTrace.span(
+        'editTest.canonical',
+        () => _service.getTest(id),
+      );
       if (fresh == null) {
         throw const FormatException('Test was not found.');
       }

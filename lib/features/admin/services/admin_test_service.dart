@@ -5,9 +5,12 @@ import '../../question_bank/repository/question_cloud_repository.dart';
 import '../../tests/data/models/test_models.dart';
 import '../../tests/data/test_cloud_mapper.dart';
 import '../../tests/repository/test_cloud_repository.dart';
+import '../../syllabus/data/models/canonical_scope.dart';
 import '../../syllabus/data/models/syllabus_models.dart';
 import '../../syllabus/services/syllabus_service.dart';
+import '../data/admin_chapter_question_query.dart';
 import '../data/admin_content_callable_client.dart';
+import '../debug/admin_perf_trace.dart';
 import '../data/admin_question_scope.dart';
 import '../data/admin_test_series_question_query.dart';
 import 'admin_question_test_assignment.dart';
@@ -46,18 +49,56 @@ class AdminTestService {
   final TestCloudRepository _tests;
   final QuestionCloudRepository _questions;
   final CourseCatalogService? _courses;
+  List<Course>? _coursesCache;
+  final Map<String, List<TestModel>> _testsCache = {};
 
   Future<List<Course>> loadCourses() {
-    return (_courses ?? CourseCatalogService()).loadPublishedCourses();
+    return AdminPerfTrace.span('hierarchy.courses', () async {
+      if (_coursesCache != null) return _coursesCache!;
+      final courses = await (_courses ?? CourseCatalogService())
+          .loadPublishedCourses();
+      _coursesCache = courses;
+      return courses;
+    });
   }
 
   Future<List<TestModel>> loadTests(String courseId) {
-    final id = courseId.trim();
-    if (id.isEmpty) {
-      throw const FormatException('Select a course before loading tests.');
-    }
-    return _tests.loadAdminTests(id);
+    return AdminPerfTrace.span('hierarchy.tests', () async {
+      final id = courseId.trim();
+      if (id.isEmpty) {
+        throw const FormatException('Select a course before loading tests.');
+      }
+      if (_testsCache.containsKey(id)) return _testsCache[id]!;
+      final tests = await _tests.loadAdminTests(id);
+      _testsCache[id] = tests;
+      return tests;
+    });
   }
+
+  /// Course catalog and one course's tests are independent reads.
+  Future<({List<Course> courses, List<TestModel> tests})> loadHierarchy({
+    String? courseId,
+  }) {
+    return AdminPerfTrace.span('hierarchy.navigation', () async {
+      final id = courseId?.trim();
+      if (id == null || id.isEmpty) {
+        return (
+          courses: await loadCourses(),
+          tests: const <TestModel>[],
+        );
+      }
+      final results = await Future.wait([
+        loadCourses(),
+        loadTests(id),
+      ]);
+      return (
+        courses: results[0] as List<Course>,
+        tests: results[1] as List<TestModel>,
+      );
+    });
+  }
+
+  void _invalidateTestLists() => _testsCache.clear();
 
   Future<TestModel?> getTest(String testId) {
     return _tests.getAdminTestById(testId);
@@ -381,6 +422,27 @@ class AdminTestService {
       );
     }
 
+    final chapterQuery = _chapterQueryForTest(
+      test,
+      searchText: searchText,
+      cursorDocumentId: cursorDocumentId,
+      cursorSearchText: cursorSearchText,
+    );
+    if (chapterQuery != null) {
+      final page = await _questions.loadChapterQuestionPage(chapterQuery);
+      return QuestionBankPage(
+        questions: [
+          for (final question in page.questions)
+            if (_isAssignableQuestion(question) &&
+                questionMatchesChapterTest(question, test))
+              question,
+        ],
+        hasMore: page.hasMore,
+        cursorDocumentId: page.cursorDocumentId,
+        cursorSearchText: page.cursorSearchText,
+      );
+    }
+
     final questions = await _questions.loadQuestions(
       filter: QuestionFilter(
         courseId: test.examId,
@@ -406,6 +468,60 @@ class AdminTestService {
       hasMore: false,
       cursorDocumentId: compatible.isEmpty ? null : compatible.last.id,
     );
+  }
+
+  /// Scoped Chapter bank when the Test's canonical location matches an
+  /// existing Chapter Question query. Incomplete locations keep the paper scan.
+  static AdminChapterQuestionQuery? _chapterQueryForTest(
+    TestModel test, {
+    String? searchText,
+    String? cursorDocumentId,
+    String? cursorSearchText,
+  }) {
+    if (test.category != TestCategoryType.chapterTests &&
+        test.category != TestCategoryType.paperTests) {
+      return null;
+    }
+    final scope = test.canonicalScope;
+    if (scope == null) return null;
+    switch (scope.shape) {
+      case CanonicalScopeShape.groupIiiPaperUnit:
+      case CanonicalScopeShape.groupIiiPartUnit:
+        return AdminChapterQuestionQuery(
+          courseId: scope.courseId,
+          paperId: scope.paperId,
+          partId: scope.partId,
+          syllabusUnitId: scope.syllabusUnitId,
+          searchText: searchText,
+          cursorDocumentId: cursorDocumentId,
+          cursorSearchText: cursorSearchText,
+        );
+      case CanonicalScopeShape.groupIiPartUnit:
+        final partId = scope.partId;
+        if (partId == null) return null;
+        return AdminChapterQuestionQuery(
+          courseId: scope.courseId,
+          paperId: scope.paperId,
+          partId: partId,
+          topicId: scope.canonicalTopicId ?? scope.syllabusUnitId,
+          searchText: searchText,
+          cursorDocumentId: cursorDocumentId,
+          cursorSearchText: cursorSearchText,
+        );
+      case CanonicalScopeShape.groupIiPaperI:
+        final areaId = scope.majorStudyAreaId;
+        final contentTopicId = scope.contentTopicId;
+        if (areaId == null || contentTopicId == null) return null;
+        return AdminChapterQuestionQuery(
+          courseId: scope.courseId,
+          paperId: scope.paperId,
+          majorStudyAreaId: areaId,
+          contentTopicId: contentTopicId,
+          searchText: searchText,
+          cursorDocumentId: cursorDocumentId,
+          cursorSearchText: cursorSearchText,
+        );
+    }
   }
 
   static AdminQuestionScope _questionScopeForTest(TestModel test) {
@@ -488,7 +604,9 @@ class AdminTestService {
       throw FormatException(errors.join(' '));
     }
     await _validateAssignedQuestions(draft);
-    return _tests.createTest(draft);
+    final id = await _tests.createTest(draft);
+    _invalidateTestLists();
+    return id;
   }
 
   Future<void> updateTest(
@@ -532,6 +650,7 @@ class AdminTestService {
       effective,
       preserveQuestionAssignments: preserveAssignments,
     );
+    _invalidateTestLists();
   }
 
   /// Metadata edits keep the assignment set that is already stored.
@@ -595,6 +714,7 @@ class AdminTestService {
     }
 
     await _tests.setTestStatus(id, TestPublicationStatus.published);
+    _invalidateTestLists();
   }
 
   Future<void> unpublishTest(String testId) {
@@ -611,6 +731,7 @@ class AdminTestService {
       return;
     }
     await _tests.setTestStatus(testId, status);
+    _invalidateTestLists();
   }
 
   /// Filter-based question ID selection for building fixed tests.
@@ -830,7 +951,7 @@ class AdminTestService {
   }) async {
     if (test.questionIds.isEmpty) return;
 
-    final questions = await _questions.getByIds(test.questionIds);
+    final questions = await _questions.getAdminByIds(test.questionIds);
     final byId = {for (final question in questions) question.id: question};
     final errors = <String>[];
     for (final id in test.questionIds) {
