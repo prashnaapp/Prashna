@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'features/admin/admin_app.dart';
 import 'features/admin/services/admin_question_service.dart';
+import 'features/admin/services/admin_test_service.dart';
 import 'features/authentication/services/auth_service.dart';
 import 'features/question_bank/repository/question_cloud_repository.dart';
 import 'firebase_options.dart';
@@ -17,9 +18,11 @@ import 'firebase_options.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  AdminQuestionService.configureProduction(
-    QuestionCloudRepository(firestore: FirebaseFirestore.instance),
+  final questionRepository = QuestionCloudRepository(
+    firestore: FirebaseFirestore.instance,
   );
+  AdminQuestionService.configureProduction(questionRepository);
+  AdminTestService.configureProduction(questionRepository);
   await AuthService.instance.initialize();
   runApp(const AdminApp());
 }

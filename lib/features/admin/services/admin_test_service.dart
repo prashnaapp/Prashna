@@ -44,7 +44,13 @@ class AdminTestService {
        _questions = questionRepository ?? QuestionCloudRepository(),
        _courses = courseCatalogService;
 
-  static final AdminTestService instance = AdminTestService();
+  static AdminTestService instance = AdminTestService();
+
+  /// Replaces the default test-friendly instance after Firebase is initialized
+  /// by the Admin application composition root.
+  static void configureProduction(QuestionCloudRepository repository) {
+    instance = AdminTestService(questionRepository: repository);
+  }
 
   final TestCloudRepository _tests;
   final QuestionCloudRepository _questions;
@@ -82,15 +88,9 @@ class AdminTestService {
     return AdminPerfTrace.span('hierarchy.navigation', () async {
       final id = courseId?.trim();
       if (id == null || id.isEmpty) {
-        return (
-          courses: await loadCourses(),
-          tests: const <TestModel>[],
-        );
+        return (courses: await loadCourses(), tests: const <TestModel>[]);
       }
-      final results = await Future.wait([
-        loadCourses(),
-        loadTests(id),
-      ]);
+      final results = await Future.wait([loadCourses(), loadTests(id)]);
       return (
         courses: results[0] as List<Course>,
         tests: results[1] as List<TestModel>,
