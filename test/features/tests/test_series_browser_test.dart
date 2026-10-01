@@ -116,6 +116,36 @@ void main() {
       ]);
     });
 
+    test('paper-wise grouping ignores chapter tests sharing paperId', () {
+      final papers = SyllabusService.instance
+          .getCourseById('group-ii')!
+          .papers
+          .where((paper) => paper.id == 'group-ii-paper-ii')
+          .toList();
+      final tabs = TestSeriesBrowserGroups.paperWise(
+        papers: papers,
+        tests: [
+          published(
+            id: 'chapter-leak',
+            examId: 'group-ii',
+            category: TestCategoryType.chapterTests,
+            title: 'Chapter leak',
+            paperId: 'group-ii-paper-ii',
+            partId: 'group-ii-paper-ii-part-01',
+          ),
+          published(
+            id: 'part-real',
+            examId: 'group-ii',
+            category: TestCategoryType.partTests,
+            title: 'Real part test',
+            paperId: 'group-ii-paper-ii',
+            partId: 'group-ii-paper-ii-part-01',
+          ),
+        ],
+      );
+      expect(tabs.single.tests.map((test) => test.id), ['part-real']);
+    });
+
     test('Group-III paper-wise has three paper tabs from syllabus data', () {
       final papers = SyllabusService.instance.getCourseById('group-iii')!.papers;
       final tabs = TestSeriesBrowserGroups.paperWise(

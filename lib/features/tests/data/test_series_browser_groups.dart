@@ -33,7 +33,9 @@ abstract final class TestSeriesBrowserGroups {
           label: _paperLabel(paper.title),
           tests: _sorted([
             for (final test in tests)
-              if (test.paperId == paper.id) test,
+              if (test.category == TestCategoryType.partTests &&
+                  test.paperId == paper.id)
+                test,
           ]),
         ),
     ];

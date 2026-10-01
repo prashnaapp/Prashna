@@ -282,6 +282,7 @@ void main() {
       required String courseId,
       required TestCategoryType category,
       String title = 'T',
+      String? paperId,
     }) {
       return TestModel(
         id: id,
@@ -293,6 +294,7 @@ void main() {
         durationMinutes: 1,
         negativeMarking: '0',
         difficulty: 'Medium',
+        paperId: paperId,
       );
     }
 
@@ -389,45 +391,42 @@ void main() {
       expect(mocks.map((t) => t.id), ['mock-1']);
     });
 
-    test(
-      'Paper-wise filter includes legacy chapter-classified published tests',
-      () async {
-        final service = TestService(
-          cloudRepository: TestCloudRepository.withLoader(
-            (courseId) async => [
-              cloudTest(
-                id: 'test-group-ii-001',
-                courseId: courseId,
-                category: TestCategoryType.chapterTests,
-                title: 'Group-II Practice Test 1',
-              ),
-              cloudTest(
-                id: 'part-1',
-                courseId: courseId,
-                category: TestCategoryType.partTests,
-                title: 'Paper-wise Part Test',
-              ),
-              cloudTest(
-                id: 'mock-1',
-                courseId: courseId,
-                category: TestCategoryType.mockTests,
-              ),
-            ],
-          ),
-        );
+    test('Paper-wise filter excludes chapter-classified published tests', () async {
+      final service = TestService(
+        cloudRepository: TestCloudRepository.withLoader(
+          (courseId) async => [
+            cloudTest(
+              id: 'test-group-ii-001',
+              courseId: courseId,
+              category: TestCategoryType.chapterTests,
+              title: 'Group-II Practice Test 1',
+              paperId: 'group-ii-paper-i',
+            ),
+            cloudTest(
+              id: 'part-1',
+              courseId: courseId,
+              category: TestCategoryType.partTests,
+              title: 'Paper-wise Part Test',
+              paperId: 'group-ii-paper-i',
+            ),
+            cloudTest(
+              id: 'mock-1',
+              courseId: courseId,
+              category: TestCategoryType.mockTests,
+            ),
+          ],
+        ),
+      );
 
-        final paperWise = await service.getTests(
-          examId: 'group-ii',
-          category: TestCategoryType.partTests,
-        );
+      final paperWise = await service.getTests(
+        examId: 'group-ii',
+        category: TestCategoryType.partTests,
+      );
 
-        expect(
-          paperWise.map((t) => t.id),
-          containsAll(<String>['test-group-ii-001', 'part-1']),
-        );
-        expect(paperWise.any((t) => t.id == 'mock-1'), isFalse);
-      },
-    );
+      expect(paperWise.map((t) => t.id), ['part-1']);
+      expect(paperWise.any((t) => t.id == 'test-group-ii-001'), isFalse);
+      expect(paperWise.any((t) => t.id == 'mock-1'), isFalse);
+    });
 
     test('propagates repository errors (no dummy fallback)', () async {
       final service = TestService(

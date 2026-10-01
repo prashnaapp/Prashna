@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../question_bank/data/models/question_models.dart';
+import '../../admin_routes.dart';
 import '../../data/admin_content_callable_client.dart';
 import '../../data/admin_question_scope.dart';
 import '../../data/question_create_outcome.dart';
@@ -10,13 +11,10 @@ import '../../data/models/question_import_models.dart';
 import '../../services/admin_question_service.dart';
 import '../../services/admin_question_test_assignment.dart';
 import '../../services/question_import_service.dart';
-import '../../theme/admin_colors.dart';
 import '../../theme/admin_spacing.dart';
 import '../widgets/admin_ui/admin_empty_state.dart';
 import '../widgets/admin_ui/admin_loading_surface.dart';
 import '../widgets/admin_ui/admin_question_row.dart';
-import '../widgets/admin_ui/admin_status_badge.dart';
-import '../widgets/admin_ui/admin_surface.dart';
 import 'admin_question_form_screen.dart';
 import 'admin_question_import_screen.dart';
 
@@ -251,6 +249,60 @@ class _AdminTestSeriesQuestionBankScreenState
     );
   }
 
+  Future<void> _openEdit(Question question) async {
+    final changed = await Navigator.of(
+      context,
+    ).pushNamed(AdminRoutes.questionEdit, arguments: question);
+    if (mounted && changed == true) await _loadFirstPage();
+  }
+
+  Future<void> _requestLifecycleStatus(
+    Question question,
+    QuestionPublicationStatus status,
+  ) async {
+    if (status == QuestionPublicationStatus.archived) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Archive Question?'),
+            content: const Text(
+              'This question will be removed from Student Practice and new Tests.\n'
+              'Existing historical records will not be deleted.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Archive'),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true) return;
+    }
+    await _setStatus(question, status);
+  }
+
+  Future<void> _setStatus(
+    Question question,
+    QuestionPublicationStatus status,
+  ) async {
+    try {
+      await _service.setStatus(question.id, status);
+      if (mounted) await _loadFirstPage();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update status: $error')),
+      );
+    }
+  }
+
   Future<void> _import() async {
     final result = await Navigator.of(context).push<Object?>(
       MaterialPageRoute(
@@ -365,43 +417,20 @@ class _AdminTestSeriesQuestionBankScreenState
       itemBuilder: (context, index) {
         if (index == _questions.length) return _pageFooter();
         final question = _questions[index];
-        final status = AdminQuestionRow.effectiveStatus(question);
-        return AdminSurface(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AdminSpacing.lg,
-            vertical: AdminSpacing.md,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  AdminQuestionRow.previewText(question),
-                  key: ValueKey('test-series-question-${question.id}'),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AdminColors.textPrimary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AdminSpacing.md),
-              AdminStatusBadge.question(status),
-              if (!_assignmentLookupFailed &&
-                  AdminQuestionService.canDeleteQuestion(
+        return AdminQuestionRow(
+          question: question,
+          onEdit: () => _openEdit(question),
+          onRequestStatus: (status) =>
+              _requestLifecycleStatus(question, status),
+          onDelete:
+              _assignmentLookupFailed ||
+                  _deletingQuestionIds.contains(question.id) ||
+                  !AdminQuestionService.canDeleteQuestion(
                     question,
                     _assignmentState,
-                  ) &&
-                  !_deletingQuestionIds.contains(question.id))
-                TextButton.icon(
-                  key: ValueKey('test-series-question-delete-${question.id}'),
-                  onPressed: () => _requestDelete(question),
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  label: const Text('Delete'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AdminColors.danger,
-                  ),
-                ),
-            ],
-          ),
+                  )
+              ? null
+              : () => _requestDelete(question),
         );
       },
     );
