@@ -661,7 +661,13 @@ class QuestionCloudRepository {
   }
 
   /// Updates all editable fields while preserving `createdAt`.
-  Future<void> updateQuestion(Question question) async {
+  ///
+  /// [ownership] applies locked Test Series bank fields on update, matching
+  /// [createQuestion].
+  Future<void> updateQuestion(
+    Question question, {
+    AdminQuestionScope? ownership,
+  }) async {
     final questionId = question.id.trim();
     if (questionId.isEmpty) {
       throw const FormatException('Question ID is required for update.');
@@ -670,6 +676,7 @@ class QuestionCloudRepository {
       question,
       documentId: questionId,
       forUpdate: true,
+      ownership: ownership,
     );
     try {
       final testUpdate = _updateForTest;

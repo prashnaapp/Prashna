@@ -497,13 +497,18 @@ test('decoded delete marker is absent during compatibility checks', async () => 
     draftTest({ partId: FieldValue.delete() }),
     'q-delete',
   ));
+  assert.doesNotThrow(() => assertQuestionCompatibleWithTest(
+    paperWiseQuestion({ id: 'q-stale-part', partId: 'part-b', paperId: 'group-ii-paper-i' }),
+    draftTest({ partId: 'part-a', paperId: 'group-ii-paper-i' }),
+    'q-stale-part',
+  ));
   assert.throws(
     () => assertQuestionCompatibleWithTest(
-      paperWiseQuestion({ id: 'q-wrong-part', partId: 'part-b' }),
-      draftTest({ partId: 'part-a' }),
-      'q-wrong-part',
+      paperWiseQuestion({ id: 'q-wrong-paper', paperId: 'group-ii-paper-ii' }),
+      draftTest({ paperId: 'group-ii-paper-i' }),
+      'q-wrong-paper',
     ),
-    (err) => err.code === 'failed-precondition' && /test part/.test(err.message),
+    (err) => err.code === 'failed-precondition' && /test paper/.test(err.message),
   );
 });
 
@@ -629,6 +634,13 @@ test('question context accepts chapter, paper-wise, grand, and previous shapes',
   const paperWise = validateQuestionPayload(paperWiseQuestion(), { documentId: 'q-part' });
   assert.equal(paperWise.courseId, 'group-ii');
   assert.equal(paperWiseQuestion().partId, undefined);
+  assert.throws(
+    () => validateQuestionPayload(
+      paperWiseQuestion({ id: 'q-part-field', partId: 'group-ii-paper-i-part' }),
+      { documentId: 'q-part-field' },
+    ),
+    (err) => /cannot set partId/.test(err.message),
+  );
 
   const paperTwo = validateQuestionPayload(
     paperWiseQuestion({
@@ -1137,7 +1149,6 @@ test('assignment mutation: part paper mismatch is rejected', async () => {
         data: draftTest({
           id: 't-wrong-paper',
           paperId: 'group-ii-paper-ii',
-          partId: 'group-ii-paper-ii-part-01',
           questionIds: ['q-part'],
         }),
       },

@@ -1150,7 +1150,10 @@ class _FakeQuestionFormService extends AdminQuestionService {
   }) async => 'created-id';
 
   @override
-  Future<void> updateQuestion(Question question) async {}
+  Future<void> updateQuestion(
+    Question question, {
+    AdminQuestionScope? scope,
+  }) async {}
 }
 
 class _ShellDirtyQuestionHost extends StatefulWidget {

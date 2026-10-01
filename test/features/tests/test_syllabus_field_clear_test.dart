@@ -15,7 +15,7 @@ void main() {
     return TestModel(
       id: 't-stale',
       examId: 'group-iii',
-      category: TestCategoryType.partTests,
+      category: TestCategoryType.chapterTests,
       title: 'Group-III Practice Test',
       questionCount: 10,
       marks: 10,
@@ -101,7 +101,7 @@ void main() {
     expect(data['id'], 't-stale');
     expect(data['courseId'], 'group-iii');
     expect(data['title'], 'Group-III Practice Test');
-    expect(data['category'], 'part');
+    expect(data['category'], 'chapter');
     expect(data['questionCount'], 10);
     expect(data['isPublished'], isFalse);
     expect(_isDelete(data['id']), isFalse);

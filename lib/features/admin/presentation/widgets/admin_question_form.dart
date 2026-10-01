@@ -502,9 +502,13 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
           ? null
           : (_canonicalMode ? _canonicalAttribution() : _initial?.syllabus),
       status: _canonicalMode ? _status : _initial?.status,
-      contentArea: _initial?.contentArea,
-      testSeriesCategory: _initial?.testSeriesCategory,
-      seriesId: _initial?.seriesId,
+      contentArea: _lockedBank
+          ? AdminQuestionScope.contentAreaTestSeries
+          : _initial?.contentArea,
+      testSeriesCategory: _lockedBank
+          ? locked!.testSeriesCategory
+          : _initial?.testSeriesCategory,
+      seriesId: _lockedBank ? locked!.seriesId : _initial?.seriesId,
     );
 
     setState(() {
@@ -515,9 +519,9 @@ class _AdminQuestionFormState extends State<AdminQuestionForm> {
       await widget.onSubmit(question);
       if (mounted) {
         _clearDirty();
-        Navigator.of(
-          context,
-        ).pop(_lockedBank ? QuestionCreateOutcome.created : true);
+        Navigator.of(context).pop(
+          _lockedBank && _initial == null ? QuestionCreateOutcome.created : true,
+        );
       }
     } on QuestionAssignmentFailed catch (error) {
       if (!mounted) return;

@@ -51,6 +51,29 @@ class AdminQuestionScope {
     };
   }
 
+  /// Rebuilds a bank scope from a stored Test Series question.
+  ///
+  /// Used when Edit opens the shared form without an explicit navigation scope.
+  static AdminQuestionScope? fromQuestion({
+    required String? contentArea,
+    required String? courseId,
+    required String? testSeriesCategory,
+    String? paperId,
+    String? seriesId,
+    int? year,
+  }) {
+    if (contentArea != contentAreaTestSeries) return null;
+    final scope = AdminQuestionScope(
+      contentArea: contentAreaTestSeries,
+      courseId: courseId,
+      testSeriesCategory: testSeriesCategory,
+      paperId: paperId,
+      seriesId: seriesId,
+      year: year,
+    );
+    return scope.isQuestionBank ? scope : null;
+  }
+
   String get categoryLabel => labelForCategory(testSeriesCategory);
 
   static String labelForCategory(String? category) {

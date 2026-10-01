@@ -27,7 +27,7 @@ class AdminTestScope {
       category: test.category,
       courseId: test.examId,
       paperId: test.paperId,
-      partId: test.partId,
+      partId: test.category == TestCategoryType.partTests ? null : test.partId,
       syllabusUnitId: test.syllabusUnitId,
       seriesId: test.seriesId,
       year: test.year,

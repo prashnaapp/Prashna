@@ -118,10 +118,23 @@ class AdminQuestionService {
       documentId: documentId,
     );
     if (question.status != null) {
+      final bankScope =
+          scope ??
+          AdminQuestionScope.fromQuestion(
+            contentArea: question.contentArea,
+            courseId: question.courseId,
+            testSeriesCategory: question.testSeriesCategory,
+            paperId: question.paperId,
+            seriesId: question.seriesId,
+            year: question.year,
+          );
       errors.addAll(
         _validateCanonicalAdminQuestion(
           question,
-          testSeriesBank: scope?.isQuestionBank ?? false,
+          testSeriesContext:
+              bankScope?.isQuestionBank == true ||
+              question.contentArea == AdminQuestionScope.contentAreaTestSeries,
+          bankScope: bankScope,
         ),
       );
     }
@@ -146,12 +159,32 @@ class AdminQuestionService {
     return _questions.createQuestion(question, ownership: scope);
   }
 
-  Future<void> updateQuestion(Question question) {
-    final errors = validate(question, documentId: question.id);
+  Future<void> updateQuestion(
+    Question question, {
+    AdminQuestionScope? scope,
+  }) {
+    final resolvedScope =
+        scope ??
+        AdminQuestionScope.fromQuestion(
+          contentArea: question.contentArea,
+          courseId: question.courseId,
+          testSeriesCategory: question.testSeriesCategory,
+          paperId: question.paperId,
+          seriesId: question.seriesId,
+          year: question.year,
+        );
+    final errors = validate(
+      question,
+      documentId: question.id,
+      scope: resolvedScope,
+    );
     if (errors.isNotEmpty) {
       throw FormatException(errors.join(' '));
     }
-    return _questions.updateQuestion(question);
+    return _questions.updateQuestion(
+      question,
+      ownership: resolvedScope?.isQuestionBank == true ? resolvedScope : null,
+    );
   }
 
   /// Client pre-check only. Concurrent creates can still both pass.
@@ -226,7 +259,8 @@ class AdminQuestionService {
 
   List<String> _validateCanonicalAdminQuestion(
     Question question, {
-    bool testSeriesBank = false,
+    bool testSeriesContext = false,
+    AdminQuestionScope? bankScope,
   }) {
     final errors = <String>[];
     final content = question.content;
@@ -283,7 +317,15 @@ class AdminQuestionService {
     if (!const ['A', 'B', 'C', 'D'].contains(question.correctOption)) {
       errors.add('Correct answer must be A, B, C, or D.');
     }
-    if (testSeriesBank) return errors;
+    if (testSeriesContext) {
+      final creatingInBank =
+          bankScope?.isQuestionBank == true &&
+          question.contentArea != AdminQuestionScope.contentAreaTestSeries;
+      if (!creatingInBank) {
+        errors.addAll(_validateTestSeriesOwnership(question));
+      }
+      return errors;
+    }
     if (syllabus == null) {
       errors.add('Canonical syllabus attribution is required.');
       return errors;
@@ -374,6 +416,65 @@ class AdminQuestionService {
     }
 
     errors.add('Paper has no Group-III syllabus units.');
+    return errors;
+  }
+
+  List<String> _validateTestSeriesOwnership(Question question) {
+    final errors = <String>[];
+    final category = question.testSeriesCategory?.trim();
+    if (category == null || category.isEmpty) {
+      errors.add('Test Series category is required.');
+      return errors;
+    }
+    switch (category) {
+      case AdminQuestionScope.categoryPart:
+        if (question.paperId.trim().isEmpty) {
+          errors.add('Paper is required for Paper-wise Test Series questions.');
+        }
+        errors.addAll(_forbiddenPaperWiseHierarchyErrors(question));
+      case AdminQuestionScope.categoryMock:
+        if (question.seriesId?.trim().isEmpty ?? true) {
+          errors.add('Grand Test series is required.');
+        }
+      case AdminQuestionScope.categoryPreviousYear:
+        if (question.year == null) {
+          errors.add('Year is required for Previous Papers questions.');
+        }
+      default:
+        errors.add('Unknown Test Series category "$category".');
+    }
+    return errors;
+  }
+
+  List<String> _forbiddenPaperWiseHierarchyErrors(Question question) {
+    final errors = <String>[];
+    void forbid(String field) {
+      errors.add(
+        'Paper-wise Test Series questions must not include $field.',
+      );
+    }
+
+    final syllabus = question.syllabus;
+    if (syllabus != null) {
+      for (final entry in <(String?, String)>[
+        (syllabus.partId, 'partId'),
+        (syllabus.topicId, 'topicId'),
+        (syllabus.lessonId, 'lessonId'),
+        (syllabus.majorStudyAreaId, 'majorStudyAreaId'),
+        (syllabus.contentTopicId, 'contentTopicId'),
+        (syllabus.syllabusUnitId, 'syllabusUnitId'),
+      ]) {
+        if (entry.$1 != null && entry.$1!.trim().isNotEmpty) {
+          forbid(entry.$2);
+        }
+      }
+    }
+    if (question.topicId.trim().isNotEmpty) {
+      forbid('topicId');
+    }
+    if (question.sectionId.trim().isNotEmpty) {
+      forbid('sectionId');
+    }
     return errors;
   }
 }

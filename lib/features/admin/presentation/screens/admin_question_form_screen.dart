@@ -49,8 +49,27 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
   String? _assignTestId;
   AdminDirtyController? _dirtyController;
 
-  bool get _lockedBank =>
-      widget.question == null && (widget.scope?.isQuestionBank ?? false);
+  bool get _lockedBank {
+    if (widget.scope?.isQuestionBank == true && widget.question == null) {
+      return true;
+    }
+    return false;
+  }
+
+  AdminQuestionScope? get _formScope {
+    final explicit = widget.scope;
+    if (explicit != null && explicit.isQuestionBank) return explicit;
+    final question = widget.question;
+    if (question == null) return null;
+    return AdminQuestionScope.fromQuestion(
+      contentArea: question.contentArea,
+      courseId: question.courseId,
+      testSeriesCategory: question.testSeriesCategory,
+      paperId: question.paperId,
+      seriesId: question.seriesId,
+      year: question.year,
+    );
+  }
 
   bool _isDirtyChecker() => _dirty;
 
@@ -102,7 +121,7 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
     if (widget.question == null) {
       await _service.createQuestion(question);
     } else {
-      await _service.updateQuestion(question);
+      await _service.updateQuestion(question, scope: _formScope);
     }
   }
 
@@ -200,7 +219,7 @@ class _AdminQuestionFormScreenState extends State<AdminQuestionFormScreen> {
                   child: AdminQuestionForm(
                     courses: courses,
                     initialQuestion: widget.question,
-                    lockedScope: _lockedBank ? widget.scope : null,
+                    lockedScope: _formScope,
                     chapterContext: widget.question == null
                         ? widget.chapterContext
                         : null,

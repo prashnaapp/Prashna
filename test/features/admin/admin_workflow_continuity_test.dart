@@ -384,7 +384,10 @@ class _CountingQuestionService extends AdminQuestionService {
   }
 
   @override
-  Future<void> updateQuestion(Question question) async {}
+  Future<void> updateQuestion(
+    Question question, {
+    AdminQuestionScope? scope,
+  }) async {}
 }
 
 class _FakeImportService extends QuestionImportService {

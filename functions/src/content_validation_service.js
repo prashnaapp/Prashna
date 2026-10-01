@@ -552,8 +552,21 @@ export function validateQuestionContentContext(data = {}) {
       fail('invalid-argument', 'Paper is required for Paper-wise Questions.');
     }
     assertKnownPaper(courseId, paperId);
-    const partId = trimToNull(data.partId);
-    if (partId) assertKnownPart(courseId, paperId, partId);
+    for (const field of [
+      'partId',
+      'topicId',
+      'lessonId',
+      'majorStudyAreaId',
+      'contentTopicId',
+      'syllabusUnitId',
+    ]) {
+      if (trimToNull(data[field]) || trimToNull(data.syllabus?.[field])) {
+        fail(
+          'invalid-argument',
+          `Paper-wise Test Series Questions cannot set ${field}.`,
+        );
+      }
+    }
     return { legacy: false, contentArea, testSeriesCategory };
   }
 
@@ -791,9 +804,19 @@ export function validateTestCategoryLocation(data, courseId, category) {
       fail('invalid-argument', 'Paper is required for Paper-wise Tests.');
     }
     assertKnownPaper(courseId, paperId);
-    validateOptionalPartAndUnit(data, courseId, paperId, {
-      requirePartIfPaperHasParts: true,
-    });
+    for (const field of [
+      'partId',
+      'syllabusUnitId',
+      'seriesId',
+      'year',
+    ]) {
+      if (trimToNull(data[field]) != null) {
+        fail(
+          'invalid-argument',
+          `Paper-wise Tests cannot set ${field}.`,
+        );
+      }
+    }
     return;
   }
 
@@ -857,7 +880,7 @@ export function assertQuestionCompatibleWithTest(questionData, testData, questio
       if (!questionPaper || !testPaper || questionPaper !== testPaper) {
         fail('failed-precondition', `Question "${questionId}" does not match the test paper.`);
       }
-    }
+    } else {
     if (sub === 'mock') {
       const questionSeries = trimToNull(questionData.seriesId);
       const testSeries = trimToNull(testData.seriesId);
@@ -872,6 +895,7 @@ export function assertQuestionCompatibleWithTest(questionData, testData, questio
         fail('failed-precondition', `Question "${questionId}" does not match the test year.`);
       }
     }
+    }
   }
 
   const testPaper = trimToNull(testData.paperId);
@@ -881,7 +905,7 @@ export function assertQuestionCompatibleWithTest(questionData, testData, questio
   }
   const testPart = trimToNull(testData.partId);
   const questionPart = trimToNull(questionData.partId);
-  if (testPart && questionPart && questionPart !== testPart) {
+  if (testPart && questionPart && questionPart !== testPart && area !== 'testSeries') {
     fail('failed-precondition', `Question "${questionId}" does not match the test part.`);
   }
   const testUnit = trimToNull(testData.syllabusUnitId);

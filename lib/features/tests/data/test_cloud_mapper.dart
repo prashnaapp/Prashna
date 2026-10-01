@@ -214,12 +214,27 @@ abstract final class TestCloudMapper {
     }
 
     writeOptional('paperId', test.paperId);
-    writeOptional('partId', test.partId);
-    writeOptional('syllabusUnitId', test.syllabusUnitId);
-    writeOptional('majorStudyAreaId', test.majorStudyAreaId);
-    writeOptional('contentTopicId', test.contentTopicId);
-    writeOptional('canonicalTopicId', test.canonicalTopicId);
-    writeOptional('lessonId', test.lessonId);
+    if (test.category == TestCategoryType.partTests) {
+      // Paper-wise Tests are owned by course + paper only. Clear stale
+      // chapter hierarchy fields on update and omit them on create.
+      for (final field in const [
+        'partId',
+        'syllabusUnitId',
+        'majorStudyAreaId',
+        'contentTopicId',
+        'canonicalTopicId',
+        'lessonId',
+      ]) {
+        if (forUpdate) data[field] = FieldValue.delete();
+      }
+    } else {
+      writeOptional('partId', test.partId);
+      writeOptional('syllabusUnitId', test.syllabusUnitId);
+      writeOptional('majorStudyAreaId', test.majorStudyAreaId);
+      writeOptional('contentTopicId', test.contentTopicId);
+      writeOptional('canonicalTopicId', test.canonicalTopicId);
+      writeOptional('lessonId', test.lessonId);
+    }
     writeOptional('seriesId', test.seriesId);
     if (test.year != null) {
       data['year'] = test.year;

@@ -810,6 +810,21 @@ class QuestionImportValidator {
     }
     switch (bank.testSeriesCategory) {
       case AdminQuestionScope.categoryPart:
+        for (final entry in <(String?, String)>[
+          (record.partId, 'partId'),
+          (record.topicId, 'topicId'),
+          (record.lessonId, 'lessonId'),
+          (record.majorStudyAreaId, 'majorStudyAreaId'),
+          (record.contentTopicId, 'contentTopicId'),
+          (record.syllabusUnitId, 'syllabusUnitId'),
+        ]) {
+          if (entry.$1 != null && entry.$1!.trim().isNotEmpty) {
+            conflict(
+              entry.$2,
+              'Paper-wise Test Series import cannot include ${entry.$2}.',
+            );
+          }
+        }
         if (record.paperId.trim().isNotEmpty &&
             record.paperId.trim() != bank.paperId) {
           conflict(

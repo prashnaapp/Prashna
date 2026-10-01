@@ -75,7 +75,7 @@ function validTest(overrides = {}) {
     status: 'draft',
     isPublished: false,
     paperId: 'group-ii-paper-i',
-    syllabusUnitId: 'group-ii-paper-i-area-01',
+    syllabusUnitId: undefined,
     ...overrides,
   };
 }
@@ -617,25 +617,32 @@ test('test: invalid metadata, category, status, and questionCount are rejected',
   );
 });
 
-test('test: paper-wise requires paper and part when the paper has parts', () => {
+test('test: paper-wise requires paper but not part', () => {
   assert.throws(
     () => validateTestPayload(validTest({ paperId: undefined, syllabusUnitId: undefined })),
     (err) => /Paper is required for Paper-wise Tests/.test(err.message),
   );
-  assert.throws(
+  assert.doesNotThrow(
     () => validateTestPayload(validTest({
       paperId: 'group-ii-paper-ii',
       syllabusUnitId: undefined,
     })),
-    (err) => /Part is required/.test(err.message),
   );
   assert.equal(
     validateTestPayload(validTest({
       paperId: 'group-ii-paper-ii',
-      partId: 'group-ii-paper-ii-part-01',
+      partId: undefined,
       syllabusUnitId: undefined,
     }), { documentId: 't-valid-1' }).id,
     't-valid-1',
+  );
+  assert.throws(
+    () => validateTestPayload(validTest({
+      paperId: 'group-ii-paper-ii',
+      partId: 'group-ii-paper-ii-part-01',
+      syllabusUnitId: undefined,
+    })),
+    (err) => /cannot set partId/.test(err.message),
   );
 });
 

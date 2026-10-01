@@ -800,12 +800,14 @@ void main() {
       isActive: false,
       status: QuestionPublicationStatus.draft,
       content: draft(paperI: true).content,
-      syllabus: draft(paperI: true).syllabus,
       contentArea: AdminQuestionScope.contentAreaTestSeries,
       testSeriesCategory: AdminQuestionScope.categoryPart,
     );
     await service.updateQuestion(existing);
     expect(written?['contentArea'], 'testSeries');
+    expect(written?['testSeriesCategory'], 'part');
+    expect(written?['paperId'], 'group-ii-paper-i');
+    expect(written?.containsKey('partId'), isFalse);
   });
 }
 

@@ -171,12 +171,16 @@ class _AdminTestFormState extends State<AdminTestForm> {
         widget.initialCourseId ??
         (widget.courses.isEmpty ? null : widget.courses.first.courseId);
     _paperId = initial?.paperId ?? widget.scope?.paperId;
-    _partId = initial?.partId ?? widget.scope?.partId;
-    _syllabusUnitId = initial?.syllabusUnitId ?? widget.scope?.syllabusUnitId;
     _category =
         initial?.category ??
         widget.scope?.category ??
         TestCategoryType.chapterTests;
+    _partId = _category == TestCategoryType.partTests
+        ? null
+        : initial?.partId ?? widget.scope?.partId;
+    _syllabusUnitId = _category == TestCategoryType.partTests
+        ? null
+        : initial?.syllabusUnitId ?? widget.scope?.syllabusUnitId;
     _status = initial?.status ?? TestPublicationStatus.draft;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -226,9 +230,11 @@ class _AdminTestFormState extends State<AdminTestForm> {
     _seriesId = _optionalString(next.seriesId);
     _courseId = next.examId;
     _paperId = next.paperId;
-    _partId = next.partId;
-    _syllabusUnitId = next.syllabusUnitId;
     _category = next.category;
+    _partId = _category == TestCategoryType.partTests ? null : next.partId;
+    _syllabusUnitId = _category == TestCategoryType.partTests
+        ? null
+        : next.syllabusUnitId;
     _status = next.status;
     _canonicalRevision++;
     _trackDirty = true;
@@ -329,7 +335,7 @@ class _AdminTestFormState extends State<AdminTestForm> {
           ? TestPublicationStatus.draft
           : _status,
       paperId: _isSyllabusCourse ? _paperId : null,
-      partId: _isSyllabusCourse && (isPaperWise || keepChapterLocation)
+      partId: _isSyllabusCourse && !isPaperWise && keepChapterLocation
           ? _partId
           : null,
       syllabusUnitId: _isSyllabusCourse && keepChapterLocation
